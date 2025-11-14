@@ -1,4 +1,5 @@
 import asyncio
+import time
 from typing import Optional
 
 from web3 import Web3
@@ -7,6 +8,8 @@ from app.config import ALCHEMY_WS_URL, VERIFIER_ALLOWLIST
 from alerts.slack import send_slack_alert, build_rich_slack_payload
 from models.types import ZKFlow
 from observability.metrics import zk_proof_detected
+from bus.signal_bus import publish_signal
+from utils.price import get_price_usd
 
 
 def _is_zk_proof(tx) -> bool:
@@ -49,7 +52,27 @@ async def start_zk_scanner():
                             timestamp=int(tx.get("nonce", 0)),
                             network=chain,
                         )
+                        print(f"[ZK] Proof-like tx {flow.tx_hash[:10]}.. gas={flow.gas_used}")
                         await send_slack_alert(build_rich_slack_payload({"type": "zk", "flow": flow}))
+                        # Estimate USD value via gas * (gas price) * ETH price
+                        try:
+                            gas_price_wei = tx.get("gasPrice") or tx.get("maxFeePerGas") or 0
+                            eth_price = await get_price_usd("eth")
+                            fee_eth = (int(gas_price_wei) * int(flow.gas_used)) / 1e18
+                            usd_value = float(fee_eth) * float(eth_price)
+                        except Exception:
+                            usd_value = 0.0
+                        await publish_signal({
+                            "type": "zk",
+                            "sub_type": "verifier_call",
+                            "network": chain,
+                            "tx_hash": flow.tx_hash,
+                            "gas_used": flow.gas_used,
+                            "to": flow.to_address,
+                            "usd_value": round(usd_value, 2),
+                            "timestamp": int(time.time()),
+                            "summary": f"ZK verify {flow.to_address[:6]}.. gas {flow.gas_used}",
+                        })
             except Exception:
                 await asyncio.sleep(0.5)
             await asyncio.sleep(0.2)

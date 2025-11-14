@@ -5,9 +5,10 @@ from typing import Any, Dict, List
 import httpx
 import websockets
 
-from app.config import FINNHUB_API_KEY, POLYGON_API_KEY, EQUITY_TICKERS, DISABLE_EQUITY_FALLBACK
+from app.config import FINNHUB_API_KEY, POLYGON_API_KEY, EQUITY_TICKERS, DISABLE_EQUITY_FALLBACK, EQUITY_BLOCK_MIN_SHARES
 from alerts.slack import send_slack_alert, build_rich_slack_payload
 from observability.metrics import equity_dark_pool_volume
+from bus.signal_bus import publish_signal
 
 
 async def start_equities_scanner():
@@ -27,9 +28,25 @@ async def start_equities_scanner():
                 if await is_dark_pool_print(trade):
                     symbol = trade.get("s", "")
                     shares = int(trade.get("v", 0))
+                    price = float(trade.get("p", 0.0))
+                    if shares < EQUITY_BLOCK_MIN_SHARES:
+                        continue
                     venue = trade.get("venue", "DARK")
                     equity_dark_pool_volume.labels(symbol=symbol, venue=venue).inc(shares)
                     await send_slack_alert(build_rich_slack_payload({"type": "equity", "trade": trade}))
+                    usd_value = round(shares * price, 2)
+                    summary = f"{symbol} dark {shares:,} @ {price:.2f} ({venue})"
+                    await publish_signal({
+                        "type": "equity",
+                        "sub_type": "dark_pool",
+                        "symbol": symbol,
+                        "shares": shares,
+                        "price": price,
+                        "usd_value": usd_value,
+                        "venue": venue,
+                        "timestamp": int(trade.get("t", 0) // 1000) if trade.get("t") else None,
+                        "summary": summary,
+                    })
 
 
 async def is_dark_pool_print(trade: Dict[str, Any]) -> bool:

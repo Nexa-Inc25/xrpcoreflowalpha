@@ -4,6 +4,7 @@ from app.config import XRPL_WSS, ALCHEMY_WS_URL, FINNHUB_API_KEY
 from scanners.xrpl_scanner import start_xrpl_scanner
 from scanners.zk_scanner import start_zk_scanner
 from scanners.equities_scanner import start_equities_scanner
+from correlator.cross_market import run_correlation_loop
 
 
 async def main():
@@ -28,6 +29,8 @@ async def main():
     if FINNHUB_API_KEY:
         print("[Worker] Launching Equities scanner")
         tasks.append(asyncio.create_task(supervise(start_equities_scanner, "EQUITIES")))
+    # Correlator always runs; it only acts on available signals
+    tasks.append(asyncio.create_task(supervise(run_correlation_loop, "CROSS")))
     if not tasks:
         # Idle loop if no env configured
         while True:

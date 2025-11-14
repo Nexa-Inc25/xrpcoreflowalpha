@@ -87,3 +87,44 @@ def build_rich_slack_payload(flow: Dict[str, Any]) -> Dict[str, Any]:
             {"type": "section", "text": {"type": "mrkdwn", "text": text_block}},
         ]
     }
+
+
+def build_cross_slack_payload(cross: Dict[str, Any]) -> Dict[str, Any]:
+    confidence = int(cross.get("confidence", 0))
+    impact = float(cross.get("predicted_impact_pct", 0.0))
+    delta = int(cross.get("time_delta", 0))
+    urgency = "HIGH" if impact >= 1.5 else "MEDIUM"
+    color = "#ff0000" if urgency == "HIGH" else "#ffa500"
+
+    s1 = cross.get("signals", [{}])[0]
+    s2 = cross.get("signals", [{}])[1] if len(cross.get("signals", [])) > 1 else {}
+
+    def _fmt(sig: Dict[str, Any]) -> str:
+        t = sig.get("type", "?").upper()
+        summ = sig.get("summary", "")
+        val = sig.get("usd_value")
+        val_str = f" | ${val:,.0f}" if isinstance(val, (int, float)) and val else ""
+        return f"{t}: {summ}{val_str}"
+
+    return {
+        "type": "cross",
+        "blocks": [
+            {"type": "header", "text": {"type": "plain_text", "text": f"CROSS-MARKET SIGNAL: {urgency}"}},
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Signal 1*: {_fmt(s1)}\n*Signal 2*: {_fmt(s2)}\n*Time Delta*: {delta//60}m {delta%60}s",
+                },
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {"type": "mrkdwn", "text": f"*Confidence*: {confidence}%"},
+                    {"type": "mrkdwn", "text": f"*Predicted XRP Move*: {impact:+.2f}% in 15m"},
+                ],
+            },
+            {"type": "context", "elements": [{"type": "mrkdwn", "text": f"Correlation ID: {cross.get('id','')}"}]},
+        ],
+        "attachments": [{"color": color}],
+    }
