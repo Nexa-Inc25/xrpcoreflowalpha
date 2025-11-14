@@ -22,9 +22,15 @@ async def main():
             client = AsyncJsonRpcClient("https://xrplcluster.com")
             resp = await client.request(Ledger(ledger_index="validated"))
             ledger = resp.result.get("ledger") or {}
-            total = ledger.get("total_coins")
-            assert total == "99999999999999999999", f"XRPL mainnet proof failed: total_coins={total}"
-            print("[Worker] XRPL mainnet proof passed.")
+            total_str = ledger.get("total_coins") or ""
+            li = int((resp.result.get("ledger_index") or ledger.get("ledger_index") or 0))
+            total = int(total_str) if total_str.isdigit() else 0
+            # Mainnet invariants (Nov 2025):
+            # - ledger index well above 100,000,000
+            # - total_coins in drops within (90B*1e6, 100B*1e6]
+            assert li > 100_000_000, f"ledger_index too low: {li}"
+            assert 90_000_000_000 * 1_000_000 < total <= 100_000_000_000 * 1_000_000, f"total_coins out of range: {total_str}"
+            print(f"[Worker] XRPL mainnet proof passed. ledger_index={li} total_coins={total_str}")
         except Exception as e:
             raise AssertionError(f"XRPL mainnet proof failed: {e}")
 

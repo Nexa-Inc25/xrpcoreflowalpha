@@ -17,7 +17,7 @@ import time
 async def start_xrpl_scanner():
     if not XRPL_WSS:
         return
-    assert ("xrplcluster.com" in XRPL_WSS) or ("ripple.com" in XRPL_WSS), "NON-MAINNET WSS – ABORT"
+    assert ("xrplcluster.com" in XRPL_WSS) or ("ripple.com" in XRPL_WSS), "NON-MAINNET WSS – FATAL ABORT"
     async with AsyncWebsocketClient(XRPL_WSS) as client:
         # Server info log on startup
         try:
@@ -54,9 +54,8 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
         if isinstance(amount, str) and amount.isdigit():
             drops = int(amount)
             xrp = drops / 1_000_000
-            # Hard reject unrealistic amounts
+            # Hard reject unrealistic amounts (drop silently)
             if xrp > 5_000_000_000:
-                print(f"[XRPL] DROP unreal amount {xrp:,.0f} XRP hash={txn.get('hash','')}")
                 return
             if xrp >= 5_000_000:
                 flow = XRPFlow(
