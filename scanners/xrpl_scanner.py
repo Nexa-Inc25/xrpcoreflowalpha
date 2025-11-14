@@ -10,14 +10,14 @@ from models.types import XRPFlow
 from observability.metrics import xrpl_tx_processed
 from bus.signal_bus import publish_signal
 from utils.price import get_price_usd
-from utils.xrpl_verify import verify_xrpl_payment
+from utils.xrpl_verify import validate_xrpl_tx
 import time
 
 
 async def start_xrpl_scanner():
     if not XRPL_WSS:
         return
-    assert ("livenet" in XRPL_WSS) or ("ripple.com" in XRPL_WSS), "TESTNET DETECTED – ABORT"
+    assert ("s1.ripple.com" in XRPL_WSS) or ("ripple.com" in XRPL_WSS), "TESTNET – FATAL ABORT"
     async with AsyncWebsocketClient(XRPL_WSS) as client:
         # Server info log on startup
         try:
@@ -69,10 +69,9 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
                 )
                 xrpl_tx_processed.labels(type="payment_large").inc()
                 print(f"[XRPL] Large payment detected (verifying): {xrp:,.0f} XRP hash={flow.tx_hash}")
-                # Verify exists on Ripple Data and amount matches
-                ok = await verify_xrpl_payment(flow.tx_hash, drops, timeout_sec=30)
+                ok = await validate_xrpl_tx(flow.tx_hash, timeout_sec=10)
                 if not ok:
-                    print(f"[XRPL] Verification failed, dropping hash={flow.tx_hash}")
+                    print(f"[XRPL] Validation failed, dropping hash={flow.tx_hash}")
                     return
                 usd = 0.0
                 try:
@@ -100,6 +99,12 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
     # Other institutional signals to extend in Phase 1
     if ttype in {"AMMDeposit", "AMMWithdraw", "EscrowCreate", "EscrowFinish", "TrustSet"}:
         xrpl_tx_processed.labels(type=ttype.lower()).inc()
+        tx_hash = txn.get("hash", "")
+        if not tx_hash:
+            return
+        ok = await validate_xrpl_tx(tx_hash, timeout_sec=10)
+        if not ok:
+            return
         print(f"[XRPL] Institutional signal: {ttype}")
         await publish_signal({
             "type": "xrp",
@@ -107,4 +112,5 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
             "timestamp": int(time.time()),
             "summary": f"XRPL {ttype}",
             "usd_value": None,
+            "tx_hash": tx_hash,
         })

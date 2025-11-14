@@ -27,7 +27,7 @@ def _is_zk_proof(tx) -> bool:
 async def start_zk_scanner():
     if not ALCHEMY_WS_URL:
         return
-    assert "mainnet" in ALCHEMY_WS_URL, "TESTNET DETECTED – ABORT"
+    assert "mainnet" in ALCHEMY_WS_URL.lower(), "NON-MAINNET ETHEREUM – FATAL ABORT"
     w3 = Web3(Web3.WebsocketProvider(ALCHEMY_WS_URL))
     # Poll pending tx filter in a thread to avoid blocking the event loop
     pending_filter = w3.eth.filter("pending")

@@ -36,7 +36,7 @@ def _hex_to_addr(topic_hex: str) -> str:
 async def start_godark_eth_scanner():
     if not ENABLE_GODARK_ETH_SCANNER or not ALCHEMY_WS_URL:
         return
-    assert "mainnet" in ALCHEMY_WS_URL, "TESTNET DETECTED – ABORT"
+    assert "mainnet" in ALCHEMY_WS_URL.lower(), "NON-MAINNET ETHEREUM – FATAL ABORT"
     sub_params = {
         "address": [USDC, USDT, DAI]
     }

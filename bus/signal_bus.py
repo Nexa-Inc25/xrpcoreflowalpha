@@ -23,6 +23,13 @@ async def publish_signal(signal: Dict[str, Any]) -> None:
         signal = await annotate_godark(signal)
     except Exception:
         pass
+    try:
+        if signal.get("type") == "xrp":
+            amt = signal.get("amount_xrp")
+            if amt is not None and float(amt) > 10_000_000_000:
+                return
+    except Exception:
+        return
     # Ensure required fields
     if "timestamp" not in signal:
         signal["timestamp"] = int(time.time())

@@ -4,6 +4,7 @@ from typing import Optional
 import httpx
 
 RIPPLE_DATA_API = "https://data.ripple.com/v2/transactions/"
+LIVENET_TX_URL = "https://livenet.xrpl.org/transactions/"
 
 
 async def _fetch_tx(tx_hash: str) -> Optional[dict]:
@@ -38,6 +39,15 @@ async def verify_xrpl_payment(tx_hash: str, expected_drops: int, timeout_sec: in
                 return False
         await asyncio.sleep(2)
     return False
+
+
+async def validate_xrpl_tx(tx_hash: str, timeout_sec: int = 10) -> bool:
+    try:
+        async with httpx.AsyncClient(timeout=timeout_sec) as client:
+            r = await client.get(f"{LIVENET_TX_URL}{tx_hash}")
+            return r.status_code == 200
+    except Exception:
+        return False
 
 
 async def verify_xrpl_tx_exists(tx_hash: str, timeout_sec: int = 30) -> bool:
