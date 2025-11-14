@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from typing import Dict, Any
+from app.config import EXECUTION_ENABLED
 
 
 def _now_iso() -> str:
@@ -63,6 +64,11 @@ def generate_sdui_payload(cross: Dict) -> dict:
     }
     if godark:
         comp["badge"] = "GoDark"
+        if confidence >= 95:
+            if EXECUTION_ENABLED:
+                comp.setdefault("actions", []).append({"label": "Execute Counter-Trade", "url": "", "enabled": True})
+            else:
+                comp.setdefault("actions", []).append({"label": "Execute Counter-Trade", "url": "", "enabled": False})
     ts = cross.get("timestamp")
     ts_iso = datetime.fromtimestamp(ts, timezone.utc).isoformat() if isinstance(ts, (int, float)) and ts > 0 else _now_iso()
     return {
@@ -70,6 +76,100 @@ def generate_sdui_payload(cross: Dict) -> dict:
         "timestamp": ts_iso,
         "components": [comp],
         "predictive_actions": [{"type": "prefetch_chart", "symbol": "XRP-USD", "timeframe": "15m"}],
+    }
+
+
+def generate_rwa_amm_payload(sig: Dict[str, Any]) -> dict:
+    chg = sig.get("amm_liquidity_change", {}).get("lp_change_pct")
+    pct = round(float(chg) * 100.0, 2) if isinstance(chg, (int, float)) else None
+    tags = [str(t) for t in (sig.get("tags") or [])]
+    # Color mapping
+    if any("GoDark" in t for t in tags):
+        color = "#8b5cf6"
+    elif any("Withdrawal" in t for t in tags):
+        color = "#ff0000"
+    elif any("Deposit" in t for t in tags):
+        color = "#10b981"
+    else:
+        color = "#ffa500"
+    badge = None
+    if pct is not None:
+        arrow = "+" if pct > 0 else ""
+        badge = f"AMM {arrow}{pct}%"
+    comp = {
+        "type": "rwa_amm_liquidity_card",
+        "id": f"rwa_amm_{sig.get('tx_hash','')}",
+        "title": "RWA AMM LIQUIDITY",
+        "urgency": sig.get("urgency") or "MEDIUM",
+        "color": color,
+        "summary": sig.get("summary") or "RWA AMM Liquidity Shift",
+        "time_delta": "",
+        "confidence": None,
+        "predicted_impact": None,
+        "actions": [],
+        "auto_expand": False,
+    }
+    if sig.get("tx_hash"):
+        comp["actions"].append({"label": "XRPL Tx", "url": f"https://livenet.xrpl.org/transactions/{sig['tx_hash']}"})
+    if badge:
+        comp["badge"] = badge
+    ts = sig.get("timestamp")
+    ts_iso = datetime.fromtimestamp(ts, timezone.utc).isoformat() if isinstance(ts, (int, float)) and ts > 0 else _now_iso()
+    return {
+        "layout_version": "1.0",
+        "timestamp": ts_iso,
+        "components": [comp],
+        "predictive_actions": [],
+    }
+
+
+def generate_orderbook_payload(sig: Dict[str, Any]) -> dict:
+    tags = [str(t) for t in (sig.get("tags") or [])]
+    pair = sig.get("pair") or "XRPL Pair"
+    bid = float(sig.get("bid_depth_usd") or 0.0)
+    ask = float(sig.get("ask_depth_usd") or 0.0)
+    sp = sig.get("spread_bps")
+    if any("GoDark" in t for t in tags):
+        color = "#8b5cf6"
+    elif any("Imbalance" in t for t in tags) or any("Whale" in t for t in tags):
+        color = "#ff0000"
+    elif any("Depth Surge" in t for t in tags):
+        color = "#10b981"
+    else:
+        color = "#ffa500"
+    badge = None
+    if sig.get("change"):
+        bc = sig["change"].get("bid_change_pct")
+        ac = sig["change"].get("ask_change_pct")
+        try:
+            if abs(float(bc or 0)) >= abs(float(ac or 0)):
+                badge = f"OB {('+' if (bc or 0)>0 else '')}{round(float(bc or 0)*100,1)}%"
+            else:
+                badge = f"OB {('+' if (ac or 0)>0 else '')}{round(float(ac or 0)*100,1)}%"
+        except Exception:
+            badge = None
+    comp = {
+        "type": "orderbook_card",
+        "id": f"ob_{pair}",
+        "title": "ORDERBOOK LIQUIDITY",
+        "urgency": sig.get("urgency") or "MEDIUM",
+        "color": color,
+        "summary": f"{pair}: bid ${bid:,.0f} | ask ${ask:,.0f} | spread {sp if sp is not None else 'n/a'} bps",
+        "time_delta": "",
+        "confidence": None,
+        "predicted_impact": None,
+        "actions": [],
+        "auto_expand": False,
+    }
+    if badge:
+        comp["badge"] = badge
+    ts = sig.get("timestamp")
+    ts_iso = datetime.fromtimestamp(ts, timezone.utc).isoformat() if isinstance(ts, (int, float)) and ts > 0 else _now_iso()
+    return {
+        "layout_version": "1.0",
+        "timestamp": ts_iso,
+        "components": [comp],
+        "predictive_actions": [],
     }
 
 

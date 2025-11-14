@@ -14,6 +14,7 @@ from app.config import (
     ALERTS_RATE_MAX_PER_WINDOW,
     ALERTS_RATE_LIMIT_PER_CATEGORY,
 )
+from app.config import EXECUTION_ENABLED
 
 _redis: redis.Redis | None = None
 
@@ -72,6 +73,8 @@ def build_rich_slack_payload(flow: Dict[str, Any]) -> Dict[str, Any]:
     header_text = (
         "CROSS-MARKET SIGNAL" if ftype == "cross" else
         "TRUSTLINE ALERT" if ftype == "trustline" else
+        "RWA AMM LIQUIDITY" if ftype == "rwa_amm" else
+        "ORDERBOOK ALERT" if ftype == "orderbook" else
         "GODARK PREP" if ftype == "godark_prep" else
         "FLOW ALERT"
     )
@@ -98,14 +101,46 @@ def build_rich_slack_payload(flow: Dict[str, Any]) -> Dict[str, Any]:
         usd = payload_obj.get("usd_value")
         to = (payload_obj.get("to") or "")
         detail_lines.append(f"GoDark Prep: ${usd:,.1f} {asset} → {to[:10]}...")
+    if ftype == "rwa_amm":
+        tags = ", ".join(payload_obj.get("tags") or [])
+        chg = payload_obj.get("amm_liquidity_change", {}).get("lp_change_pct")
+        detail_lines.append(f"RWA AMM: Δ LP {round(chg*100,2) if chg is not None else 'n/a'}%\nTags: {tags}")
+    if ftype == "orderbook":
+        pair = payload_obj.get("pair")
+        bid = payload_obj.get("bid_depth_usd")
+        ask = payload_obj.get("ask_depth_usd")
+        sp = payload_obj.get("spread_bps")
+        tags = ", ".join(payload_obj.get("tags") or [])
+        detail_lines.append(f"{pair}: bid ${bid:,.0f} | ask ${ask:,.0f} | spread {sp if sp is not None else 'n/a'} bps\nTags: {tags}")
     text_block = "\n".join(detail_lines) if detail_lines else ""
-    return {
+    payload = {
         "type": ftype,
         "blocks": [
             {"type": "header", "text": {"type": "plain_text", "text": header_text}},
             {"type": "section", "text": {"type": "mrkdwn", "text": text_block}},
         ]
     }
+    # Set color for non-cross types
+    if ftype != "cross":
+        color = None
+        tags = [str(t) for t in (payload_obj.get("tags") or [])]
+        if ftype == "rwa_amm":
+            if any("GoDark" in t for t in tags):
+                color = "#8b5cf6"
+            elif any("Withdrawal" in t for t in tags):
+                color = "#ff0000"
+            elif any("Deposit" in t for t in tags):
+                color = "#10b981"
+        elif ftype == "orderbook":
+            if any("GoDark" in t for t in tags):
+                color = "#8b5cf6"
+            elif any("Imbalance" in t for t in tags) or any("Whale" in t for t in tags):
+                color = "#ff0000"
+            elif any("Depth Surge" in t for t in tags):
+                color = "#10b981"
+        if color:
+            payload["attachments"] = [{"color": color}]
+    return payload
 
 
 def build_cross_slack_payload(cross: Dict[str, Any]) -> Dict[str, Any]:
@@ -150,4 +185,23 @@ def build_cross_slack_payload(cross: Dict[str, Any]) -> Dict[str, Any]:
     }
     if godark:
         payload["blocks"].insert(1, {"type": "context", "elements": [{"type": "mrkdwn", "text": "*GoDark*"}]})
+    # Execution action (disabled by default)
+    if godark and confidence >= 95:
+        if EXECUTION_ENABLED:
+            payload["blocks"].append({
+                "type": "context",
+                "elements": [{"type": "mrkdwn", "text": "Execution: ENABLED (trigger gated by backend)"}],
+            })
+        else:
+            payload["blocks"].append({
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Execute Counter-Trade"},
+                        "style": "primary",
+                        "disabled": True,
+                    }
+                ],
+            })
     return payload

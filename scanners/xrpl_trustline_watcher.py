@@ -28,7 +28,7 @@ async def _get_dyn_partners() -> set[str]:
 async def start_trustline_watcher():
     if not XRPL_WSS:
         return
-    assert ("xrplcluster.com" in XRPL_WSS) or ("ripple.com" in XRPL_WSS), "NON-MAINNET WSS – ABORT"
+    assert ("xrplcluster.com" in XRPL_WSS) or ("ripple.com" in XRPL_WSS), "NON-MAINNET WSS – FATAL ABORT"
     dyn_partners = await _get_dyn_partners()
     partners = {a.lower() for a in GODARK_XRPL_PARTNERS} | {a.lower() for a in dyn_partners}
     async with AsyncWebsocketClient(XRPL_WSS) as client:

@@ -6,6 +6,8 @@ from scanners.zk_scanner import start_zk_scanner
 from scanners.equities_scanner import start_equities_scanner
 from scanners.xrpl_trustline_watcher import start_trustline_watcher
 from scanners.godark_eth_scanner import start_godark_eth_scanner
+from scanners.rwa_amm_liquidity_monitor import start_rwa_amm_monitor
+from scanners.xrpl_orderbook_monitor import start_xrpl_orderbook_monitor
 from godark.dynamic_ingest import run_dynamic_ingest
 from correlator.cross_market import run_correlation_loop
 from xrpl.asyncio.clients import AsyncJsonRpcClient
@@ -47,6 +49,10 @@ async def main():
         await _xrpl_mainnet_proof()
         print("[Worker] Launching XRPL scanner")
         tasks.append(asyncio.create_task(supervise(start_xrpl_scanner, "XRPL")))
+        print("[Worker] Launching XRPL RWA AMM monitor")
+        tasks.append(asyncio.create_task(supervise(start_rwa_amm_monitor, "RWA_AMM")))
+        print("[Worker] Launching XRPL orderbook monitor")
+        tasks.append(asyncio.create_task(supervise(start_xrpl_orderbook_monitor, "ORDERBOOK")))
     if ALCHEMY_WS_URL:
         print("[Worker] Launching ZK scanner")
         tasks.append(asyncio.create_task(supervise(start_zk_scanner, "ZK")))

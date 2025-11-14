@@ -50,3 +50,12 @@ MONSTER_TRUSTLINE_THRESHOLD = float(os.getenv("MONSTER_TRUSTLINE_THRESHOLD", "10
 
 # Ethereum GoDark prep scanner
 ENABLE_GODARK_ETH_SCANNER = os.getenv("ENABLE_GODARK_ETH_SCANNER", "true").lower() == "true"
+
+# Execution stubs (disabled by default)
+EXECUTION_ENABLED = os.getenv("EXECUTION_ENABLED", "false").lower() == "true"
+
+# RWA AMM monitor
+RWA_AMM_CHANGE_THRESHOLD_PCT = float(os.getenv("RWA_AMM_CHANGE_THRESHOLD_PCT", "5"))
+
+# DEX orderbook pairs monitor
+DEX_ORDERBOOK_PAIRS = [p.strip() for p in os.getenv("DEX_ORDERBOOK_PAIRS", "XRP/USD.rhub,XRP/USDC.rhub").split(",") if p.strip()]

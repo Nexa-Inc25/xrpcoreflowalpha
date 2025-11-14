@@ -55,7 +55,11 @@
           (payload.components || []).forEach(c => {
             const card = document.createElement('div');
             const urgency = (c.urgency || '').toLowerCase();
+            const color = c.color || '';
             card.className = `card ${urgency} ${c.auto_expand ? 'auto-expand' : ''}`;
+            if (color) {
+              card.style.borderLeft = `6px solid ${color}`;
+            }
             const badge = c.badge ? `<span class="badge">${c.badge}</span>` : '';
             card.innerHTML = `
               <h2>${c.title || ''} ${badge}</h2>

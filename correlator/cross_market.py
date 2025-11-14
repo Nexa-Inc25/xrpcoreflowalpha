@@ -10,6 +10,8 @@ from alerts.slack import send_slack_alert, build_cross_slack_payload
 from app.config import REDIS_URL, CROSS_SIGNAL_DEDUP_TTL
 from bus.signal_bus import fetch_recent_signals, publish_cross_signal
 from ml.impact_predictor import predict_xrp_impact
+from app.config import EXECUTION_ENABLED
+from execution.engine import XRPFlowAlphaExecution
 
 
 def _pair_ok(a: Dict, b: Dict) -> bool:
@@ -17,7 +19,7 @@ def _pair_ok(a: Dict, b: Dict) -> bool:
         return False
     # At least one must be crypto (xrp, zk, trustline) and one may be equity
     types = {a.get("type"), b.get("type")}
-    crypto_present = any(t in {"xrp", "zk", "trustline", "godark_prep"} for t in types)
+    crypto_present = any(t in {"xrp", "zk", "trustline", "godark_prep", "rwa_amm", "orderbook"} for t in types)
     return crypto_present and ("equity" in types or crypto_present)
 
 
@@ -128,6 +130,33 @@ async def correlate_signals(signals: List[Dict]) -> List[Dict]:
                         pass
                 cross["godark"] = True
                 cross["godark_reason"] = reason
+            # RWA AMM and Orderbook influences
+            amm_deposit = any("rwa amm deposit" in t for t in ta.union(tb))
+            amm_withdraw = any("rwa amm withdrawal" in t for t in ta.union(tb))
+            ob_depth = any("ob depth surge" in t for t in ta.union(tb))
+            ob_imbalance = any("ob imbalance" in t for t in ta.union(tb))
+            ob_whale = any("ob whale move" in t for t in ta.union(tb))
+            godark_ext = any("godark rwa amm" in t or "godark ob shift" in t for t in ta.union(tb))
+            try:
+                base_impact = float(cross["predicted_impact_pct"])
+            except Exception:
+                base_impact = 0.0
+            if amm_deposit:
+                cross["predicted_impact_pct"] = round(abs(base_impact) * 1.7 or 1.7, 2)
+            if amm_withdraw:
+                cross["predicted_impact_pct"] = round(-abs(base_impact) * 1.5 or -1.5, 2)
+            if ob_depth:
+                try:
+                    cross["predicted_impact_pct"] = round(float(cross["predicted_impact_pct"]) * 1.8, 2)
+                except Exception:
+                    pass
+            if ob_imbalance or ob_whale:
+                try:
+                    cross["predicted_impact_pct"] = round(float(cross["predicted_impact_pct"]) * 1.5, 2)
+                except Exception:
+                    pass
+            if godark_ext or godark_any:
+                cross["godark"] = True
         except Exception:
             pass
         if cross["confidence"] >= 85 and await _dedup_allow(cross):
@@ -145,6 +174,26 @@ async def run_correlation_loop():
                 payload = build_cross_slack_payload(c)
                 await send_slack_alert(payload)
                 print(f"[CROSS] Correlated {c['signals'][0].get('type')} + {c['signals'][1].get('type')} | conf {c['confidence']} | impact {c['predicted_impact_pct']}%")
+                # Optional execution trigger (disabled by default)
+                if EXECUTION_ENABLED and c.get("godark") and int(c.get("confidence", 0)) >= 95:
+                    async def _exec():
+                        try:
+                            xs = [s for s in c.get("signals", []) if s.get("type") == "xrp" and s.get("amount_xrp")]
+                            if not xs:
+                                return
+                            sig = xs[0]
+                            dest = sig.get("destination") or sig.get("source")
+                            if not dest:
+                                return
+                            amt = float(sig.get("amount_xrp") or 0.0)
+                            if amt <= 0:
+                                return
+                            tranche = min(100_000.0, max(1.0, amt * 0.005))
+                            engine = XRPFlowAlphaExecution()
+                            await engine.counter_trade_xrp(tranche, dest)
+                        except Exception:
+                            pass
+                    asyncio.create_task(_exec())
         except Exception as e:
             print("[CROSS] error:", repr(e))
         await asyncio.sleep(60)
