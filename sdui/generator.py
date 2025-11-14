@@ -1,11 +1,41 @@
-from models.types import CrossMarketSignal
+from datetime import datetime, timezone
+from typing import Dict
 
-def generate_cross_market_card(signal: CrossMarketSignal) -> dict:
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _fmt_delta(seconds: int) -> str:
+    m, s = divmod(max(0, int(seconds)), 60)
+    return f"{m}m {s}s"
+
+
+def generate_sdui_payload(cross: Dict) -> dict:
+    confidence = int(cross.get("confidence", 0))
+    impact = float(cross.get("predicted_impact_pct", 0.0))
+    delta = int(cross.get("time_delta", 0))
+    urgency = "HIGH" if impact >= 1.5 else "MEDIUM"
+    color = "#ff0000" if urgency == "HIGH" else "#ffa500"
+    s1, s2 = cross.get("signals", [{}])[0], (cross.get("signals", [{}])[1] if len(cross.get("signals", [])) > 1 else {})
+    def _sum(sig: Dict) -> str:
+        return sig.get("summary") or sig.get("type", "").upper()
+    comp = {
+        "type": "cross_signal_card",
+        "id": f"cross_{cross.get('id','')}",
+        "title": f"CROSS-MARKET SIGNAL: {urgency}",
+        "urgency": urgency,
+        "color": color,
+        "summary": f"{_sum(s1)} → {_sum(s2)}",
+        "time_delta": _fmt_delta(delta),
+        "confidence": confidence,
+        "predicted_impact": f"{impact:+.2f}% XRP in 15m",
+        "actions": [],
+        "auto_expand": confidence >= 90,
+    }
     return {
-        "type": "cross_market_flow",
-        "id": signal.id,
-        "title": f"{signal.equity_ticker} ↔ {signal.crypto_asset}",
-        "confidence": signal.confidence,
-        "predicted_impact": signal.forecast,
-        "auto_expand": signal.confidence > 90,
+        "layout_version": "1.0",
+        "timestamp": _now_iso(),
+        "components": [comp],
+        "predictive_actions": [{"type": "prefetch_chart", "symbol": "XRP-USD", "timeframe": "15m"}],
     }

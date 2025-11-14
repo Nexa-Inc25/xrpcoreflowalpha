@@ -8,7 +8,7 @@ import redis.asyncio as redis
 
 from alerts.slack import send_slack_alert, build_cross_slack_payload
 from app.config import REDIS_URL, CROSS_SIGNAL_DEDUP_TTL
-from bus.signal_bus import fetch_recent_signals
+from bus.signal_bus import fetch_recent_signals, publish_cross_signal
 from ml.impact_predictor import predict_xrp_impact
 
 
@@ -93,6 +93,7 @@ async def run_correlation_loop():
             signals = await fetch_recent_signals(window_seconds=900)
             crosses = await correlate_signals(signals)
             for c in crosses:
+                await publish_cross_signal(c)
                 payload = build_cross_slack_payload(c)
                 await send_slack_alert(payload)
                 print(f"[CROSS] Correlated {c['signals'][0].get('type')} + {c['signals'][1].get('type')} | conf {c['confidence']} | impact {c['predicted_impact_pct']}%")

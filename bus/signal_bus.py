@@ -46,3 +46,29 @@ async def fetch_recent_signals(window_seconds: int = 900, types: Optional[List[s
             continue
         out.append(s)
     return out
+
+
+# Cross-signal helpers (for SDUI feed and alerts)
+async def publish_cross_signal(cross: Dict[str, Any]) -> None:
+    r = await _get_redis()
+    if "timestamp" not in cross:
+        cross["timestamp"] = int(time.time())
+    data = json.dumps(cross, separators=(",", ":"))
+    await r.xadd("cross_signals", {"json": data}, maxlen=1000, approximate=True)
+
+
+async def fetch_recent_cross_signals(limit: int = 10) -> List[Dict[str, Any]]:
+    r = await _get_redis()
+    rows = await r.xrevrange("cross_signals", max="+", min="-", count=limit)
+    out: List[Dict[str, Any]] = []
+    for _, fields in rows:
+        raw = fields.get("json")
+        if not raw:
+            continue
+        try:
+            s = json.loads(raw)
+        except Exception:
+            continue
+        out.append(s)
+    out.reverse()
+    return out
