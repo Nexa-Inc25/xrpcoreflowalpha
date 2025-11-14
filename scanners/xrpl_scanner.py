@@ -43,9 +43,11 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
                     source=txn.get("Account", ""),
                 )
                 xrpl_tx_processed.labels(type="payment_large").inc()
+                print(f"[XRPL] Large payment: {xrp:,.0f} XRP hash={flow.tx_hash}")
                 await send_slack_alert(build_rich_slack_payload({"type": "xrp", "flow": flow}))
                 return
 
     # Other institutional signals to extend in Phase 1
     if ttype in {"AMMDeposit", "AMMWithdraw", "EscrowCreate", "EscrowFinish", "TrustSet"}:
         xrpl_tx_processed.labels(type=ttype.lower()).inc()
+        print(f"[XRPL] Institutional signal: {ttype}")

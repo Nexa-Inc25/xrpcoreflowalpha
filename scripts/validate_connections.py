@@ -6,6 +6,7 @@ import httpx
 from web3 import Web3
 from xrpl.asyncio.clients import AsyncWebsocketClient
 from xrpl.models.requests import ServerInfo
+from dotenv import load_dotenv
 
 
 async def check_xrpl(url: str) -> bool:
@@ -64,6 +65,8 @@ async def check_slack(webhook: str) -> bool:
 
 
 async def main():
+    # Load .env if present
+    load_dotenv(".env")
     xrpl = await check_xrpl(os.getenv("XRPL_WSS", ""))
     web3 = check_web3(os.getenv("ALCHEMY_WS_URL", ""))
     finnhub = await check_finnhub(os.getenv("FINNHUB_API_KEY", ""))
