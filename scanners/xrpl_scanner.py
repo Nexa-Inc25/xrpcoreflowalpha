@@ -10,14 +10,14 @@ from models.types import XRPFlow
 from observability.metrics import xrpl_tx_processed
 from bus.signal_bus import publish_signal
 from utils.price import get_price_usd
-from utils.xrpl_verify import validate_xrpl_tx
+from utils.tx_validate import validate_tx
 import time
 
 
 async def start_xrpl_scanner():
     if not XRPL_WSS:
         return
-    assert ("s1.ripple.com" in XRPL_WSS) or ("ripple.com" in XRPL_WSS), "TESTNET – FATAL ABORT"
+    assert ("xrplcluster.com" in XRPL_WSS) or ("ripple.com" in XRPL_WSS), "NON-MAINNET WSS – ABORT"
     async with AsyncWebsocketClient(XRPL_WSS) as client:
         # Server info log on startup
         try:
@@ -55,7 +55,7 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
             drops = int(amount)
             xrp = drops / 1_000_000
             # Hard reject unrealistic amounts
-            if xrp > 10_000_000_000:
+            if xrp > 5_000_000_000:
                 print(f"[XRPL] DROP unreal amount {xrp:,.0f} XRP hash={txn.get('hash','')}")
                 return
             if xrp >= 5_000_000:
@@ -68,11 +68,11 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
                     source=txn.get("Account", ""),
                 )
                 xrpl_tx_processed.labels(type="payment_large").inc()
-                print(f"[XRPL] Large payment detected (verifying): {xrp:,.0f} XRP hash={flow.tx_hash}")
-                ok = await validate_xrpl_tx(flow.tx_hash, timeout_sec=10)
+                ok = await validate_tx("xrpl", flow.tx_hash, timeout_sec=10)
                 if not ok:
-                    print(f"[XRPL] Validation failed, dropping hash={flow.tx_hash}")
+                    # Drop silently to avoid noise from fake data
                     return
+                print(f"[XRPL] Large payment: {xrp:,.0f} XRP hash={flow.tx_hash}")
                 usd = 0.0
                 try:
                     px = await get_price_usd("xrp")
@@ -102,7 +102,7 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
         tx_hash = txn.get("hash", "")
         if not tx_hash:
             return
-        ok = await validate_xrpl_tx(tx_hash, timeout_sec=10)
+        ok = await validate_tx("xrpl", tx_hash, timeout_sec=10)
         if not ok:
             return
         print(f"[XRPL] Institutional signal: {ttype}")

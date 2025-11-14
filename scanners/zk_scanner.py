@@ -6,6 +6,7 @@ from web3 import Web3
 
 from app.config import ALCHEMY_WS_URL, VERIFIER_ALLOWLIST
 from alerts.slack import send_slack_alert, build_rich_slack_payload
+from utils.tx_validate import validate_tx
 from models.types import ZKFlow
 from observability.metrics import zk_proof_detected
 from bus.signal_bus import publish_signal
@@ -56,6 +57,10 @@ async def start_zk_scanner():
                             timestamp=int(tx.get("nonce", 0)),
                             network=chain,
                         )
+                        # Validate on Etherscan before publishing
+                        ok = await validate_tx("ethereum", flow.tx_hash, timeout_sec=10)
+                        if not ok:
+                            continue
                         print(f"[ZK] Proof-like tx {flow.tx_hash[:10]}.. gas={flow.gas_used}")
                         await send_slack_alert(build_rich_slack_payload({"type": "zk", "flow": flow}))
                         # Estimate USD value via gas * (gas price) * ETH price

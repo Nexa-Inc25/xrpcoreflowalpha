@@ -16,7 +16,7 @@ from app.config import (
 from bus.signal_bus import publish_signal
 import redis.asyncio as redis
 from alerts.slack import send_slack_alert, build_rich_slack_payload
-from utils.xrpl_verify import validate_xrpl_tx
+from utils.tx_validate import validate_tx
 
 
 async def _get_dyn_partners() -> set[str]:
@@ -28,7 +28,7 @@ async def _get_dyn_partners() -> set[str]:
 async def start_trustline_watcher():
     if not XRPL_WSS:
         return
-    assert ("s1.ripple.com" in XRPL_WSS) or ("ripple.com" in XRPL_WSS), "TESTNET – FATAL ABORT"
+    assert ("xrplcluster.com" in XRPL_WSS) or ("ripple.com" in XRPL_WSS), "NON-MAINNET WSS – ABORT"
     dyn_partners = await _get_dyn_partners()
     partners = {a.lower() for a in GODARK_XRPL_PARTNERS} | {a.lower() for a in dyn_partners}
     async with AsyncWebsocketClient(XRPL_WSS) as client:
@@ -76,8 +76,8 @@ async def start_trustline_watcher():
                     "summary": f"TrustSet {value:,.0f} {currency} issuer {issuer[:8]}...",
                     "confidence_boost": boost if boost > 0 else None,
                 }
-                # Validate tx exists on livenet.xrpl.org
-                ok = await validate_xrpl_tx(signal["tx_hash"], timeout_sec=10)
+                # Validate tx exists on livenet.xrpl.org via unified validator
+                ok = await validate_tx("xrpl", signal["tx_hash"], timeout_sec=10)
                 if not ok:
                     continue
                 await publish_signal(signal)

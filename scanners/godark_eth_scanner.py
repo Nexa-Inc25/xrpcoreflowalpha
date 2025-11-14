@@ -8,6 +8,7 @@ import redis.asyncio as redis
 
 from app.config import ALCHEMY_WS_URL, REDIS_URL, ENABLE_GODARK_ETH_SCANNER
 from bus.signal_bus import publish_signal
+from utils.tx_validate import validate_tx
 
 # Ethereum mainnet token addresses
 USDC = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
@@ -69,6 +70,11 @@ async def start_godark_eth_scanner():
                 if value < 10_000_000:
                     continue
                 asset = "USDC" if addr == USDC else ("USDT" if addr == USDT else "DAI")
+                # Validate tx on Etherscan before publish
+                tx_hash = log.get("transactionHash")
+                ok = await validate_tx("ethereum", tx_hash, timeout_sec=10)
+                if not ok:
+                    continue
                 signal: Dict[str, Any] = {
                     "type": "godark_prep",
                     "chain": "ethereum",
@@ -76,7 +82,7 @@ async def start_godark_eth_scanner():
                     "usd_value": float(value),
                     "to": to_addr,
                     "token": addr,
-                    "tx_hash": log.get("transactionHash"),
+                    "tx_hash": tx_hash,
                     "timestamp": int(time.time()),
                     "summary": f"GoDark Prep: ${value:,.1f} {asset} → Partner",
                     "tags": ["GoDark Prep"],

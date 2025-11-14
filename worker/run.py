@@ -8,11 +8,25 @@ from scanners.xrpl_trustline_watcher import start_trustline_watcher
 from scanners.godark_eth_scanner import start_godark_eth_scanner
 from godark.dynamic_ingest import run_dynamic_ingest
 from correlator.cross_market import run_correlation_loop
+from xrpl.asyncio.clients import AsyncJsonRpcClient
+from xrpl.models.requests import Ledger
 
 
 async def main():
     print(f"[Worker] Starting. XRPL={'on' if XRPL_WSS else 'off'} | ZK={'on' if ALCHEMY_WS_URL else 'off'} | EQUITIES={'on' if FINNHUB_API_KEY else 'off'}")
     tasks = []
+
+    async def _xrpl_mainnet_proof():
+        try:
+            # Use HTTP JSON-RPC to xrplcluster.com regardless of WSS
+            client = AsyncJsonRpcClient("https://xrplcluster.com")
+            resp = await client.request(Ledger(ledger_index="validated"))
+            ledger = resp.result.get("ledger") or {}
+            total = ledger.get("total_coins")
+            assert total == "99999999999999999999", f"XRPL mainnet proof failed: total_coins={total}"
+            print("[Worker] XRPL mainnet proof passed.")
+        except Exception as e:
+            raise AssertionError(f"XRPL mainnet proof failed: {e}")
 
     async def supervise(coro, name: str):
         while True:
@@ -24,6 +38,7 @@ async def main():
                 await asyncio.sleep(2)
 
     if XRPL_WSS:
+        await _xrpl_mainnet_proof()
         print("[Worker] Launching XRPL scanner")
         tasks.append(asyncio.create_task(supervise(start_xrpl_scanner, "XRPL")))
     if ALCHEMY_WS_URL:

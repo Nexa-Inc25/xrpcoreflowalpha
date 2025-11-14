@@ -26,7 +26,7 @@ async def publish_signal(signal: Dict[str, Any]) -> None:
     try:
         if signal.get("type") == "xrp":
             amt = signal.get("amount_xrp")
-            if amt is not None and float(amt) > 10_000_000_000:
+            if amt is not None and float(amt) > 5_000_000_000:
                 return
     except Exception:
         return
