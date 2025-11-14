@@ -93,8 +93,9 @@ def build_cross_slack_payload(cross: Dict[str, Any]) -> Dict[str, Any]:
     confidence = int(cross.get("confidence", 0))
     impact = float(cross.get("predicted_impact_pct", 0.0))
     delta = int(cross.get("time_delta", 0))
-    urgency = "HIGH" if impact >= 1.5 else "MEDIUM"
-    color = "#ff0000" if urgency == "HIGH" else "#ffa500"
+    godark = bool(cross.get("godark"))
+    urgency = "CRITICAL" if godark else ("HIGH" if impact >= 1.5 else "MEDIUM")
+    color = "#8b5cf6" if godark else ("#ff0000" if urgency == "HIGH" else "#ffa500")
 
     s1 = cross.get("signals", [{}])[0]
     s2 = cross.get("signals", [{}])[1] if len(cross.get("signals", [])) > 1 else {}
@@ -106,7 +107,7 @@ def build_cross_slack_payload(cross: Dict[str, Any]) -> Dict[str, Any]:
         val_str = f" | ${val:,.0f}" if isinstance(val, (int, float)) and val else ""
         return f"{t}: {summ}{val_str}"
 
-    return {
+    payload = {
         "type": "cross",
         "blocks": [
             {"type": "header", "text": {"type": "plain_text", "text": f"CROSS-MARKET SIGNAL: {urgency}"}},
@@ -128,3 +129,6 @@ def build_cross_slack_payload(cross: Dict[str, Any]) -> Dict[str, Any]:
         ],
         "attachments": [{"color": color}],
     }
+    if godark:
+        payload["blocks"].insert(1, {"type": "context", "elements": [{"type": "mrkdwn", "text": "*GoDark*"}]})
+    return payload

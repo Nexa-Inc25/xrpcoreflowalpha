@@ -55,6 +55,7 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
                 except Exception:
                     usd = 0.0
                 summary = f"{xrp/1_000_000:.1f}M XRP → {txn.get('Destination','')[:6]}..."
+                dest_tag = txn.get("DestinationTag")
                 await publish_signal({
                     "type": "xrp",
                     "sub_type": "payment",
@@ -63,6 +64,9 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
                     "tx_hash": flow.tx_hash,
                     "timestamp": flow.timestamp,
                     "summary": summary,
+                    "destination": flow.destination,
+                    "source": flow.source,
+                    "destination_tag": dest_tag,
                 })
                 return
 

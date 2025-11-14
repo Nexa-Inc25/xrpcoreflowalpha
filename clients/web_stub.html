@@ -9,6 +9,8 @@
     .card { background: #1e293b; border-radius: 12px; padding: 16px; margin: 16px 0; box-shadow: 0 4px 20px rgba(0,0,0,0.5); transition: all 0.3s; }
     .high { border-left: 6px solid #ff0000; }
     .medium { border-left: 6px solid #ffa500; }
+    .critical { border-left: 6px solid #8b5cf6; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 9999px; background: #8b5cf6; color: #0f172a; font-weight: 700; margin-left: 8px; }
     h1 { text-align: center; color: #8b5cf6; }
     .confidence { font-weight: bold; color: #8b5cf6; }
     .impact { font-size: 1.2em; font-weight: bold; }
@@ -54,8 +56,9 @@
             const card = document.createElement('div');
             const urgency = (c.urgency || '').toLowerCase();
             card.className = `card ${urgency} ${c.auto_expand ? 'auto-expand' : ''}`;
+            const badge = c.badge ? `<span class="badge">${c.badge}</span>` : '';
             card.innerHTML = `
-              <h2>${c.title || ''}</h2>
+              <h2>${c.title || ''} ${badge}</h2>
               <p>${c.summary || ''}</p>
               <p>Time Delta: ${c.time_delta || ''}</p>
               <p class="confidence">Confidence: ${c.confidence ?? ''}%</p>

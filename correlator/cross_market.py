@@ -82,6 +82,34 @@ async def correlate_signals(signals: List[Dict]) -> List[Dict]:
         if not _pair_ok(a, b):
             continue
         cross = _mk_cross(a, b)
+        try:
+            ta = {str(t).lower() for t in (a.get("tags") or [])}
+            tb = {str(t).lower() for t in (b.get("tags") or [])}
+            godark_any = any("godark" in t for t in ta.union(tb))
+            boost = 1.0
+            reason = None
+            if any("godark xrpl settlement" in t for t in ta.union(tb)):
+                boost *= 1.30
+                reason = "settlement"
+            elif any("godark partner" in t for t in ta.union(tb)):
+                boost *= 1.15
+                reason = "partner"
+            tset = {a.get("type"), b.get("type")}
+            if godark_any and "equity" in tset and abs(int(a.get("timestamp", 0)) - int(b.get("timestamp", 0))) <= 600:
+                boost *= 1.25
+                if reason is None:
+                    reason = "cross"
+            if boost != 1.0:
+                cross["confidence"] = min(99, int(cross["confidence"] * boost))
+                if godark_any and "equity" in tset:
+                    try:
+                        cross["predicted_impact_pct"] = round(float(cross["predicted_impact_pct"]) * 1.25, 2)
+                    except Exception:
+                        pass
+                cross["godark"] = True
+                cross["godark_reason"] = reason
+        except Exception:
+            pass
         if cross["confidence"] >= 85 and await _dedup_allow(cross):
             out.append(cross)
     return out

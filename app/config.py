@@ -34,3 +34,7 @@ COINGECKO_API_KEY = os.getenv("COINGECKO_API_KEY", "")
 
 # Correlation dedup
 CROSS_SIGNAL_DEDUP_TTL = int(os.getenv("CROSS_SIGNAL_DEDUP_TTL", "21600"))  # 6h
+
+# GoDark XRPL integration
+GODARK_XRPL_PARTNERS = [a.strip().lower() for a in os.getenv("GODARK_XRPL_PARTNERS", "").split(",") if a.strip()]
+GODARK_XRPL_DEST_TAGS = [int(x.strip()) for x in os.getenv("GODARK_XRPL_DEST_TAGS", "").split(",") if x.strip().isdigit()]

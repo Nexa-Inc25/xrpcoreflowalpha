@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 import redis.asyncio as redis
 
 from app.config import REDIS_URL
+from godark.detector import annotate_godark
 
 _redis: Optional[redis.Redis] = None
 
@@ -18,6 +19,10 @@ async def _get_redis() -> redis.Redis:
 
 async def publish_signal(signal: Dict[str, Any]) -> None:
     r = await _get_redis()
+    try:
+        signal = await annotate_godark(signal)
+    except Exception:
+        pass
     # Ensure required fields
     if "timestamp" not in signal:
         signal["timestamp"] = int(time.time())
