@@ -1,9 +1,12 @@
 import asyncio
 
-from app.config import XRPL_WSS, ALCHEMY_WS_URL, FINNHUB_API_KEY
+from app.config import XRPL_WSS, ALCHEMY_WS_URL, FINNHUB_API_KEY, ENABLE_GODARK_ETH_SCANNER
 from scanners.xrpl_scanner import start_xrpl_scanner
 from scanners.zk_scanner import start_zk_scanner
 from scanners.equities_scanner import start_equities_scanner
+from scanners.xrpl_trustline_watcher import start_trustline_watcher
+from scanners.godark_eth_scanner import start_godark_eth_scanner
+from godark.dynamic_ingest import run_dynamic_ingest
 from correlator.cross_market import run_correlation_loop
 
 
@@ -29,6 +32,17 @@ async def main():
     if FINNHUB_API_KEY:
         print("[Worker] Launching Equities scanner")
         tasks.append(asyncio.create_task(supervise(start_equities_scanner, "EQUITIES")))
+    # XRPL trustline watcher (predictive)
+    if XRPL_WSS:
+        print("[Worker] Launching XRPL trustline watcher")
+        tasks.append(asyncio.create_task(supervise(start_trustline_watcher, "TRUSTLINES")))
+    # Ethereum GoDark prep scanner (USDC/USDT/DAI inflows)
+    if ENABLE_GODARK_ETH_SCANNER and ALCHEMY_WS_URL:
+        print("[Worker] Launching GoDark ETH prep scanner")
+        tasks.append(asyncio.create_task(supervise(start_godark_eth_scanner, "GODARK_ETH")))
+    # Dynamic partner ingestion (Arkham/env sync)
+    print("[Worker] Launching GoDark dynamic ingestion")
+    tasks.append(asyncio.create_task(supervise(run_dynamic_ingest, "GODARK_INGEST")))
     # Correlator always runs; it only acts on available signals
     tasks.append(asyncio.create_task(supervise(run_correlation_loop, "CROSS")))
     if not tasks:

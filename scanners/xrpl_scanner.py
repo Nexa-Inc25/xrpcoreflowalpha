@@ -2,7 +2,7 @@ import asyncio
 from typing import Any, Dict
 
 from xrpl.asyncio.clients import AsyncWebsocketClient
-from xrpl.models.requests import Subscribe
+from xrpl.models.requests import Subscribe, ServerInfo
 
 from app.config import XRPL_WSS
 from alerts.slack import send_slack_alert, build_rich_slack_payload
@@ -10,18 +10,36 @@ from models.types import XRPFlow
 from observability.metrics import xrpl_tx_processed
 from bus.signal_bus import publish_signal
 from utils.price import get_price_usd
+from utils.xrpl_verify import verify_xrpl_payment
 import time
 
 
 async def start_xrpl_scanner():
     if not XRPL_WSS:
         return
+    assert ("livenet" in XRPL_WSS) or ("ripple.com" in XRPL_WSS), "TESTNET DETECTED – ABORT"
     async with AsyncWebsocketClient(XRPL_WSS) as client:
+        # Server info log on startup
+        try:
+            info = await client.request(ServerInfo())
+            vi = (info.result.get("info", {}).get("validated_ledger", {}) or {}).get("seq") or (info.result.get("info", {}).get("validated_ledger", {}) or {}).get("ledger_index")
+            print(f"[XRPL] Connected. validated_ledger={vi}")
+        except Exception:
+            print("[XRPL] Connected. server_info unavailable")
         await client.request(Subscribe(streams=["transactions"]))
+        processed = 0
         async for msg in client:
             if isinstance(msg, dict) and msg.get("status") == "success":
                 continue
             await process_xrpl_transaction(msg)
+            processed += 1
+            if processed % 100 == 0:
+                try:
+                    info = await client.request(ServerInfo())
+                    vi = (info.result.get("info", {}).get("validated_ledger", {}) or {}).get("seq") or (info.result.get("info", {}).get("validated_ledger", {}) or {}).get("ledger_index")
+                    print(f"[XRPL] Heartbeat. validated_ledger={vi} processed={processed}")
+                except Exception:
+                    print(f"[XRPL] Heartbeat. processed={processed}")
 
 
 async def process_xrpl_transaction(msg: Dict[str, Any]):
@@ -36,6 +54,10 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
         if isinstance(amount, str) and amount.isdigit():
             drops = int(amount)
             xrp = drops / 1_000_000
+            # Hard reject unrealistic amounts
+            if xrp > 10_000_000_000:
+                print(f"[XRPL] DROP unreal amount {xrp:,.0f} XRP hash={txn.get('hash','')}")
+                return
             if xrp >= 5_000_000:
                 flow = XRPFlow(
                     amount_xrp=xrp,
@@ -46,8 +68,12 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
                     source=txn.get("Account", ""),
                 )
                 xrpl_tx_processed.labels(type="payment_large").inc()
-                print(f"[XRPL] Large payment: {xrp:,.0f} XRP hash={flow.tx_hash}")
-                await send_slack_alert(build_rich_slack_payload({"type": "xrp", "flow": flow}))
+                print(f"[XRPL] Large payment detected (verifying): {xrp:,.0f} XRP hash={flow.tx_hash}")
+                # Verify exists on Ripple Data and amount matches
+                ok = await verify_xrpl_payment(flow.tx_hash, drops, timeout_sec=30)
+                if not ok:
+                    print(f"[XRPL] Verification failed, dropping hash={flow.tx_hash}")
+                    return
                 usd = 0.0
                 try:
                     px = await get_price_usd("xrp")
@@ -68,6 +94,7 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
                     "source": flow.source,
                     "destination_tag": dest_tag,
                 })
+                await send_slack_alert(build_rich_slack_payload({"type": "xrp", "flow": flow}))
                 return
 
     # Other institutional signals to extend in Phase 1

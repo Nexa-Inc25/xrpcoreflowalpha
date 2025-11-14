@@ -38,3 +38,14 @@ CROSS_SIGNAL_DEDUP_TTL = int(os.getenv("CROSS_SIGNAL_DEDUP_TTL", "21600"))  # 6h
 # GoDark XRPL integration
 GODARK_XRPL_PARTNERS = [a.strip().lower() for a in os.getenv("GODARK_XRPL_PARTNERS", "").split(",") if a.strip()]
 GODARK_XRPL_DEST_TAGS = [int(x.strip()) for x in os.getenv("GODARK_XRPL_DEST_TAGS", "").split(",") if x.strip().isdigit()]
+GODARK_ETH_PARTNERS = [a.strip().lower() for a in os.getenv("GODARK_ETH_PARTNERS", "").split(",") if a.strip()]
+ARKHAM_API_KEY = os.getenv("ARKHAM_API_KEY", "")
+GODARK_DYNAMIC_REFRESH_SECONDS = int(os.getenv("GODARK_DYNAMIC_REFRESH_SECONDS", "3600"))
+
+# Trustline watcher configuration
+TRUSTLINE_WATCHED_ISSUERS = [a.strip() for a in os.getenv("TRUSTLINE_WATCHED_ISSUERS", "").split(",") if a.strip()]
+GODARK_TRUSTLINE_MIN_VALUE = float(os.getenv("GODARK_TRUSTLINE_MIN_VALUE", "10000000"))
+MONSTER_TRUSTLINE_THRESHOLD = float(os.getenv("MONSTER_TRUSTLINE_THRESHOLD", "100000000"))
+
+# Ethereum GoDark prep scanner
+ENABLE_GODARK_ETH_SCANNER = os.getenv("ENABLE_GODARK_ETH_SCANNER", "true").lower() == "true"

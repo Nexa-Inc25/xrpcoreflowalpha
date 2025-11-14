@@ -27,12 +27,16 @@ def _is_zk_proof(tx) -> bool:
 async def start_zk_scanner():
     if not ALCHEMY_WS_URL:
         return
+    assert "mainnet" in ALCHEMY_WS_URL, "TESTNET DETECTED – ABORT"
     w3 = Web3(Web3.WebsocketProvider(ALCHEMY_WS_URL))
     # Poll pending tx filter in a thread to avoid blocking the event loop
     pending_filter = w3.eth.filter("pending")
-    chain = "eth" if (w3.eth.chain_id == 1) else str(w3.eth.chain_id)
+    chain_id = w3.eth.chain_id
+    chain = "eth" if (chain_id == 1) else str(chain_id)
+    print(f"[ZK] Connected. chain_id={chain_id}")
 
     async def poll_pending():
+        processed = 0
         while True:
             try:
                 hashes = await asyncio.to_thread(pending_filter.get_new_entries)
@@ -73,6 +77,9 @@ async def start_zk_scanner():
                             "timestamp": int(time.time()),
                             "summary": f"ZK verify {flow.to_address[:6]}.. gas {flow.gas_used}",
                         })
+                        processed += 1
+                        if processed % 100 == 0:
+                            print(f"[ZK] Heartbeat. processed={processed} chain_id={chain_id}")
             except Exception:
                 await asyncio.sleep(0.5)
             await asyncio.sleep(0.2)

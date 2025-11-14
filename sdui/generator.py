@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Dict
+from typing import Dict, Any
 
 
 def _now_iso() -> str:
@@ -63,9 +63,49 @@ def generate_sdui_payload(cross: Dict) -> dict:
     }
     if godark:
         comp["badge"] = "GoDark"
+    ts = cross.get("timestamp")
+    ts_iso = datetime.fromtimestamp(ts, timezone.utc).isoformat() if isinstance(ts, (int, float)) and ts > 0 else _now_iso()
     return {
         "layout_version": "1.0",
-        "timestamp": _now_iso(),
+        "timestamp": ts_iso,
         "components": [comp],
         "predictive_actions": [{"type": "prefetch_chart", "symbol": "XRP-USD", "timeframe": "15m"}],
+    }
+
+
+def generate_trustline_payload(sig: Dict[str, Any]) -> dict:
+    tags = [str(t) for t in (sig.get("tags") or [])]
+    val = float(sig.get("limit_value") or 0.0)
+    currency = sig.get("currency") or "IOU"
+    issuer = (sig.get("issuer") or "")
+    urgency = "CRITICAL" if "GoDark Trustline" in tags else ("HIGH" if ("Monster Trustline" in tags or "RWA Prep" in tags) else "MEDIUM")
+    color = "#8b5cf6" if urgency == "CRITICAL" else ("#ff0000" if urgency == "HIGH" else "#ffa500")
+    badge = "GoDark Trustline" if "GoDark Trustline" in tags else ("Trustline" if tags else None)
+    actions = []
+    if sig.get("tx_hash"):
+        actions.append({"label": "XRPL Tx", "url": f"https://livenet.xrpl.org/transactions/{sig['tx_hash']}"})
+    if issuer:
+        actions.append({"label": "Issuer", "url": f"https://livenet.xrpl.org/accounts/{issuer}"})
+    comp = {
+        "type": "trustline_card",
+        "id": f"trustline_{sig.get('tx_hash','')}",
+        "title": f"NEW TRUSTLINE: {urgency}",
+        "urgency": urgency,
+        "color": color,
+        "summary": f"{val:,.0f} {currency} issuer {issuer[:8]}...",
+        "time_delta": "",
+        "confidence": None,
+        "predicted_impact": "Potential XRP flow in 1–3 days",
+        "actions": actions,
+        "auto_expand": urgency == "CRITICAL",
+    }
+    if badge:
+        comp["badge"] = badge
+    ts = sig.get("timestamp")
+    ts_iso = datetime.fromtimestamp(ts, timezone.utc).isoformat() if isinstance(ts, (int, float)) and ts > 0 else _now_iso()
+    return {
+        "layout_version": "1.0",
+        "timestamp": ts_iso,
+        "components": [comp],
+        "predictive_actions": [],
     }

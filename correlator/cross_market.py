@@ -15,9 +15,10 @@ from ml.impact_predictor import predict_xrp_impact
 def _pair_ok(a: Dict, b: Dict) -> bool:
     if a.get("type") == b.get("type"):
         return False
-    # At least one must be crypto (xrp or zk) and one may be equity
+    # At least one must be crypto (xrp, zk, trustline) and one may be equity
     types = {a.get("type"), b.get("type")}
-    return ("xrp" in types or "zk" in types) and ("equity" in types or "xrp" in types or "zk" in types)
+    crypto_present = any(t in {"xrp", "zk", "trustline", "godark_prep"} for t in types)
+    return crypto_present and ("equity" in types or crypto_present)
 
 
 def _confidence(a: Dict, b: Dict) -> int:
@@ -99,6 +100,25 @@ async def correlate_signals(signals: List[Dict]) -> List[Dict]:
                 boost *= 1.25
                 if reason is None:
                     reason = "cross"
+            # Trustline boosts
+            if any("rwa prep" in t for t in ta.union(tb)):
+                boost *= 1.20
+            if any("godark trustline" in t for t in ta.union(tb)):
+                boost *= 1.35
+                cross["godark"] = True
+            if any("monster trustline" in t for t in ta.union(tb)):
+                boost *= 1.40
+            # Prep -> Settlement confirmation boost within 30 min
+            a_is_prep = (a.get("type") == "godark_prep") or any("godark prep" in t for t in ta)
+            b_is_prep = (b.get("type") == "godark_prep") or any("godark prep" in t for t in tb)
+            a_is_settle = any("godark xrpl settlement" in t for t in ta)
+            b_is_settle = any("godark xrpl settlement" in t for t in tb)
+            if ((a_is_prep and b_is_settle) or (b_is_prep and a_is_settle)):
+                dt = abs(int(a.get("timestamp", 0)) - int(b.get("timestamp", 0)))
+                if dt <= 1800:
+                    boost *= 1.50
+                    cross["godark"] = True
+                    cross["godark_reason"] = "prep_settlement"
             if boost != 1.0:
                 cross["confidence"] = min(99, int(cross["confidence"] * boost))
                 if godark_any and "equity" in tset:

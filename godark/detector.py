@@ -1,6 +1,7 @@
 from typing import Any, Dict, List
 
-from app.config import GODARK_XRPL_PARTNERS, GODARK_XRPL_DEST_TAGS
+from app.config import GODARK_XRPL_PARTNERS, GODARK_XRPL_DEST_TAGS, REDIS_URL
+import redis.asyncio as redis
 
 
 def _lower_list(xs: List[str]) -> List[str]:
@@ -10,7 +11,10 @@ def _lower_list(xs: List[str]) -> List[str]:
 async def annotate_godark(signal: Dict[str, Any]) -> Dict[str, Any]:
     tags = list(signal.get("tags") or [])
     if signal.get("type") == "xrp":
-        partners = _lower_list(GODARK_XRPL_PARTNERS)
+        # merge env seeds + dynamic partner set from redis
+        r = redis.from_url(REDIS_URL, decode_responses=True)
+        dyn = await r.smembers("godark:partners:xrpl")
+        partners = set(_lower_list(GODARK_XRPL_PARTNERS)) | {str(x).lower() for x in (dyn or [])}
         dest = str(signal.get("destination") or "").lower()
         src = str(signal.get("source") or "").lower()
         if dest in partners or src in partners:
