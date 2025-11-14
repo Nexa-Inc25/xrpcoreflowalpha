@@ -2,9 +2,11 @@ from fastapi import FastAPI, Response
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from app.config import XRPL_WSS, ALCHEMY_WS_URL, FINNHUB_API_KEY
 from api.sdui import router as sdui_router
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
 app.include_router(sdui_router)
+app.mount("/static", StaticFiles(directory="clients"), name="static")
 
 @app.get("/health")
 async def health():

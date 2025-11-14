@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>XRP Flow Alpha – Live SDUI Feed</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 20px; }
+    .card { background: #1e293b; border-radius: 12px; padding: 16px; margin: 16px 0; box-shadow: 0 4px 20px rgba(0,0,0,0.5); transition: all 0.3s; }
+    .high { border-left: 6px solid #ff0000; }
+    .medium { border-left: 6px solid #ffa500; }
+    h1 { text-align: center; color: #8b5cf6; }
+    .confidence { font-weight: bold; color: #8b5cf6; }
+    .impact { font-size: 1.2em; font-weight: bold; }
+    .auto-expand { background: #334155; }
+  </style>
+</head>
+<body>
+  <h1>XRP Flow Alpha – Live Institutional Flow</h1>
+  <div id="feed"></div>
+
+  <script>
+    const feedEl = document.getElementById('feed');
+    function prefetchChartFor(payload) {
+      const acts = (payload.predictive_actions || []);
+      acts.forEach(a => {
+        if (a.type === 'prefetch_chart') {
+          // Prefetch a simple XRP-USD chart image (zero dependency)
+          // Using QuickChart as a transient stub for demo visualization
+          const img = new Image();
+          const label = (new Date()).toISOString().slice(11, 16);
+          const url = 'https://quickchart.io/chart?c=' + encodeURIComponent(JSON.stringify({
+            type: 'line',
+            data: { labels: [label], datasets: [{ label: 'XRP-USD 15m', data: [0] }] },
+            options: { legend: { labels: { fontColor: '#e2e8f0' } }, scales: { xAxes: [{ ticks: { fontColor: '#e2e8f0' } }], yAxes: [{ ticks: { fontColor: '#e2e8f0' } }] } }
+          }));
+          img.decoding = 'async';
+          img.loading = 'eager';
+          img.referrerPolicy = 'no-referrer';
+          img.style.display = 'none';
+          document.body.appendChild(img);
+          img.src = url;
+        }
+      });
+    }
+    async function updateFeed() {
+      try {
+        const res = await fetch('http://localhost:8000/sdui/feed');
+        const data = await res.json();
+        feedEl.innerHTML = '';
+        (data.feed || []).forEach(payload => {
+          prefetchChartFor(payload);
+          (payload.components || []).forEach(c => {
+            const card = document.createElement('div');
+            const urgency = (c.urgency || '').toLowerCase();
+            card.className = `card ${urgency} ${c.auto_expand ? 'auto-expand' : ''}`;
+            card.innerHTML = `
+              <h2>${c.title || ''}</h2>
+              <p>${c.summary || ''}</p>
+              <p>Time Delta: ${c.time_delta || ''}</p>
+              <p class="confidence">Confidence: ${c.confidence ?? ''}%</p>
+              <p class="impact">${c.predicted_impact || ''}</p>
+              <div>
+                ${(c.actions || []).map(a => `<a href="${a.url}" target="_blank" style="margin-right:8px;color:#8b5cf6;">${a.label}</a>`).join('')}
+              </div>
+            `;
+            feedEl.prepend(card);
+          });
+        });
+      } catch (e) {
+        feedEl.innerHTML = `<p style="color:#ef4444">SDUI feed offline or no signals yet</p>`;
+      }
+    }
+    updateFeed();
+    setInterval(updateFeed, 5000);
+  </script>
+</body>
+</html>

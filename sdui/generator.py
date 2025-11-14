@@ -20,6 +20,18 @@ def generate_sdui_payload(cross: Dict) -> dict:
     s1, s2 = cross.get("signals", [{}])[0], (cross.get("signals", [{}])[1] if len(cross.get("signals", [])) > 1 else {})
     def _sum(sig: Dict) -> str:
         return sig.get("summary") or sig.get("type", "").upper()
+    actions = []
+    # Add XRPL tx links if present; add equity ticker link if present
+    for s in (s1, s2):
+        try:
+            if s.get("type") == "xrp" and s.get("tx_hash"):
+                tx = s.get("tx_hash")
+                actions.append({"label": "XRPL Tx", "url": f"https://livenet.xrpl.org/transactions/{tx}"})
+            if s.get("type") == "equity" and s.get("symbol"):
+                sym = s.get("symbol")
+                actions.append({"label": f"{sym} Quote", "url": f"https://finance.yahoo.com/quote/{sym}"})
+        except Exception:
+            pass
     comp = {
         "type": "cross_signal_card",
         "id": f"cross_{cross.get('id','')}",
@@ -30,7 +42,7 @@ def generate_sdui_payload(cross: Dict) -> dict:
         "time_delta": _fmt_delta(delta),
         "confidence": confidence,
         "predicted_impact": f"{impact:+.2f}% XRP in 15m",
-        "actions": [],
+        "actions": actions,
         "auto_expand": confidence >= 90,
     }
     return {
