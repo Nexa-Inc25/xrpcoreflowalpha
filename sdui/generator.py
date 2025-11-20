@@ -123,6 +123,45 @@ def generate_rwa_amm_payload(sig: Dict[str, Any]) -> dict:
     }
 
 
+def generate_redis_monitor_payload(stats: Dict[str, Any]) -> dict:
+    status = stats.get("status") or "unreachable"
+    color = "#10b981" if status == "ok" else "#ef4444"
+    used_memory = stats.get("used_memory") or ""
+    connected = stats.get("connected_clients")
+    ops = stats.get("ops_per_sec")
+    windows = stats.get("windows") or {}
+    godark = windows.get("godark:settlements", 0)
+    penumbra = windows.get("penumbra:unshields", 0)
+    secret = windows.get("secret:unshields", 0)
+    comp = {
+        "type": "redis_monitor_card",
+        "id": "redis_state",
+        "title": "Redis State",
+        "urgency": "INFO" if status == "ok" else "CRITICAL",
+        "color": color,
+        "summary": f"Memory: {used_memory} | Ops/sec: {ops}",
+        "time_delta": "",
+        "confidence": None,
+        "predicted_impact": None,
+        "actions": [],
+        "auto_expand": status != "ok",
+        "memory_used": used_memory,
+        "connected_clients": connected,
+        "ops_per_sec": ops,
+        "godark_cluster": godark,
+        "penumbra_cluster": penumbra,
+        "secret_cluster": secret,
+        "status": status,
+    }
+    ts_iso = _now_iso()
+    return {
+        "layout_version": "1.0",
+        "timestamp": ts_iso,
+        "components": [comp],
+        "predictive_actions": [],
+    }
+
+
 def generate_orderbook_payload(sig: Dict[str, Any]) -> dict:
     tags = [str(t) for t in (sig.get("tags") or [])]
     pair = sig.get("pair") or "XRPL Pair"

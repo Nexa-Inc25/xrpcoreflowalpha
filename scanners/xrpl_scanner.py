@@ -10,6 +10,7 @@ from models.types import XRPFlow
 from observability.metrics import xrpl_tx_processed
 from bus.signal_bus import publish_signal
 from utils.price import get_price_usd
+from utils.retry import async_retry
 from utils.tx_validate import validate_tx
 import time
 
@@ -19,14 +20,25 @@ async def start_xrpl_scanner():
         return
     assert ("xrplcluster.com" in XRPL_WSS) or ("ripple.com" in XRPL_WSS), "NON-MAINNET WSS – FATAL ABORT"
     async with AsyncWebsocketClient(XRPL_WSS) as client:
+        @async_retry(max_attempts=5, delay=1, backoff=2)
+        async def _req(payload):
+            return await client.request(payload)
         # Server info log on startup
         try:
-            info = await client.request(ServerInfo())
+            info = await _req(ServerInfo())
             vi = (info.result.get("info", {}).get("validated_ledger", {}) or {}).get("seq") or (info.result.get("info", {}).get("validated_ledger", {}) or {}).get("ledger_index")
             print(f"[XRPL] Connected. validated_ledger={vi}")
         except Exception:
             print("[XRPL] Connected. server_info unavailable")
-        await client.request(Subscribe(streams=["transactions"]))
+        await _req(Subscribe(streams=["transactions"]))
+        async def _keepalive():
+            while True:
+                try:
+                    await _req(ServerInfo())
+                except Exception:
+                    pass
+                await asyncio.sleep(20)
+        asyncio.create_task(_keepalive())
         processed = 0
         async for msg in client:
             if isinstance(msg, dict) and msg.get("status") == "success":

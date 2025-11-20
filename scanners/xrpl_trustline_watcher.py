@@ -3,7 +3,8 @@ import time
 from typing import Any, Dict
 
 from xrpl.asyncio.clients import AsyncWebsocketClient
-from xrpl.models.requests import Subscribe
+from xrpl.models.requests import Subscribe, ServerInfo
+from utils.retry import async_retry
 
 from app.config import (
     XRPL_WSS,
@@ -32,8 +33,19 @@ async def start_trustline_watcher():
     dyn_partners = await _get_dyn_partners()
     partners = {a.lower() for a in GODARK_XRPL_PARTNERS} | {a.lower() for a in dyn_partners}
     async with AsyncWebsocketClient(XRPL_WSS) as client:
-        await client.request(Subscribe(streams=["transactions"]))
+        @async_retry(max_attempts=5, delay=1, backoff=2)
+        async def _req(payload):
+            return await client.request(payload)
+        await _req(Subscribe(streams=["transactions"]))
         processed = 0
+        async def _keepalive():
+            while True:
+                try:
+                    await _req(ServerInfo())
+                except Exception:
+                    pass
+                await asyncio.sleep(20)
+        asyncio.create_task(_keepalive())
         async for msg in client:
             try:
                 tx = msg.get("transaction") or {}

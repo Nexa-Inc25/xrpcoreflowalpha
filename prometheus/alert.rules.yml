@@ -1,0 +1,18 @@
+groups:
+  - name: redis-alerts
+    rules:
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis memory >85% on {{ $labels.instance }}"
+
+      - alert: RedisEvictedKeys
+        expr: increase(redis_evicted_keys_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis is evicting keys on {{ $labels.instance }}"

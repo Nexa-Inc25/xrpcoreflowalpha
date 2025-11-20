@@ -1,3 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DarkFlow Subscription</title>
+  <style>
+    body { font-family: -apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 40px; color: #111; }
+    .card { max-width: 640px; margin: auto; padding: 24px; border-radius: 12px; background: #f7f7f9; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    h1 { margin-top: 0; }
+    .hint { color: #666; font-size: 14px; }
+    .ok { color: #0a7f2e; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>DarkFlow Subscription Active</h1>
+    <p class="ok">Payment completed. You can close this page and return to the app.</p>
+    <p class="hint">This is a local development stub for Stripe success/cancel URLs.</p>
+  </div>
+</body>
+</html>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -61,16 +83,26 @@
               card.style.borderLeft = `6px solid ${color}`;
             }
             const badge = c.badge ? `<span class="badge">${c.badge}</span>` : '';
-            card.innerHTML = `
-              <h2>${c.title || ''} ${badge}</h2>
-              <p>${c.summary || ''}</p>
-              <p>Time Delta: ${c.time_delta || ''}</p>
-              <p class="confidence">Confidence: ${c.confidence ?? ''}%</p>
-              <p class="impact">${c.predicted_impact || ''}</p>
-              <div>
-                ${(c.actions || []).map(a => `<a href="${a.url}" target="_blank" style="margin-right:8px;color:#8b5cf6;">${a.label}</a>`).join('')}
-              </div>
-            `;
+            if (c.type === 'redis_monitor_card') {
+              card.innerHTML = `
+                <h2>${c.title || ''}</h2>
+                <p>Memory: ${c.memory_used || ''}</p>
+                <p>Clients: ${c.connected_clients ?? ''} | Ops/sec: ${c.ops_per_sec ?? ''}</p>
+                <p>GoDark cluster: ${c.godark_cluster ?? 0} | Penumbra: ${c.penumbra_cluster ?? 0} | Secret: ${c.secret_cluster ?? 0}</p>
+                <p>Status: ${c.status || ''}</p>
+              `;
+            } else {
+              card.innerHTML = `
+                <h2>${c.title || ''} ${badge}</h2>
+                <p>${c.summary || ''}</p>
+                <p>Time Delta: ${c.time_delta || ''}</p>
+                <p class="confidence">Confidence: ${c.confidence ?? ''}%</p>
+                <p class="impact">${c.predicted_impact || ''}</p>
+                <div>
+                  ${(c.actions || []).map(a => `<a href="${a.url}" target="_blank" style="margin-right:8px;color:#8b5cf6;">${a.label}</a>`).join('')}
+                </div>
+              `;
+            }
             feedEl.prepend(card);
           });
         });

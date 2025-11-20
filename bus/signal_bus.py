@@ -6,6 +6,8 @@ import redis.asyncio as redis
 
 from app.config import REDIS_URL
 from godark.detector import annotate_godark
+from godark.pattern_monitor import detect_godark_patterns
+from utils.retry import async_retry
 
 _redis: Optional[redis.Redis] = None
 
@@ -17,6 +19,15 @@ async def _get_redis() -> redis.Redis:
     return _redis
 
 
+def _safe_get(obj: Any, key: str, default: Any = None) -> Any:
+    try:
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        return getattr(obj, key, default)
+    except Exception:
+        return default
+
+
 async def publish_signal(signal: Dict[str, Any]) -> None:
     r = await _get_redis()
     try:
@@ -24,19 +35,34 @@ async def publish_signal(signal: Dict[str, Any]) -> None:
     except Exception:
         pass
     try:
-        if signal.get("type") == "xrp":
-            amt = signal.get("amount_xrp")
+        if _safe_get(signal, "type") == "xrp":
+            amt = _safe_get(signal, "amount_xrp")
             if amt is not None and float(amt) > 5_000_000_000:
                 return
     except Exception:
         return
+    # Higher-order GoDark patterns (clusters, batches, cross-chain, equity rotation)
+    try:
+        signal = await detect_godark_patterns(signal)
+    except Exception:
+        pass
     # Ensure required fields
     if "timestamp" not in signal:
         signal["timestamp"] = int(time.time())
     if "id" not in signal:
-        signal["id"] = f"{signal.get('type','unknown')}:{signal['timestamp']}:{int(time.time()*1000)}"
+        signal["id"] = f"{_safe_get(signal,'type','unknown')}:{signal['timestamp']}:{int(time.time()*1000)}"
+    # Validate minimal structure
+    if not validate_signal(signal):
+        try:
+            print(f"[VALIDATION] Dropped invalid signal: {signal.get('id','?')}")
+        except Exception:
+            print("[VALIDATION] Dropped invalid signal")
+        return
     data = json.dumps(signal, separators=(",", ":"))
-    await r.xadd("signals", {"json": data}, maxlen=5000, approximate=True)
+    try:
+        await r.xadd("signals", {"json": data}, maxlen=5000, approximate=True)
+    except Exception as e:
+        print("[REDIS] xadd failed:", repr(e))
 
 
 async def fetch_recent_signals(window_seconds: int = 900, types: Optional[List[str]] = None) -> List[Dict[str, Any]]:
@@ -44,7 +70,11 @@ async def fetch_recent_signals(window_seconds: int = 900, types: Optional[List[s
     now_ms = int(time.time() * 1000)
     start = now_ms - window_seconds * 1000
     start_id = f"{start}-0"
-    rows = await r.xrange("signals", min=start_id, max="+")
+    try:
+        rows = await r.xrange("signals", min=start_id, max="+")
+    except Exception as e:
+        print("[REDIS] xrange failed:", repr(e))
+        rows = []
     out: List[Dict[str, Any]] = []
     for _, fields in rows:
         raw = fields.get("json")
@@ -71,7 +101,11 @@ async def publish_cross_signal(cross: Dict[str, Any]) -> None:
 
 async def fetch_recent_cross_signals(limit: int = 10) -> List[Dict[str, Any]]:
     r = await _get_redis()
-    rows = await r.xrevrange("cross_signals", max="+", min="-", count=limit)
+    try:
+        rows = await r.xrevrange("cross_signals", max="+", min="-", count=limit)
+    except Exception as e:
+        print("[REDIS] xrevrange failed:", repr(e))
+        rows = []
     out: List[Dict[str, Any]] = []
     for _, fields in rows:
         raw = fields.get("json")
@@ -84,3 +118,16 @@ async def fetch_recent_cross_signals(limit: int = 10) -> List[Dict[str, Any]]:
         out.append(s)
     out.reverse()
     return out
+
+
+def validate_signal(sig: Dict[str, Any]) -> bool:
+    try:
+        if not isinstance(sig, dict):
+            return False
+        req = ["type", "timestamp", "tags"]
+        for k in req:
+            if k not in sig:
+                return False
+        return isinstance(sig.get("tags"), list)
+    except Exception:
+        return False

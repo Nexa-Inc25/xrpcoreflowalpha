@@ -10,6 +10,7 @@ from scanners.rwa_amm_liquidity_monitor import start_rwa_amm_monitor
 from scanners.xrpl_orderbook_monitor import start_xrpl_orderbook_monitor
 from godark.dynamic_ingest import run_dynamic_ingest
 from correlator.cross_market import run_correlation_loop
+from ml.flow_predictor import live_gru_training
 from xrpl.asyncio.clients import AsyncJsonRpcClient
 from xrpl.models.requests import Ledger
 
@@ -42,8 +43,9 @@ async def main():
                 print(f"[Worker] Starting {name} loop")
                 await coro()
             except Exception as e:
-                print(f"[Worker] {name} crashed: {e.__class__.__name__}: {e}")
-                await asyncio.sleep(2)
+                # Critical crash marker with class and message; keep running with backoff
+                print(f"[CRASH] {name} crashed: {e.__class__.__name__}: {e}")
+                await asyncio.sleep(5)
 
     if XRPL_WSS:
         await _xrpl_mainnet_proof()
@@ -72,6 +74,9 @@ async def main():
     tasks.append(asyncio.create_task(supervise(run_dynamic_ingest, "GODARK_INGEST")))
     # Correlator always runs; it only acts on available signals
     tasks.append(asyncio.create_task(supervise(run_correlation_loop, "CROSS")))
+    # ML GRU trainer (no-op loop if torch unavailable)
+    print("[Worker] Launching ML GRU trainer")
+    tasks.append(asyncio.create_task(supervise(live_gru_training, "ML")))
     if not tasks:
         # Idle loop if no env configured
         while True:

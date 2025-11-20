@@ -4,7 +4,8 @@ from typing import Any, Dict, Optional
 
 import redis.asyncio as redis
 from xrpl.asyncio.clients import AsyncWebsocketClient
-from xrpl.models.requests import Subscribe
+from xrpl.models.requests import Subscribe, ServerInfo
+from utils.retry import async_retry
 
 from app.config import XRPL_WSS, REDIS_URL, TRUSTLINE_WATCHED_ISSUERS, GODARK_XRPL_PARTNERS, RWA_AMM_CHANGE_THRESHOLD_PCT
 from bus.signal_bus import publish_signal
@@ -63,7 +64,18 @@ async def start_rwa_amm_monitor():
     assert ("xrplcluster.com" in XRPL_WSS) or ("ripple.com" in XRPL_WSS), "NON-MAINNET WSS – FATAL ABORT"
     r = await _get_redis()
     async with AsyncWebsocketClient(XRPL_WSS) as client:
-        await client.request(Subscribe(streams=["transactions"]))
+        @async_retry(max_attempts=5, delay=1, backoff=2)
+        async def _req(payload):
+            return await client.request(payload)
+        await _req(Subscribe(streams=["transactions"]))
+        async def _keepalive():
+            while True:
+                try:
+                    await _req(ServerInfo())
+                except Exception:
+                    pass
+                await asyncio.sleep(20)
+        asyncio.create_task(_keepalive())
         async for msg in client:
             try:
                 tx = msg.get("transaction") or {}

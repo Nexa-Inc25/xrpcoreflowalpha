@@ -5,6 +5,7 @@ import httpx
 from typing import Any, Dict
 
 import redis.asyncio as redis
+from utils.retry import async_retry
 
 from app.config import (
     ALERTS_SLACK_WEBHOOK,
@@ -36,24 +37,26 @@ async def _get_redis() -> redis.Redis:
 
 async def _allow_send(fp: str, category: str | None) -> bool:
     r = await _get_redis()
-    # Dedup: skip if we've sent identical payload within TTL
-    dedup_key = f"alerts:dedup:{fp}"
-    added = await r.set(dedup_key, "1", ex=ALERTS_DEDUP_TTL_SECONDS, nx=True)
-    if not added:
-        return False
-    # Rate limit: sliding window via fixed window counter
-    now = int(time.time())
-    window = now // ALERTS_RATE_WINDOW_SECONDS
-    suffix = f":{category}" if (ALERTS_RATE_LIMIT_PER_CATEGORY and category) else ""
-    rate_key = f"alerts:rate{suffix}:{window}"
-    count = await r.incr(rate_key)
-    if count == 1:
-        await r.expire(rate_key, ALERTS_RATE_WINDOW_SECONDS + 5)
-    if count > ALERTS_RATE_MAX_PER_WINDOW:
-        return False
-    return True
+    try:
+        dedup_key = f"alerts:dedup:{fp}"
+        added = await r.set(dedup_key, "1", ex=ALERTS_DEDUP_TTL_SECONDS, nx=True)
+        if not added:
+            return False
+        now = int(time.time())
+        window = now // ALERTS_RATE_WINDOW_SECONDS
+        suffix = f":{category}" if (ALERTS_RATE_LIMIT_PER_CATEGORY and category) else ""
+        rate_key = f"alerts:rate{suffix}:{window}"
+        count = await r.incr(rate_key)
+        if count == 1:
+            await r.expire(rate_key, ALERTS_RATE_WINDOW_SECONDS + 5)
+        if count > ALERTS_RATE_MAX_PER_WINDOW:
+            return False
+        return True
+    except Exception:
+        return True
 
 
+@async_retry(max_attempts=5, delay=1, backoff=2)
 async def send_slack_alert(payload: Dict[str, Any]) -> None:
     if not ALERTS_SLACK_WEBHOOK:
         return
@@ -65,8 +68,11 @@ async def send_slack_alert(payload: Dict[str, Any]) -> None:
         category = None
     if not await _allow_send(fp, category):
         return
-    async with httpx.AsyncClient(timeout=10) as client:
-        await client.post(ALERTS_SLACK_WEBHOOK, json=payload)
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(ALERTS_SLACK_WEBHOOK, json=payload)
+    except Exception:
+        pass
 
 def build_rich_slack_payload(flow: Dict[str, Any]) -> Dict[str, Any]:
     ftype = flow.get("type")
@@ -123,7 +129,16 @@ def build_rich_slack_payload(flow: Dict[str, Any]) -> Dict[str, Any]:
     # Set color for non-cross types
     if ftype != "cross":
         color = None
-        tags = [str(t) for t in (payload_obj.get("tags") or [])]
+        tsrc = []
+        try:
+            if isinstance(payload_obj, dict):
+                tsrc = payload_obj.get("tags") or []
+            else:
+                # payload_obj may be a dataclass (e.g., XRPFlow). Fallback to top-level tags if present.
+                tsrc = flow.get("tags") or []
+        except Exception:
+            tsrc = []
+        tags = [str(t) for t in tsrc]
         if ftype == "rwa_amm":
             if any("GoDark" in t for t in tags):
                 color = "#8b5cf6"

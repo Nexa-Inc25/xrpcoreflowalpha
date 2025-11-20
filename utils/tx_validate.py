@@ -2,6 +2,7 @@ import asyncio
 from typing import Optional
 
 import httpx
+from utils.retry import async_retry
 
 from app.config import ETHERSCAN_API_KEY
 
@@ -9,6 +10,7 @@ XRPL_LIVENET_TX_URL = "https://livenet.xrpl.org/transactions/"
 ETHERSCAN_TX_URL = "https://api.etherscan.io/api"
 
 
+@async_retry(max_attempts=5, delay=1, backoff=2)
 async def validate_tx(chain: str, tx_hash: str, timeout_sec: int = 10) -> bool:
     try:
         async with httpx.AsyncClient(timeout=timeout_sec) as client:

@@ -8,8 +8,10 @@ import redis.asyncio as redis
 
 from alerts.slack import send_slack_alert, build_cross_slack_payload
 from app.config import REDIS_URL, CROSS_SIGNAL_DEDUP_TTL
+from utils.retry import async_retry
 from bus.signal_bus import fetch_recent_signals, publish_cross_signal
 from ml.impact_predictor import predict_xrp_impact
+from ml.flow_predictor import predict_impact_ml
 from app.config import EXECUTION_ENABLED
 from execution.engine import XRPFlowAlphaExecution
 
@@ -17,9 +19,10 @@ from execution.engine import XRPFlowAlphaExecution
 def _pair_ok(a: Dict, b: Dict) -> bool:
     if a.get("type") == b.get("type"):
         return False
-    # At least one must be crypto (xrp, zk, trustline) and one may be equity
+    # At least one must be crypto-like and one may be equity
     types = {a.get("type"), b.get("type")}
-    crypto_present = any(t in {"xrp", "zk", "trustline", "godark_prep", "rwa_amm", "orderbook"} for t in types)
+    crypto_types = {"xrp", "zk", "trustline", "godark_prep", "rwa_amm", "orderbook", "penumbra", "secret"}
+    crypto_present = any(t in crypto_types for t in types)
     return crypto_present and ("equity" in types or crypto_present)
 
 
@@ -57,7 +60,7 @@ def _mk_cross(a: Dict, b: Dict) -> Dict:
     dt = abs(int(a.get("timestamp", 0)) - int(b.get("timestamp", 0)))
     conf = _confidence(a, b)
     impact = predict_xrp_impact(a, b)
-    return {
+    cross = {
         "id": str(uuid.uuid4()),
         "signals": [a, b],
         "confidence": conf,
@@ -65,8 +68,16 @@ def _mk_cross(a: Dict, b: Dict) -> Dict:
         "time_delta": dt,
         "timestamp": int(time.time()),
     }
+    try:
+        ml_pred = predict_impact_ml(cross)
+        if ml_pred is not None:
+            cross["predicted_impact_pct"] = round(float(ml_pred), 2)
+    except Exception:
+        pass
+    return cross
 
 
+@async_retry(max_attempts=10, delay=2, backoff=1.5)
 async def _dedup_allow(cross: Dict) -> bool:
     r = redis.from_url(REDIS_URL, decode_responses=True)
     s1 = cross.get("signals", [{}])[0]
@@ -88,13 +99,14 @@ async def correlate_signals(signals: List[Dict]) -> List[Dict]:
         try:
             ta = {str(t).lower() for t in (a.get("tags") or [])}
             tb = {str(t).lower() for t in (b.get("tags") or [])}
-            godark_any = any("godark" in t for t in ta.union(tb))
+            all_tags = ta.union(tb)
+            godark_any = any("godark" in t for t in all_tags)
             boost = 1.0
             reason = None
-            if any("godark xrpl settlement" in t for t in ta.union(tb)):
+            if any("godark xrpl settlement" in t for t in all_tags):
                 boost *= 1.30
                 reason = "settlement"
-            elif any("godark partner" in t for t in ta.union(tb)):
+            elif any("godark partner" in t for t in all_tags):
                 boost *= 1.15
                 reason = "partner"
             tset = {a.get("type"), b.get("type")}
@@ -102,6 +114,41 @@ async def correlate_signals(signals: List[Dict]) -> List[Dict]:
                 boost *= 1.25
                 if reason is None:
                     reason = "cross"
+            # GoDark settlement pattern boosts (cluster / batch / cross-chain / equity rotation)
+            if any("godark cluster" in t for t in all_tags):
+                boost *= 1.55
+                if reason is None:
+                    reason = "cluster"
+            if any("godark batch" in t for t in all_tags):
+                boost *= 1.60
+                if reason is None:
+                    reason = "batch"
+            if any("godark cross-chain" in t for t in all_tags):
+                boost *= 1.65
+                if reason is None:
+                    reason = "cross_chain"
+            if any("godark equity rotation" in t for t in all_tags):
+                boost *= 1.70
+                if reason is None:
+                    reason = "equity_rotation"
+            # Penumbra unshield / settlement clusters (proxy for shielded pool exits)
+            if any("penumbra unshield" in t for t in all_tags):
+                boost *= 1.20
+                if reason is None:
+                    reason = "penumbra_unshield"
+            if any("penumbra settlement cluster" in t for t in all_tags):
+                boost *= 1.40
+                if reason is None:
+                    reason = "penumbra_cluster"
+            # Secret Network unshield / settlement clusters (shielded exits via SNIP-20)
+            if any("secret unshield" in t for t in all_tags):
+                boost *= 1.25
+                if reason is None:
+                    reason = "secret_unshield"
+            if any("secret settlement cluster" in t for t in all_tags):
+                boost *= 1.45
+                if reason is None:
+                    reason = "secret_cluster"
             # Trustline boosts
             if any("rwa prep" in t for t in ta.union(tb)):
                 boost *= 1.20
@@ -175,25 +222,22 @@ async def run_correlation_loop():
                 await send_slack_alert(payload)
                 print(f"[CROSS] Correlated {c['signals'][0].get('type')} + {c['signals'][1].get('type')} | conf {c['confidence']} | impact {c['predicted_impact_pct']}%")
                 # Optional execution trigger (disabled by default)
-                if EXECUTION_ENABLED and c.get("godark") and int(c.get("confidence", 0)) >= 95:
-                    async def _exec():
-                        try:
-                            xs = [s for s in c.get("signals", []) if s.get("type") == "xrp" and s.get("amount_xrp")]
-                            if not xs:
-                                return
-                            sig = xs[0]
-                            dest = sig.get("destination") or sig.get("source")
-                            if not dest:
-                                return
-                            amt = float(sig.get("amount_xrp") or 0.0)
-                            if amt <= 0:
-                                return
-                            tranche = min(100_000.0, max(1.0, amt * 0.005))
-                            engine = XRPFlowAlphaExecution()
-                            await engine.counter_trade_xrp(tranche, dest)
-                        except Exception:
-                            pass
-                    asyncio.create_task(_exec())
+                if EXECUTION_ENABLED and c.get("godark"):
+                    try:
+                        conf_ok = int(c.get("confidence", 0)) >= 95
+                        imp = float(c.get("predicted_impact_pct") or 0.0)
+                        imp_ok = abs(imp) >= 2.5
+                    except Exception:
+                        conf_ok = False
+                        imp_ok = False
+                    if conf_ok and imp_ok:
+                        async def _exec():
+                            try:
+                                engine = XRPFlowAlphaExecution()
+                                await engine.counter_trade(c)
+                            except Exception as e:
+                                print("[EXECUTION] error:", repr(e))
+                        asyncio.create_task(_exec())
         except Exception as e:
             print("[CROSS] error:", repr(e))
         await asyncio.sleep(60)

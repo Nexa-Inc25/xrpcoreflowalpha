@@ -5,7 +5,9 @@ from typing import Any, Dict, Optional, Tuple, List
 
 import redis.asyncio as redis
 from xrpl.asyncio.clients import AsyncWebsocketClient
-from xrpl.models.requests import BookOffers
+from xrpl.models.requests import BookOffers, ServerInfo
+from xrpl.models.currencies import XRP, IssuedCurrency
+from utils.retry import async_retry
 
 from app.config import XRPL_WSS, REDIS_URL, DEX_ORDERBOOK_PAIRS, TRUSTLINE_WATCHED_ISSUERS, GODARK_XRPL_PARTNERS
 from bus.signal_bus import publish_signal
@@ -92,6 +94,17 @@ async def start_xrpl_orderbook_monitor():
     assert ("xrplcluster.com" in XRPL_WSS) or ("ripple.com" in XRPL_WSS), "NON-MAINNET WSS – FATAL ABORT"
     r = await _get_redis()
     async with AsyncWebsocketClient(XRPL_WSS) as client:
+        @async_retry(max_attempts=5, delay=1, backoff=2)
+        async def _req(payload):
+            return await client.request(payload)
+        async def _keepalive():
+            while True:
+                try:
+                    await _req(ServerInfo())
+                except Exception:
+                    pass
+                await asyncio.sleep(20)
+        asyncio.create_task(_keepalive())
         while True:
             try:
                 xrp_usd = 0.0
@@ -106,14 +119,29 @@ async def start_xrpl_orderbook_monitor():
                     gd_partners |= {x.lower() for x in (dyn or [])}
                 except Exception:
                     pass
+                def _asset_from_str(tok: str):
+                    if "." in tok:
+                        cur, iss = tok.split(".", 1)
+                        if cur.upper() == "XRP":
+                            return XRP()
+                        return IssuedCurrency(currency=cur.upper(), issuer=iss)
+                    return XRP() if tok.upper() == "XRP" else IssuedCurrency(currency=tok.upper(), issuer="")
                 for pair in DEX_ORDERBOOK_PAIRS:
                     parsed = _parse_pair(pair)
                     if not parsed:
                         continue
                     base, quote, key = parsed
                     # Ask side (sellers of base)
-                    asks_resp = await client.request(BookOffers(taker_gets=base, taker_pays=quote, limit=10, ledger_index="validated"))
-                    bids_resp = await client.request(BookOffers(taker_gets=quote, taker_pays=base, limit=10, ledger_index="validated"))
+                    base_raw, quote_raw = pair.split("/")
+                    # If non-XRP lacks issuer, skip
+                    if base.get("currency") != "XRP" and not base.get("issuer"):
+                        continue
+                    if quote.get("currency") != "XRP" and not quote.get("issuer"):
+                        continue
+                    asks_req = BookOffers(taker_gets=_asset_from_str(base_raw), taker_pays=_asset_from_str(quote_raw), limit=20, ledger_index="validated")
+                    bids_req = BookOffers(taker_gets=_asset_from_str(quote_raw), taker_pays=_asset_from_str(base_raw), limit=20, ledger_index="validated")
+                    asks_resp = await _req(asks_req)
+                    bids_resp = await _req(bids_req)
                     asks: List[Dict[str, Any]] = asks_resp.result.get("offers", [])
                     bids: List[Dict[str, Any]] = bids_resp.result.get("offers", [])
                     # Aggregate USD depths
@@ -218,6 +246,10 @@ async def start_xrpl_orderbook_monitor():
                     }))
                     await publish_signal(signal)
                     await send_slack_alert(build_rich_slack_payload(signal))
+                    try:
+                        print(f"[OB] {signal['summary']}")
+                    except Exception:
+                        pass
                 await asyncio.sleep(15)
             except Exception:
                 await asyncio.sleep(1)
