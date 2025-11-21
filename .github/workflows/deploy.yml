@@ -1,0 +1,74 @@
+name: CI & Deploy
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build_test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies (optional)
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      - name: Lint placeholder (no-op)
+        run: |
+          echo "Linting not configured yet"
+
+  deploy:
+    name: Deploy to Droplet
+    needs: build_test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Preload known_hosts for strict host key checking
+          ssh-keyscan -p "${SSH_PORT:-22}" "${SSH_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Rsync code to server
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          RSYNC_RSH="ssh -i ~/.ssh/id_ed25519 -p ${SSH_PORT:-22} -o StrictHostKeyChecking=yes"
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude '.venv' \
+            --exclude '__pycache__' \
+            --exclude 'node_modules' \
+            -e "$RSYNC_RSH" \
+            ./ "${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/"
+
+      - name: Restart service
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SERVICE_NAME: ${{ secrets.SERVICE_NAME }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -p ${SSH_PORT:-22} -o StrictHostKeyChecking=yes "${SSH_USER}@${SSH_HOST}" \
+            "cd ${DEPLOY_PATH} && sudo systemctl restart ${SERVICE_NAME} && echo 'Service restarted'"
