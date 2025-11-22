@@ -1,4 +1,4 @@
-name: CI & Deploy
+name: Deploy to Droplet
 
 on:
   push:
@@ -58,11 +58,12 @@ jobs:
             --exclude '.github' \
             --exclude '.venv' \
             --exclude '__pycache__' \
+            --exclude '.env' \
             --exclude 'node_modules' \
             -e "$RSYNC_RSH" \
             ./ "${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/"
 
-      - name: Restart service
+      - name: Install deps and restart service
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
@@ -71,4 +72,4 @@ jobs:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
           ssh -i ~/.ssh/id_ed25519 -p ${SSH_PORT:-22} -o StrictHostKeyChecking=yes "${SSH_USER}@${SSH_HOST}" \
-            "cd ${DEPLOY_PATH} && sudo systemctl restart ${SERVICE_NAME} && echo 'Service restarted'"
+            "cd ${DEPLOY_PATH} && if [ -x .venv/bin/pip ]; then .venv/bin/pip install -r requirements.txt; fi && sudo systemctl restart ${SERVICE_NAME} && echo 'Service restarted'"
