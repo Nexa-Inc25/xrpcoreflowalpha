@@ -83,3 +83,16 @@ async def trigger_test_event() -> Dict[str, Any]:
     except Exception:
         pass
     return {"status": "ok", "surge_seeded": 4, "zk_seeded": True, "updated_at": _now_iso()}
+
+
+@router.get("/sentry-debug")
+async def sentry_debug(verify: str = ""):
+    """Temporary endpoint to verify Sentry. Append ?verify=sentry to trigger.
+    Remove this after confirming events appear in Sentry.
+    """
+    if verify != "sentry":
+        raise HTTPException(status_code=404, detail="Not Found")
+    # This will be captured by Sentry as an unhandled exception
+    _ = 1 / 0
+    return {"ok": True}
+
