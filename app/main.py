@@ -1,7 +1,9 @@
 import asyncio
 from fastapi import FastAPI, Response
+from fastapi.responses import RedirectResponse
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from app.config import XRPL_WSS, ALCHEMY_WS_URL, FINNHUB_API_KEY, SOLANA_RPC_URL, APP_VERSION
+from app.config import SENTRY_DSN, APP_ENV
 from app.config import CORS_ALLOW_ORIGINS, CORS_ALLOW_CREDENTIALS, CORS_ALLOW_METHODS, CORS_ALLOW_HEADERS
 from api.sdui import router as sdui_router
 from api.debug import router as debug_router
@@ -9,6 +11,7 @@ from api.health import router as health_router
 from api.ui import router as ui_router
 from api.billing import router as billing_router
 from api.admin import router as admin_router
+from api.db_health import router as db_health_router
 from fastapi.staticfiles import StaticFiles
 from observability.impact import start_binance_depth_worker
 from api.export import router as export_router
@@ -22,6 +25,11 @@ from api.history import router as history_router
 from api.qr import router as qr_router
 from api.user import router as user_router
 from fastapi.middleware.cors import CORSMiddleware
+import sentry_sdk
+from sentry_sdk.integrations.starlette import StarletteIntegration
+
+if SENTRY_DSN:
+    sentry_sdk.init(dsn=SENTRY_DSN, environment=APP_ENV, integrations=[StarletteIntegration()], traces_sample_rate=0.1)
 
 app = FastAPI()
 app.add_middleware(
@@ -43,8 +51,17 @@ app.include_router(qr_router)
 app.include_router(user_router)
 app.include_router(debug_router)
 app.include_router(health_router)
+app.include_router(db_health_router)
 app.mount("/static", StaticFiles(directory="clients"), name="static")
 app.middleware("http")(api_key_middleware)
+
+@app.get("/", include_in_schema=False)
+async def root_redirect():
+    return RedirectResponse(url="/ui")
+
+@app.head("/", include_in_schema=False)
+async def root_redirect_head():
+    return RedirectResponse(url="/ui")
 
 @app.on_event("startup")
 async def _startup():
