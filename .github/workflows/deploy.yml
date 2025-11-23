@@ -36,15 +36,29 @@ jobs:
       - name: Prepare SSH key
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_PRIVATE_KEY_B64: ${{ secrets.SSH_PRIVATE_KEY_B64 }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
         run: |
-          set -e
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y openssh-client rsync
           mkdir -p ~/.ssh
-          printf "%s" "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_ed25519
+          if [ -n "${SSH_PRIVATE_KEY_B64:-}" ]; then
+            echo "$SSH_PRIVATE_KEY_B64" | base64 -d > ~/.ssh/id_ed25519
+          else
+            printf "%s" "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_ed25519
+          fi
           chmod 600 ~/.ssh/id_ed25519
+          # Convert key to PEM format to avoid libcrypto parsing issues in some environments
+          ssh-keygen -p -m PEM -f ~/.ssh/id_ed25519 -N ""
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/id_ed25519
           # Preload known_hosts for strict host key checking
           ssh-keyscan -p "${SSH_PORT:-22}" "${SSH_HOST}" >> ~/.ssh/known_hosts
+          # Smoke test key works (no interactive prompt expected)
+          ssh -p ${SSH_PORT:-22} -o StrictHostKeyChecking=yes -o BatchMode=yes -o IdentitiesOnly=yes "${SSH_USER}@${SSH_HOST}" echo ok
 
       - name: Rsync code to server
         env:
@@ -53,7 +67,7 @@ jobs:
           SSH_PORT: ${{ secrets.SSH_PORT }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
-          RSYNC_RSH="ssh -i ~/.ssh/id_ed25519 -p ${SSH_PORT:-22} -o StrictHostKeyChecking=yes"
+          RSYNC_RSH="ssh -p ${SSH_PORT:-22} -o StrictHostKeyChecking=yes -o BatchMode=yes -o IdentitiesOnly=yes"
           rsync -az --delete \
             --exclude '.git' \
             --exclude '.github' \
@@ -72,5 +86,5 @@ jobs:
           SERVICE_NAME: ${{ secrets.SERVICE_NAME }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
-          ssh -i ~/.ssh/id_ed25519 -p ${SSH_PORT:-22} -o StrictHostKeyChecking=yes "${SSH_USER}@${SSH_HOST}" \
+          ssh -p ${SSH_PORT:-22} -o StrictHostKeyChecking=yes -o BatchMode=yes -o IdentitiesOnly=yes "${SSH_USER}@${SSH_HOST}" \
             "cd ${DEPLOY_PATH} && if [ -x .venv/bin/pip ]; then .venv/bin/pip install -r requirements.txt; fi && sudo systemctl restart ${SERVICE_NAME} && echo 'Service restarted'"
