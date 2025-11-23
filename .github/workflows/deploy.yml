@@ -41,7 +41,7 @@ jobs:
                            AAAEAfWcqL/xmgaToBTuR09vSo/NgMX+4hkTjDTDcbYnZ2Gyo+71TwEdg+Hp4zkddMcXMG
                            4m1mEFLDIlvzUsK7PoDQAAAAEG1pa2VAemthbHBoYWZsb3cBAgMEBQ
           SSH_HOST: 64.227.62.237
-          SSH_PORT: root
+          SSH_PORT: 22
         run: |
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
