@@ -25,6 +25,7 @@ POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
 POSTGRES_DB = os.getenv("POSTGRES_DB", "xrpflow")
 POSTGRES_USER = os.getenv("POSTGRES_USER", "xrpflow")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "password")
+POSTGRES_SSLMODE = os.getenv("POSTGRES_SSLMODE", "require")
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 
 EQUITY_TICKERS = [t.strip() for t in os.getenv("EQUITY_TICKERS", "AAPL,MSFT,TSLA").split(",") if t.strip()]
