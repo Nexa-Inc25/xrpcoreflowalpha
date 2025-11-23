@@ -1,4 +1,4 @@
-from prometheus_client import Counter
+from prometheus_client import Counter, Gauge
 
 xrpl_tx_processed = Counter(
     "xrpl_tx_processed",
@@ -59,4 +59,10 @@ pending_payment_total = Counter(
     "pending_payment_total",
     "Number of pending on-chain payments created",
     ["source"],
+)
+
+zk_flow_confidence_score = Gauge(
+    "zk_flow_confidence_score",
+    "Markov-based probability of imminent dark pool execution",
+    ["protocol"],
 )

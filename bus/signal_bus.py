@@ -8,6 +8,8 @@ from app.config import REDIS_URL
 from godark.detector import annotate_godark
 from godark.pattern_monitor import detect_godark_patterns
 from utils.retry import async_retry
+from predictors.markov_predictor import zk_hmm, classify_observation
+from observability.metrics import zk_flow_confidence_score
 
 _redis: Optional[redis.Redis] = None
 
@@ -58,6 +60,16 @@ async def publish_signal(signal: Dict[str, Any]) -> None:
         except Exception:
             print("[VALIDATION] Dropped invalid signal")
         return
+    try:
+        obs = classify_observation(signal)
+        prob = await zk_hmm.update(obs)
+        try:
+            zk_flow_confidence_score.labels(protocol="godark").set(float(prob))
+        except Exception:
+            pass
+        signal["zk_markov_imminent_prob"] = float(round(float(prob), 4))
+    except Exception:
+        pass
     data = json.dumps(signal, separators=(",", ":"))
     try:
         await r.xadd("signals", {"json": data}, maxlen=5000, approximate=True)
