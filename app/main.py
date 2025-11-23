@@ -35,7 +35,12 @@ from observability.metrics import (
 )
 
 if SENTRY_DSN:
-    sentry_sdk.init(dsn=SENTRY_DSN, environment=APP_ENV, integrations=[StarletteIntegration()], traces_sample_rate=0.1)
+    try:
+        _dsn = str(SENTRY_DSN).strip()
+        if _dsn and _dsn.lower().startswith("http"):
+            sentry_sdk.init(dsn=_dsn, environment=APP_ENV, integrations=[StarletteIntegration()], traces_sample_rate=0.1)
+    except Exception:
+        pass
 
 app = FastAPI()
 app.add_middleware(
