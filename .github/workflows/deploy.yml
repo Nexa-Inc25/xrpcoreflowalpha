@@ -35,25 +35,22 @@ jobs:
 
       - name: Prepare SSH key
         env:
-          SSH_PRIVATE_KEY: b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
-                           QyNTUxOQAAACAqPu9U8BHYPh6eM5HXTHFzBuJtZhBSwyJb81LCuz6A0AAAAJicP6A6nD+g
-                           OgAAAAtzc2gtZWQyNTUxOQAAACAqPu9U8BHYPh6eM5HXTHFzBuJtZhBSwyJb81LCuz6A0A
-                           AAAEAfWcqL/xmgaToBTuR09vSo/NgMX+4hkTjDTDcbYnZ2Gyo+71TwEdg+Hp4zkddMcXMG
-                           4m1mEFLDIlvzUsK7PoDQAAAAEG1pa2VAemthbHBoYWZsb3cBAgMEBQ
-          SSH_HOST: 64.227.62.237
-          SSH_PORT: 22
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
         run: |
+          set -e
           mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          printf "%s" "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           # Preload known_hosts for strict host key checking
           ssh-keyscan -p "${SSH_PORT:-22}" "${SSH_HOST}" >> ~/.ssh/known_hosts
 
       - name: Rsync code to server
         env:
-          SSH_HOST: 64.227.62.237
-          SSH_USER: root
-          SSH_PORT: 22
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
           RSYNC_RSH="ssh -i ~/.ssh/id_ed25519 -p ${SSH_PORT:-22} -o StrictHostKeyChecking=yes"
