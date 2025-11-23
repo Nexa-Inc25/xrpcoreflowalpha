@@ -28,6 +28,11 @@ from fastapi.middleware.cors import CORSMiddleware
 import sentry_sdk
 from sentry_sdk.integrations.starlette import StarletteIntegration
 from predictors.futures_tracker import start_binance_futures_tracker
+from observability.metrics import (
+    zk_dominant_frequency_hz,
+    zk_frequency_confidence,
+    zk_flow_confidence_score,
+)
 
 if SENTRY_DSN:
     sentry_sdk.init(dsn=SENTRY_DSN, environment=APP_ENV, integrations=[StarletteIntegration()], traces_sample_rate=0.1)
@@ -75,6 +80,15 @@ async def _startup():
     asyncio.create_task(start_push_worker())
     asyncio.create_task(start_onchain_maintenance())
     asyncio.create_task(start_binance_futures_tracker())
+    try:
+        zk_dominant_frequency_hz.labels(source="futures_btcusdt").set(0.0)
+        zk_dominant_frequency_hz.labels(source="futures_ethusdt").set(0.0)
+        zk_dominant_frequency_hz.labels(source="zk_events").set(0.0)
+        zk_dominant_frequency_hz.labels(source="xrpl_settlements").set(0.0)
+        zk_frequency_confidence.labels(algo_fingerprint="unknown").set(0.0)
+        zk_flow_confidence_score.labels(protocol="godark").set(0.0)
+    except Exception:
+        pass
 
 @app.get("/health")
 async def health():
