@@ -66,3 +66,15 @@ zk_flow_confidence_score = Gauge(
     "Markov-based probability of imminent dark pool execution",
     ["protocol"],
 )
+
+zk_dominant_frequency_hz = Gauge(
+    "zk_dominant_frequency_hz",
+    "Dominant frequency detected in rolling window (Hz)",
+    ["source"],
+)
+
+zk_frequency_confidence = Gauge(
+    "zk_frequency_confidence",
+    "Confidence (0-100) of dominant frequency matching a known algo fingerprint",
+    ["algo_fingerprint"],
+)

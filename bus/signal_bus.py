@@ -9,6 +9,7 @@ from godark.detector import annotate_godark
 from godark.pattern_monitor import detect_godark_patterns
 from utils.retry import async_retry
 from predictors.markov_predictor import zk_hmm, classify_observation
+from predictors.frequency_fingerprinter import zk_fingerprinter
 from observability.metrics import zk_flow_confidence_score
 
 _redis: Optional[redis.Redis] = None
@@ -60,6 +61,24 @@ async def publish_signal(signal: Dict[str, Any]) -> None:
         except Exception:
             print("[VALIDATION] Dropped invalid signal")
         return
+    try:
+        stype = str(_safe_get(signal, "type") or "").lower()
+        ts = int(_safe_get(signal, "timestamp") or int(time.time()))
+        if stype == "zk":
+            zk_fingerprinter.add_event(timestamp=float(ts), value=1.0)
+            zk_fingerprinter.tick(source_label="zk_events")
+        elif stype == "xrp":
+            tags = [str(t).lower() for t in (signal.get("tags") or [])]
+            usd = 0.0
+            try:
+                usd = float(_safe_get(signal, "usd_value") or 0.0)
+            except Exception:
+                usd = 0.0
+            if ("godark xrpl settlement" in tags or "godark settlement" in tags) and usd > 0:
+                zk_fingerprinter.add_event(timestamp=float(ts), value=(usd / 1e6))
+                zk_fingerprinter.tick(source_label="xrpl_settlements")
+    except Exception:
+        pass
     try:
         obs = classify_observation(signal)
         prob = await zk_hmm.update(obs)

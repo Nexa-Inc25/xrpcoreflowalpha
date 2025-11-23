@@ -27,6 +27,7 @@ from api.user import router as user_router
 from fastapi.middleware.cors import CORSMiddleware
 import sentry_sdk
 from sentry_sdk.integrations.starlette import StarletteIntegration
+from predictors.futures_tracker import start_binance_futures_tracker
 
 if SENTRY_DSN:
     sentry_sdk.init(dsn=SENTRY_DSN, environment=APP_ENV, integrations=[StarletteIntegration()], traces_sample_rate=0.1)
@@ -73,6 +74,7 @@ async def _startup():
     asyncio.create_task(start_eth_onchain_watcher())
     asyncio.create_task(start_push_worker())
     asyncio.create_task(start_onchain_maintenance())
+    asyncio.create_task(start_binance_futures_tracker())
 
 @app.get("/health")
 async def health():
