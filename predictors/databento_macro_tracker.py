@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import math
 import os
 from datetime import datetime, timedelta, timezone
@@ -13,6 +14,9 @@ except Exception:  # pragma: no cover
     db = None  # type: ignore
 
 
+logger = logging.getLogger(__name__)
+
+
 _PARENT_SYMBOLS = {
     "ES": ("ES.FUT", 50.0, "macro_es"),
     "NQ": ("NQ.FUT", 20.0, "macro_nq"),
@@ -21,15 +25,23 @@ _PARENT_SYMBOLS = {
 
 async def _poll_symbol_parent(symbol_key: str, fp: FrequencyFingerprinter) -> None:
     if not DATABENTO_API_KEY or db is None:
+        logger.info(
+            "Databento macro poller disabled for %s (key_present=%s db_imported=%s)",
+            symbol_key,
+            bool(DATABENTO_API_KEY),
+            db is not None,
+        )
         return
     parent, multiplier, label = _PARENT_SYMBOLS.get(symbol_key.upper(), (symbol_key, 1.0, symbol_key.lower()))
     # Historical client for near-real-time polling. Live client requires long-lived socket; we keep this simple.
     client = db.Historical(DATABENTO_API_KEY)
+    logger.info("Databento macro poller starting for %s (parent=%s label=%s)", symbol_key, parent, label)
     poll_seconds = 30
     while True:
         try:
-            # Pull last 2 minutes of trades and aggregate notional
-            end = datetime.now(tz=timezone.utc)
+            # Pull a short window of trades with a safe lag behind available_end
+            now = datetime.now(tz=timezone.utc)
+            end = now - timedelta(minutes=15)
             start = end - timedelta(minutes=2)
             data = await asyncio.to_thread(
                 client.timeseries.get_range,
@@ -92,7 +104,16 @@ async def _poll_symbol_parent(symbol_key: str, fp: FrequencyFingerprinter) -> No
                 ts = end.timestamp()
                 fp.add_event(timestamp=ts, value=notional)
                 fp.tick(source_label=label)
-        except Exception:
+                logger.info(
+                    "Databento macro tick label=%s parent=%s window=%s..%s notional=%.2f",
+                    label,
+                    parent,
+                    start.isoformat(timespec="seconds"),
+                    end.isoformat(timespec="seconds"),
+                    notional,
+                )
+        except Exception as e:
+            logger.warning("Databento macro poller error for %s: %r", symbol_key, e)
             # soft backoff
             await asyncio.sleep(min(90, poll_seconds * 2))
         await asyncio.sleep(poll_seconds)
@@ -100,8 +121,14 @@ async def _poll_symbol_parent(symbol_key: str, fp: FrequencyFingerprinter) -> No
 
 async def start_databento_macro_tracker(symbols: Optional[List[str]] = None) -> None:
     if not DATABENTO_API_KEY or db is None:
+        logger.info(
+            "Databento macro tracker not started (key_present=%s db_imported=%s)",
+            bool(DATABENTO_API_KEY),
+            db is not None,
+        )
         return
     syms = symbols or ["ES", "NQ"]
+    logger.info("Databento macro tracker starting for symbols=%s", syms)
     tasks: List[asyncio.Task] = []
     for s in syms:
         fp = FrequencyFingerprinter(window_seconds=3600, sample_rate_hz=1.0 / 60.0)
