@@ -59,7 +59,10 @@ class FrequencyFingerprinter:
             return 0.0, 0.0, "unknown", 0.0
         # ignore DC and very low frequency bins
         start_idx = max(1, int(0.01 / (freqs[1] - freqs[0])) if freqs.size > 1 else 1)
-        peak_idx_rel = int(np.argmax(fft_vals[start_idx:]))
+        target_vals = fft_vals[start_idx:]
+        if target_vals.size == 0:
+            return 0.0, 0.0, "unknown", 0.0
+        peak_idx_rel = int(np.argmax(target_vals))
         peak_idx = start_idx + peak_idx_rel
         dom_freq = float(freqs[peak_idx]) if peak_idx < freqs.size else 0.0
         power = float(fft_vals[peak_idx]) if peak_idx < fft_vals.size else 0.0

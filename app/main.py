@@ -110,9 +110,6 @@ async def _startup():
         asyncio.create_task(start_databento_macro_tracker())
     elif POLYGON_API_KEY:
         asyncio.create_task(start_polygon_macro_tracker())
-    elif ALPHA_VANTAGE_API_KEY:
-        # Use Alpha Vantage if key is present
-        asyncio.create_task(start_alpha_macro_tracker())
     elif not DISABLE_EQUITY_FALLBACK:
         # Fallback to Yahoo Finance (no API key)
         asyncio.create_task(start_yahoo_macro_tracker())
