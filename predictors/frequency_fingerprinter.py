@@ -36,7 +36,7 @@ class FrequencyFingerprinter:
             self._vals.popleft()
 
     def _compute(self) -> Tuple[float, float, str, float]:
-        if len(self._vals) < 50:
+        if len(self._vals) < 15:
             return 0.0, 0.0, "unknown", 0.0
         t = np.array(self._ts, dtype=float)
         v = np.array(self._vals, dtype=float)
