@@ -39,10 +39,11 @@ async def _poll_symbol_parent(symbol_key: str, fp: FrequencyFingerprinter) -> No
     poll_seconds = 30
     while True:
         try:
-            # Pull a short window of trades with a safe lag behind available_end
+            # Pull a short window of trades with a conservative lag behind available_end
+            # Databento historical datasets can lag real-time by tens of minutes; use ~1h lag to avoid 422s.
             now = datetime.now(tz=timezone.utc)
-            end = now - timedelta(minutes=15)
-            start = end - timedelta(minutes=2)
+            end = now - timedelta(hours=1)
+            start = end - timedelta(minutes=5)
             data = await asyncio.to_thread(
                 client.timeseries.get_range,
                 dataset="GLBX.MDP3",
