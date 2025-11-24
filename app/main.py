@@ -28,6 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import sentry_sdk
 from sentry_sdk.integrations.starlette import StarletteIntegration
 from predictors.futures_tracker import start_binance_futures_tracker
+from predictors.polygon_macro_tracker import start_polygon_macro_tracker
 from observability.metrics import (
     zk_dominant_frequency_hz,
     zk_frequency_confidence,
@@ -38,7 +39,14 @@ if SENTRY_DSN:
     try:
         _dsn = str(SENTRY_DSN).strip()
         if _dsn and _dsn.lower().startswith("http"):
-            sentry_sdk.init(dsn=_dsn, environment=APP_ENV, integrations=[StarletteIntegration()], traces_sample_rate=0.1)
+            sentry_sdk.init(
+                dsn=_dsn,
+                environment=APP_ENV,
+                integrations=[StarletteIntegration()],
+                traces_sample_rate=0.1,
+                profiles_sample_rate=0.1,
+                release=APP_VERSION,
+            )
     except Exception:
         pass
 
@@ -85,11 +93,14 @@ async def _startup():
     asyncio.create_task(start_push_worker())
     asyncio.create_task(start_onchain_maintenance())
     asyncio.create_task(start_binance_futures_tracker())
+    asyncio.create_task(start_polygon_macro_tracker())
     try:
         zk_dominant_frequency_hz.labels(source="futures_btcusdt").set(0.0)
         zk_dominant_frequency_hz.labels(source="futures_ethusdt").set(0.0)
         zk_dominant_frequency_hz.labels(source="zk_events").set(0.0)
         zk_dominant_frequency_hz.labels(source="xrpl_settlements").set(0.0)
+        zk_dominant_frequency_hz.labels(source="macro_es").set(0.0)
+        zk_dominant_frequency_hz.labels(source="macro_nq").set(0.0)
         zk_frequency_confidence.labels(algo_fingerprint="unknown").set(0.0)
         zk_flow_confidence_score.labels(protocol="godark").set(0.0)
     except Exception:
