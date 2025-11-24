@@ -16,3 +16,7 @@ torch==2.8.0
 numpy==1.26.0
 aiohttp==3.10.5
 asyncpg==0.29.0
+
+# Yahoo Finance fallback
+pandas==2.2.3
+yfinance==0.2.40

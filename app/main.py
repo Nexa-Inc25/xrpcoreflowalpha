@@ -4,6 +4,7 @@ from fastapi.responses import RedirectResponse
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from app.config import XRPL_WSS, ALCHEMY_WS_URL, FINNHUB_API_KEY, SOLANA_RPC_URL, APP_VERSION
 from app.config import SENTRY_DSN, APP_ENV
+from app.config import POLYGON_API_KEY, ALPHA_VANTAGE_API_KEY, DISABLE_EQUITY_FALLBACK
 from app.config import CORS_ALLOW_ORIGINS, CORS_ALLOW_CREDENTIALS, CORS_ALLOW_METHODS, CORS_ALLOW_HEADERS
 from api.sdui import router as sdui_router
 from api.debug import router as debug_router
@@ -29,6 +30,8 @@ import sentry_sdk
 from sentry_sdk.integrations.starlette import StarletteIntegration
 from predictors.futures_tracker import start_binance_futures_tracker
 from predictors.polygon_macro_tracker import start_polygon_macro_tracker
+from predictors.alpha_macro_tracker import start_alpha_macro_tracker
+from predictors.yahoo_macro_tracker import start_yahoo_macro_tracker
 from observability.metrics import (
     zk_dominant_frequency_hz,
     zk_frequency_confidence,
@@ -93,7 +96,13 @@ async def _startup():
     asyncio.create_task(start_push_worker())
     asyncio.create_task(start_onchain_maintenance())
     asyncio.create_task(start_binance_futures_tracker())
-    asyncio.create_task(start_polygon_macro_tracker())
+    if POLYGON_API_KEY:
+        asyncio.create_task(start_polygon_macro_tracker())
+    elif not DISABLE_EQUITY_FALLBACK:
+        # Prefer Yahoo Finance fallback (no API key) for ES/NQ
+        asyncio.create_task(start_yahoo_macro_tracker())
+    elif ALPHA_VANTAGE_API_KEY and not DISABLE_EQUITY_FALLBACK:
+        asyncio.create_task(start_alpha_macro_tracker())
     try:
         zk_dominant_frequency_hz.labels(source="futures_btcusdt").set(0.0)
         zk_dominant_frequency_hz.labels(source="futures_ethusdt").set(0.0)
