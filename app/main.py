@@ -5,6 +5,7 @@ from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from app.config import XRPL_WSS, ALCHEMY_WS_URL, FINNHUB_API_KEY, SOLANA_RPC_URL, APP_VERSION
 from app.config import SENTRY_DSN, APP_ENV
 from app.config import POLYGON_API_KEY, ALPHA_VANTAGE_API_KEY, DISABLE_EQUITY_FALLBACK
+from app.config import DATABENTO_API_KEY
 from app.config import CORS_ALLOW_ORIGINS, CORS_ALLOW_CREDENTIALS, CORS_ALLOW_METHODS, CORS_ALLOW_HEADERS
 from api.sdui import router as sdui_router
 from api.debug import router as debug_router
@@ -30,6 +31,11 @@ import sentry_sdk
 from sentry_sdk.integrations.starlette import StarletteIntegration
 from predictors.futures_tracker import start_binance_futures_tracker
 from predictors.polygon_macro_tracker import start_polygon_macro_tracker
+try:
+    from predictors.databento_macro_tracker import start_databento_macro_tracker
+except Exception:
+    async def start_databento_macro_tracker(symbols=None):
+        return
 try:
     from predictors.alpha_macro_tracker import start_alpha_macro_tracker
 except Exception:
@@ -100,7 +106,9 @@ async def _startup():
     asyncio.create_task(start_push_worker())
     asyncio.create_task(start_onchain_maintenance())
     asyncio.create_task(start_binance_futures_tracker())
-    if POLYGON_API_KEY:
+    if DATABENTO_API_KEY:
+        asyncio.create_task(start_databento_macro_tracker())
+    elif POLYGON_API_KEY:
         asyncio.create_task(start_polygon_macro_tracker())
     elif ALPHA_VANTAGE_API_KEY:
         # Use Alpha Vantage if key is present

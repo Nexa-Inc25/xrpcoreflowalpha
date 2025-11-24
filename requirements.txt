@@ -20,3 +20,6 @@ asyncpg==0.29.0
 # Yahoo Finance fallback
 pandas==2.2.3
 yfinance==0.2.40
+
+# Databento client (CME Globex MDP 3.0)
+databento
