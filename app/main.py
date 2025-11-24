@@ -30,7 +30,11 @@ import sentry_sdk
 from sentry_sdk.integrations.starlette import StarletteIntegration
 from predictors.futures_tracker import start_binance_futures_tracker
 from predictors.polygon_macro_tracker import start_polygon_macro_tracker
-from predictors.alpha_macro_tracker import start_alpha_macro_tracker
+try:
+    from predictors.alpha_macro_tracker import start_alpha_macro_tracker
+except Exception:
+    async def start_alpha_macro_tracker(symbols=None):
+        return
 from predictors.yahoo_macro_tracker import start_yahoo_macro_tracker
 from observability.metrics import (
     zk_dominant_frequency_hz,
@@ -98,11 +102,12 @@ async def _startup():
     asyncio.create_task(start_binance_futures_tracker())
     if POLYGON_API_KEY:
         asyncio.create_task(start_polygon_macro_tracker())
-    elif not DISABLE_EQUITY_FALLBACK:
-        # Prefer Yahoo Finance fallback (no API key) for ES/NQ
-        asyncio.create_task(start_yahoo_macro_tracker())
-    elif ALPHA_VANTAGE_API_KEY and not DISABLE_EQUITY_FALLBACK:
+    elif ALPHA_VANTAGE_API_KEY:
+        # Use Alpha Vantage if key is present
         asyncio.create_task(start_alpha_macro_tracker())
+    elif not DISABLE_EQUITY_FALLBACK:
+        # Fallback to Yahoo Finance (no API key)
+        asyncio.create_task(start_yahoo_macro_tracker())
     try:
         zk_dominant_frequency_hz.labels(source="futures_btcusdt").set(0.0)
         zk_dominant_frequency_hz.labels(source="futures_ethusdt").set(0.0)
