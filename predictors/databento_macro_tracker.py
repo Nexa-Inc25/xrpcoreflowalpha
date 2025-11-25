@@ -37,13 +37,15 @@ async def _poll_symbol_parent(symbol_key: str, fp: FrequencyFingerprinter) -> No
     client = db.Historical(DATABENTO_API_KEY)
     logger.info("Databento macro poller starting for %s (parent=%s label=%s)", symbol_key, parent, label)
     poll_seconds = 30
+    lag_minutes = 62.0
+    max_lag_minutes = 480.0
     while True:
         try:
             # Pull a short window of trades with a conservative lag behind available_end.
             # Databento GLBX.MDP3 is minute-aligned and can lag real-time; use ~62m lag
             # and round down to the previous minute to stay safely before available_end.
             now = datetime.now(tz=timezone.utc)
-            end = now - timedelta(hours=1, minutes=2)
+            end = now - timedelta(minutes=lag_minutes)
             end = end.replace(second=0, microsecond=0)
             start = end - timedelta(minutes=5)
             data = await asyncio.to_thread(
@@ -116,7 +118,21 @@ async def _poll_symbol_parent(symbol_key: str, fp: FrequencyFingerprinter) -> No
                     notional,
                 )
         except Exception as e:
-            logger.warning("Databento macro poller error for %s: %r", symbol_key, e)
+            msg = str(e)
+            logger.warning(
+                "Databento macro poller error for %s window=%s..%s: %r",
+                symbol_key,
+                start.isoformat(timespec="seconds"),
+                end.isoformat(timespec="seconds"),
+                e,
+            )
+            if "data_end_after_available_end" in msg or "data_start_after_available_end" in msg:
+                lag_minutes = min(lag_minutes + 10.0, max_lag_minutes)
+                logger.info(
+                    "Databento macro poller increasing lag for %s to %.1f minutes due to range error",
+                    symbol_key,
+                    lag_minutes,
+                )
             # soft backoff
             await asyncio.sleep(min(90, poll_seconds * 2))
         await asyncio.sleep(poll_seconds)
