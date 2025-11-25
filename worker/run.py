@@ -1,5 +1,7 @@
 import asyncio
 
+from prometheus_client import start_http_server
+
 from app.config import XRPL_WSS, ALCHEMY_WS_URL, FINNHUB_API_KEY, ENABLE_GODARK_ETH_SCANNER
 from scanners.xrpl_scanner import start_xrpl_scanner
 from scanners.zk_scanner import start_zk_scanner
@@ -16,6 +18,13 @@ from xrpl.models.requests import Ledger
 
 
 async def main():
+    # Expose worker-local Prometheus metrics (ZK / GoDark / scanners) on a separate port.
+    try:
+        start_http_server(8012, addr="127.0.0.1")
+        print("[Worker] Prometheus metrics server started on 127.0.0.1:8012")
+    except Exception as e:
+        print(f"[Worker] Failed to start Prometheus metrics server: {e}")
+
     print(f"[Worker] Starting. XRPL={'on' if XRPL_WSS else 'off'} | ZK={'on' if ALCHEMY_WS_URL else 'off'} | EQUITIES={'on' if FINNHUB_API_KEY else 'off'}")
     tasks = []
 
