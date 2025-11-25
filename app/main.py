@@ -42,6 +42,7 @@ except Exception:
     async def start_alpha_macro_tracker(symbols=None):
         return
 from predictors.yahoo_macro_tracker import start_yahoo_macro_tracker
+from scanners.zk_scanner import start_zk_scanner
 from observability.metrics import (
     zk_dominant_frequency_hz,
     zk_frequency_confidence,
@@ -105,6 +106,8 @@ async def _startup():
     asyncio.create_task(start_eth_onchain_watcher())
     asyncio.create_task(start_push_worker())
     asyncio.create_task(start_onchain_maintenance())
+    if ALCHEMY_WS_URL:
+        asyncio.create_task(start_zk_scanner())
     asyncio.create_task(start_binance_futures_tracker())
     if DATABENTO_API_KEY:
         asyncio.create_task(start_databento_macro_tracker())

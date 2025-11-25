@@ -5,6 +5,11 @@ from fastapi import APIRouter, HTTPException
 
 from bus.signal_bus import fetch_recent_signals
 from bus.signal_bus import publish_signal, publish_cross_signal
+from observability.metrics import (
+    zk_dominant_frequency_hz,
+    zk_wavelet_urgency_score,
+    zk_flow_confidence_score,
+)
 import time
 from app.config import APP_ENV
 
@@ -83,4 +88,19 @@ async def trigger_test_event() -> Dict[str, Any]:
     except Exception:
         pass
     return {"status": "ok", "surge_seeded": 4, "zk_seeded": True, "updated_at": _now_iso()}
+
+
+@router.get("/debug/macro_status")
+async def macro_status() -> Dict[str, Any]:
+    es_freq = float(zk_dominant_frequency_hz.labels(source="macro_es")._value.get())
+    nq_freq = float(zk_dominant_frequency_hz.labels(source="macro_nq")._value.get())
+    es_urg = float(zk_wavelet_urgency_score.labels(source="macro_es")._value.get())
+    nq_urg = float(zk_wavelet_urgency_score.labels(source="macro_nq")._value.get())
+    macro_conf = float(zk_flow_confidence_score.labels(protocol="macro")._value.get())
+    return {
+        "macro_es": {"freq_hz": es_freq, "urgency": es_urg},
+        "macro_nq": {"freq_hz": nq_freq, "urgency": nq_urg},
+        "macro_confidence": macro_conf,
+        "updated_at": _now_iso(),
+    }
 
