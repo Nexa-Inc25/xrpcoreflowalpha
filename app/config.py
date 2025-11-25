@@ -1,9 +1,24 @@
 import os
+from pathlib import Path
 try:
     from dotenv import load_dotenv  # type: ignore
     load_dotenv()
 except Exception:
-    pass
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if env_path.exists():
+        try:
+            with env_path.open() as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, val = line.split("=", 1)
+                    key = key.strip()
+                    val = val.strip()
+                    if key and key not in os.environ:
+                        os.environ[key] = val
+        except Exception:
+            pass
 
 APP_ENV = os.getenv("APP_ENV", "dev")
 DISABLE_EQUITY_FALLBACK = os.getenv("DISABLE_EQUITY_FALLBACK", "false").lower() == "true"
