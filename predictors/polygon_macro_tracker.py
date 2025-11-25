@@ -6,6 +6,7 @@ import aiohttp
 
 from app.config import POLYGON_API_KEY
 from predictors.frequency_fingerprinter import FrequencyFingerprinter
+from predictors.wavelet_urgency import update_wavelet_urgency
 
 
 _TICKER_MAP: Dict[str, str] = {
@@ -85,6 +86,10 @@ async def _poll_ticker(ticker: str, label: str, fp: FrequencyFingerprinter) -> N
                             if ts > 0 and notional > 0 and math.isfinite(notional):
                                 fp.add_event(timestamp=ts, value=notional)
                                 fp.tick(source_label=label)
+                                try:
+                                    update_wavelet_urgency(label, ts, notional)
+                                except Exception:
+                                    pass
                                 handled = True
                 except Exception:
                     pass

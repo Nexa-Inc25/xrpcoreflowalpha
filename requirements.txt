@@ -23,3 +23,6 @@ yfinance==0.2.40
 
 # Databento client (CME Globex MDP 3.0)
 databento
+
+# Wavelet analysis (pywt)
+PyWavelets

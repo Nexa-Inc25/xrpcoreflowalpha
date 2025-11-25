@@ -7,6 +7,7 @@ from typing import List, Optional
 
 from app.config import DATABENTO_API_KEY
 from predictors.frequency_fingerprinter import FrequencyFingerprinter
+from predictors.wavelet_urgency import update_wavelet_urgency
 
 try:
     import databento as db  # type: ignore
@@ -109,6 +110,10 @@ async def _poll_symbol_parent(symbol_key: str, fp: FrequencyFingerprinter) -> No
                 ts = end.timestamp()
                 fp.add_event(timestamp=ts, value=notional)
                 fp.tick(source_label=label)
+                try:
+                    update_wavelet_urgency(label, ts, notional)
+                except Exception:
+                    pass
                 logger.info(
                     "Databento macro tick label=%s parent=%s window=%s..%s notional=%.2f",
                     label,

@@ -78,3 +78,9 @@ zk_frequency_confidence = Gauge(
     "Confidence (0-100) of dominant frequency matching a known algo fingerprint",
     ["algo_fingerprint"],
 )
+
+zk_wavelet_urgency_score = Gauge(
+    "zk_wavelet_urgency_score",
+    "Wavelet-based urgency score (0-100) for macro execution patterns",
+    ["source"],
+)
