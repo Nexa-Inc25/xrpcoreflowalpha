@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from fastapi import APIRouter
 
@@ -8,6 +8,7 @@ from observability.metrics import (
     zk_wavelet_urgency_score,
     zk_flow_confidence_score,
 )
+from utils.price import get_price_usd
 
 router = APIRouter()
 
@@ -77,4 +78,43 @@ async def flow_state() -> Dict[str, Any]:
                 "macro_nq": {"freq_hz": nq_freq, "urgency": nq_urg},
             },
         },
+    }
+
+
+@router.get("/dashboard/market_prices")
+async def market_prices() -> Dict[str, Any]:
+    """Return a simple snapshot of real market prices for key assets.
+
+    Currently supports XRP and ETH via Coingecko, using the shared pricing utility.
+    Additional assets can be added later without breaking the response shape.
+    """
+
+    assets: List[Dict[str, Any]] = [
+        {"id": "xrp", "symbol": "XRP", "name": "XRP", "asset_class": "crypto"},
+        {"id": "eth", "symbol": "ETH", "name": "Ethereum", "asset_class": "crypto"},
+    ]
+
+    markets: List[Dict[str, Any]] = []
+    for asset in assets:
+        symbol = str(asset["symbol"]).lower()
+        price = await get_price_usd(symbol)
+        markets.append(
+            {
+                "id": asset["id"],
+                "symbol": asset["symbol"],
+                "name": asset["name"],
+                "price": float(price) if price and price > 0 else 0.0,
+                # 24h change / volume / market cap can be enriched later; keep real price primary.
+                "change_24h": 0.0,
+                "volume": "N/A",
+                "market_cap": "N/A",
+                "asset_class": asset["asset_class"],
+                # Frontend accepts empty history and falls back gracefully.
+                "price_history": [],
+            }
+        )
+
+    return {
+        "updated_at": _now_iso(),
+        "markets": markets,
     }
