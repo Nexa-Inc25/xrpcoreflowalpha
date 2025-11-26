@@ -14,6 +14,7 @@ from api.ui import router as ui_router
 from api.billing import router as billing_router
 from api.admin import router as admin_router
 from api.db_health import router as db_health_router
+from api.dashboard import router as dashboard_router
 from fastapi.staticfiles import StaticFiles
 from observability.impact import start_binance_depth_worker
 from api.export import router as export_router
@@ -85,6 +86,7 @@ app.include_router(user_router)
 app.include_router(debug_router)
 app.include_router(health_router)
 app.include_router(db_health_router)
+app.include_router(dashboard_router)
 app.mount("/static", StaticFiles(directory="clients"), name="static")
 app.middleware("http")(api_key_middleware)
 

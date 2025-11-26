@@ -1,0 +1,241 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>ZK AlphaFlow – Member Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #000;
+        color: #fff;
+      }
+      a { color: #4fd1c5; }
+    </style>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel">
+      const { useState, useEffect } = React;
+
+      const SDUICard = ({ component }) => {
+        return (
+          <div
+            style={{
+              borderRadius: 12,
+              padding: 12,
+              margin: "6px 12px",
+              background: "#111",
+              borderLeft: `4px solid ${component.color || "#4b5563"}`,
+            }}
+          >
+            {component.title && (
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>{component.title}</div>
+            )}
+            {component.summary && (
+              <div style={{ opacity: 0.9, fontSize: 14 }}>{component.summary}</div>
+            )}
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                marginTop: 6,
+                fontSize: 12,
+                opacity: 0.8,
+              }}
+            >
+              {component.confidence !== undefined && (
+                <div>Conf: {component.confidence}%</div>
+              )}
+              {component.predicted_impact && <div>{component.predicted_impact}</div>}
+              {component.time_delta && <div>{component.time_delta}</div>}
+            </div>
+          </div>
+        );
+      };
+
+      const SDUIFeed = () => {
+        const [feed, setFeed] = useState([]);
+
+        useEffect(() => {
+          const fetchFeed = async () => {
+            try {
+              const res = await fetch("/sdui/feed");
+              const data = await res.json();
+              setFeed(data.feed || []);
+            } catch (e) {
+              console.error("SDUI fetch error", e);
+            }
+          };
+          fetchFeed();
+          const id = setInterval(fetchFeed, 15000);
+          return () => clearInterval(id);
+        }, []);
+
+        return (
+          <div style={{ marginTop: 40 }}>
+            <h2 style={{ fontSize: 20, margin: "0 16px 12px" }}>Recent Flow Events</h2>
+            {feed.map((p) => (
+              <div key={p.timestamp || Math.random()}>
+                {(p.components || []).map((c) => (
+                  <SDUICard component={c} key={c.id || Math.random()} />
+                ))}
+              </div>
+            ))}
+          </div>
+        );
+      };
+
+      const FlowDashboard = () => {
+        const [flow, setFlow] = useState(null);
+
+        useEffect(() => {
+          const poll = async () => {
+            try {
+              const res = await fetch("/dashboard/flow_state");
+              const data = await res.json();
+              setFlow(data);
+            } catch (e) {
+              console.error("flow_state fetch error", e);
+            }
+          };
+          poll();
+          const id = setInterval(poll, 10000);
+          return () => clearInterval(id);
+        }, []);
+
+        if (!flow) {
+          return (
+            <div
+              style={{
+                padding: 40,
+                minHeight: "100vh",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              Loading signal...
+            </div>
+          );
+        }
+
+        const godark = flow.godark || {};
+        const macro = flow.macro || {};
+
+        return (
+          <div
+            style={{
+              padding: 40,
+              minHeight: "100vh",
+              boxSizing: "border-box",
+              background: "radial-gradient(circle at top, #111 0, #000 55%)",
+            }}
+          >
+            <h1
+              style={{
+                fontSize: 40,
+                textAlign: "center",
+                marginBottom: 32,
+                letterSpacing: 1,
+              }}
+            >
+              ZK AlphaFlow — Live Regime Map
+            </h1>
+
+            <div
+              style={{
+                display: "flex",
+                gap: 32,
+                justifyContent: "center",
+                flexWrap: "wrap",
+                marginBottom: 24,
+              }}
+            >
+              {/* GoDark Tile */}
+              <div
+                style={{
+                  background: "linear-gradient(135deg, #3b0000, #8b0000)",
+                  padding: 24,
+                  borderRadius: 16,
+                  minWidth: 280,
+                  textAlign: "center",
+                  boxShadow: "0 20px 40px rgba(0,0,0,0.6)",
+                }}
+              >
+                <h2 style={{ marginBottom: 8 }}>GoDark Risk</h2>
+                <div style={{ fontSize: 56, fontWeight: "bold", color: "#fee2e2" }}>
+                  {Math.round((godark.confidence || 0) * 100)}%
+                </div>
+                <div
+                  style={{
+                    background: "#ef4444",
+                    color: "#fff",
+                    padding: "6px 14px",
+                    borderRadius: 999,
+                    display: "inline-block",
+                    marginTop: 8,
+                    fontSize: 12,
+                    letterSpacing: 1,
+                  }}
+                >
+                  {(godark.risk_level || "").toUpperCase() || "NORMAL"}
+                </div>
+                <p style={{ marginTop: 12, fontSize: 13, opacity: 0.85 }}>
+                  {godark.summary}
+                </p>
+              </div>
+
+              {/* Macro Tile */}
+              <div
+                style={{
+                  background: "linear-gradient(135deg, #001f3f, #1d4ed8)",
+                  padding: 24,
+                  borderRadius: 16,
+                  minWidth: 280,
+                  textAlign: "center",
+                  boxShadow: "0 20px 40px rgba(0,0,0,0.6)",
+                }}
+              >
+                <h2 style={{ marginBottom: 8 }}>Macro Regime</h2>
+                <div style={{ fontSize: 56, fontWeight: "bold", color: "#dbeafe" }}>
+                  {(macro.urgency || 0).toFixed(0)}
+                </div>
+                <div
+                  style={{
+                    background: "#3b82f6",
+                    color: "#fff",
+                    padding: "6px 14px",
+                    borderRadius: 999,
+                    display: "inline-block",
+                    marginTop: 8,
+                    fontSize: 12,
+                    letterSpacing: 1,
+                  }}
+                >
+                  {(macro.regime || "idle").toUpperCase()}
+                </div>
+                <p style={{ marginTop: 12, fontSize: 13, opacity: 0.85 }}>
+                  {macro.label}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ textAlign: "center", fontSize: 12, opacity: 0.7 }}>
+              Updated at {flow.updated_at}
+            </div>
+
+            <SDUIFeed />
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<FlowDashboard />);
+    </script>
+  </body>
+</html>
