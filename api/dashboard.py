@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
+import asyncio
 from fastapi import APIRouter
 
 from observability.metrics import (
@@ -9,6 +10,11 @@ from observability.metrics import (
     zk_flow_confidence_score,
 )
 from utils.price import get_price_usd
+
+try:
+    import yfinance as yf  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    yf = None  # type: ignore
 
 router = APIRouter()
 
@@ -44,6 +50,37 @@ def _macro_regime(urg: float) -> str:
     if urg > 0:
         return "calm"
     return "idle"
+
+
+async def _get_yf_last_close(ticker: str) -> float:
+    """Fetch last close for a Yahoo Finance ticker (best-effort, non-fatal).
+
+    Used to surface ES/NQ futures levels on the dashboard without impacting
+    the core pipeline. Falls back to 0.0 on any error.
+    """
+
+    if yf is None:
+        return 0.0
+
+    def _load() -> float:
+        try:
+            t = yf.Ticker(ticker)
+            df = t.history(period="1d", interval="1m", auto_adjust=False, actions=False)
+            if df is None or df.empty:
+                df = t.history(period="1d", interval="1d", auto_adjust=False, actions=False)
+            if df is None or df.empty:
+                return 0.0
+            close = df.get("Close")
+            if close is None or close.empty:
+                return 0.0
+            return float(close.iloc[-1])
+        except Exception:
+            return 0.0
+
+    try:
+        return float(await asyncio.to_thread(_load))
+    except Exception:
+        return 0.0
 
 
 @router.get("/dashboard/flow_state")
@@ -95,6 +132,8 @@ async def market_prices() -> Dict[str, Any]:
     ]
 
     markets: List[Dict[str, Any]] = []
+
+    # Crypto legs via Coingecko
     for asset in assets:
         symbol = str(asset["symbol"]).lower()
         price = await get_price_usd(symbol)
@@ -104,15 +143,44 @@ async def market_prices() -> Dict[str, Any]:
                 "symbol": asset["symbol"],
                 "name": asset["name"],
                 "price": float(price) if price and price > 0 else 0.0,
-                # 24h change / volume / market cap can be enriched later; keep real price primary.
                 "change_24h": 0.0,
                 "volume": "N/A",
                 "market_cap": "N/A",
                 "asset_class": asset["asset_class"],
-                # Frontend accepts empty history and falls back gracefully.
                 "price_history": [],
             }
         )
+
+    # S&P 500 and Nasdaq 100 futures via Yahoo Finance (ES=F, NQ=F)
+    es_price = await _get_yf_last_close("ES=F")
+    nq_price = await _get_yf_last_close("NQ=F")
+
+    markets.append(
+        {
+            "id": "es_fut",
+            "symbol": "ES",
+            "name": "S&P 500 Futures",
+            "price": float(es_price) if es_price and es_price > 0 else 0.0,
+            "change_24h": 0.0,
+            "volume": "N/A",
+            "market_cap": "N/A",
+            "asset_class": "futures",
+            "price_history": [],
+        }
+    )
+    markets.append(
+        {
+            "id": "nq_fut",
+            "symbol": "NQ",
+            "name": "Nasdaq 100 Futures",
+            "price": float(nq_price) if nq_price and nq_price > 0 else 0.0,
+            "change_24h": 0.0,
+            "volume": "N/A",
+            "market_cap": "N/A",
+            "asset_class": "futures",
+            "price_history": [],
+        }
+    )
 
     return {
         "updated_at": _now_iso(),
