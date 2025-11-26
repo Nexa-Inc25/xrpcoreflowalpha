@@ -151,33 +151,33 @@ async def market_prices() -> Dict[str, Any]:
             }
         )
 
-    # S&P 500 and Nasdaq 100 futures via Yahoo Finance (ES=F, NQ=F)
-    es_price = await _get_yf_last_close("ES=F")
-    nq_price = await _get_yf_last_close("NQ=F")
+    # S&P 500 and Nasdaq 100 exposure via highly liquid ETFs (SPY, QQQ)
+    spy_price = await _get_yf_last_close("SPY")
+    qqq_price = await _get_yf_last_close("QQQ")
 
     markets.append(
         {
-            "id": "es_fut",
-            "symbol": "ES",
-            "name": "S&P 500 Futures",
-            "price": float(es_price) if es_price and es_price > 0 else 0.0,
+            "id": "spy",
+            "symbol": "SPY",
+            "name": "S&P 500 (SPY ETF)",
+            "price": float(spy_price) if spy_price and spy_price > 0 else 0.0,
             "change_24h": 0.0,
             "volume": "N/A",
             "market_cap": "N/A",
-            "asset_class": "futures",
+            "asset_class": "etf",
             "price_history": [],
         }
     )
     markets.append(
         {
-            "id": "nq_fut",
-            "symbol": "NQ",
-            "name": "Nasdaq 100 Futures",
-            "price": float(nq_price) if nq_price and nq_price > 0 else 0.0,
+            "id": "qqq",
+            "symbol": "QQQ",
+            "name": "Nasdaq 100 (QQQ ETF)",
+            "price": float(qqq_price) if qqq_price and qqq_price > 0 else 0.0,
             "change_24h": 0.0,
             "volume": "N/A",
             "market_cap": "N/A",
-            "asset_class": "futures",
+            "asset_class": "etf",
             "price_history": [],
         }
     )
