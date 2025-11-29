@@ -1,12 +1,12 @@
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import redis.asyncio as redis
 
 from app.config import REDIS_URL, SECRET_UNSHIELD_MIN_USD
 from bus.signal_bus import publish_signal
 
-_redis: redis.Redis | None = None
+_redis: Optional[redis.Redis] = None
 
 
 async def _get_redis() -> redis.Redis:

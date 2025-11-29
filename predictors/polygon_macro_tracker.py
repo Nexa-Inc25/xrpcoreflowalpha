@@ -97,7 +97,7 @@ async def _poll_ticker(ticker: str, label: str, fp: FrequencyFingerprinter) -> N
             await asyncio.sleep(1.0 if handled else 1.5)
 
 
-async def start_polygon_macro_tracker(symbols: List[str] | None = None) -> None:
+async def start_polygon_macro_tracker(symbols: Optional[List[str]] = None) -> None:
     if not POLYGON_API_KEY:
         return
     syms = symbols or ["ES", "NQ"]

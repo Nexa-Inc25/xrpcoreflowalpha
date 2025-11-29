@@ -2,19 +2,16 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 import asyncio
+import httpx
 from fastapi import APIRouter
 
+from app.config import ALPHA_VANTAGE_API_KEY
 from observability.metrics import (
     zk_dominant_frequency_hz,
     zk_wavelet_urgency_score,
     zk_flow_confidence_score,
 )
 from utils.price import get_price_usd
-
-try:
-    import yfinance as yf  # type: ignore
-except Exception:  # pragma: no cover - optional dependency
-    yf = None  # type: ignore
 
 router = APIRouter()
 
@@ -52,33 +49,46 @@ def _macro_regime(urg: float) -> str:
     return "idle"
 
 
-async def _get_yf_last_close(ticker: str) -> float:
-    """Fetch last close for a Yahoo Finance ticker (best-effort, non-fatal).
+async def _get_alpha_last_close(symbol: str) -> float:
+    """Fetch last close for an equity (e.g., SPY, QQQ) via Alpha Vantage.
 
-    Used to surface ES/NQ futures levels on the dashboard without impacting
-    the core pipeline. Falls back to 0.0 on any error.
+    Best-effort helper for dashboard tiles; falls back to 0.0 on any error or
+    if ALPHA_VANTAGE_API_KEY is not configured.
     """
 
-    if yf is None:
+    if not ALPHA_VANTAGE_API_KEY:
         return 0.0
 
-    def _load() -> float:
-        try:
-            t = yf.Ticker(ticker)
-            df = t.history(period="1d", interval="1m", auto_adjust=False, actions=False)
-            if df is None or df.empty:
-                df = t.history(period="1d", interval="1d", auto_adjust=False, actions=False)
-            if df is None or df.empty:
-                return 0.0
-            close = df.get("Close")
-            if close is None or close.empty:
-                return 0.0
-            return float(close.iloc[-1])
-        except Exception:
-            return 0.0
+    params = {
+        "function": "TIME_SERIES_INTRADAY",
+        "symbol": symbol,
+        "interval": "1min",
+        "outputsize": "compact",
+        "apikey": ALPHA_VANTAGE_API_KEY,
+    }
+    url = "https://www.alphavantage.co/query"
 
     try:
-        return float(await asyncio.to_thread(_load))
+        async with httpx.AsyncClient(timeout=8) as client:
+            resp = await client.get(url, params=params)
+            if resp.status_code != 200:
+                return 0.0
+            data = resp.json()
+    except Exception:
+        return 0.0
+
+    try:
+        series_key = next((k for k in data.keys() if "Time Series" in k), None)
+        if not series_key:
+            return 0.0
+        series = data.get(series_key) or {}
+        if not series:
+            return 0.0
+        # Take the latest timestamp entry
+        latest_ts = sorted(series.keys())[-1]
+        bar = series.get(latest_ts) or {}
+        close_str = bar.get("4. close") or bar.get("4. Close") or "0"
+        return float(close_str)
     except Exception:
         return 0.0
 
@@ -152,8 +162,8 @@ async def market_prices() -> Dict[str, Any]:
         )
 
     # S&P 500 and Nasdaq 100 exposure via highly liquid ETFs (SPY, QQQ)
-    spy_price = await _get_yf_last_close("SPY")
-    qqq_price = await _get_yf_last_close("QQQ")
+    spy_price = await _get_alpha_last_close("SPY")
+    qqq_price = await _get_alpha_last_close("QQQ")
 
     markets.append(
         {

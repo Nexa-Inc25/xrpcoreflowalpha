@@ -2,7 +2,7 @@ import time
 import json
 import hashlib
 import httpx
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import redis.asyncio as redis
 from utils.retry import async_retry
@@ -17,7 +17,7 @@ from app.config import (
 )
 from app.config import EXECUTION_ENABLED
 
-_redis: redis.Redis | None = None
+_redis: Optional[redis.Redis] = None
 
 
 def _fingerprint(payload: Dict[str, Any]) -> str:
@@ -35,7 +35,7 @@ async def _get_redis() -> redis.Redis:
     return _redis
 
 
-async def _allow_send(fp: str, category: str | None) -> bool:
+async def _allow_send(fp: str, category: Optional[str]) -> bool:
     r = await _get_redis()
     try:
         dedup_key = f"alerts:dedup:{fp}"

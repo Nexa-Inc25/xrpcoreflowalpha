@@ -1,6 +1,6 @@
 import asyncio
 import json
-from typing import List
+from typing import List, Optional
 
 import websockets
 
@@ -34,7 +34,7 @@ async def _stream_symbol(symbol: str, fp: FrequencyFingerprinter, threshold: flo
             await asyncio.sleep(2.0)
 
 
-async def start_binance_futures_tracker(symbols: List[str] | None = None) -> None:
+async def start_binance_futures_tracker(symbols: Optional[List[str]] = None) -> None:
     syms = symbols or ["btcusdt", "ethusdt"]
     fps = {s: FrequencyFingerprinter(window_seconds=180, sample_rate_hz=1.0) for s in syms}
     tasks = [asyncio.create_task(_stream_symbol(s, fps[s])) for s in syms]

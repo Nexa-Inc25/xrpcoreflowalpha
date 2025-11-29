@@ -1,6 +1,6 @@
 import time
 from collections import deque
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, Union
 
 import numpy as np
 
@@ -85,7 +85,7 @@ class FrequencyFingerprinter:
             confidence = float(min(confidence, 100.0))
         return dom_freq, power, best_name, confidence
 
-    def tick(self, source_label: str = "zk_events") -> Dict[str, float | str]:
+    def tick(self, source_label: str = "zk_events") -> Dict[str, Union[float, str]]:
         now = time.time()
         if now - self._last_compute_ts < 1.0:
             return {"freq": 0.0, "power": 0.0, "fingerprint": "", "confidence": 0.0}

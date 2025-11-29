@@ -4,7 +4,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from bus.signal_bus import fetch_recent_signals, fetch_recent_cross_signals
@@ -314,7 +314,7 @@ async def ui_payload(request: Request):
     return JSONResponse(data)
 
 
-@router.get("/events")
+@router.get("/events/sse")
 async def event_stream(request: Request):
     last_id: Optional[str] = None
 
@@ -346,3 +346,38 @@ async def event_stream(request: Request):
             await asyncio.sleep(1)
 
     return StreamingResponse(generator(), media_type="text/event-stream")
+
+
+@router.websocket("/events")
+async def events_websocket(ws: WebSocket):
+    await ws.accept()
+    last_id: Optional[str] = None
+    try:
+        while True:
+            try:
+                recent_a = await fetch_recent_signals(window_seconds=SURGE_WINDOW_SECONDS)
+            except Exception:
+                recent_a = []
+            try:
+                recent_b = await fetch_recent_cross_signals(limit=50)
+            except Exception:
+                recent_b = []
+            combined = (recent_a or []) + (recent_b or [])
+            try:
+                combined.sort(key=lambda s: int(s.get("timestamp", 0)))
+            except Exception:
+                pass
+            item = combined[-1] if combined else None
+            if item:
+                cur_id = item.get("id") or f"{item.get('type','evt')}:{item.get('timestamp','')}"
+                if cur_id != last_id:
+                    last_id = cur_id
+                    payload = _format_event(item)
+                    await ws.send_text(json.dumps(payload, separators=(",", ":")))
+            try:
+                _ = await asyncio.wait_for(ws.receive_text(), timeout=1.0)
+            except asyncio.TimeoutError:
+                pass
+            await asyncio.sleep(0.5)
+    except WebSocketDisconnect:
+        return

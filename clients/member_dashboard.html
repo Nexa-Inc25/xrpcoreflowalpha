@@ -1,4 +1,4 @@
-<!doctype html>
+-<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
@@ -8,10 +8,10 @@
       body {
         margin: 0;
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #000;
-        color: #fff;
+        background: #020617; /* slate-950 */
+        color: #e5e7eb; /* gray-200 */
       }
-      a { color: #4fd1c5; }
+      a { color: #38bdf8; }
     </style>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -92,6 +92,7 @@
 
       const FlowDashboard = () => {
         const [flow, setFlow] = useState(null);
+        const [prices, setPrices] = useState(null);
 
         useEffect(() => {
           const poll = async () => {
@@ -105,6 +106,21 @@
           };
           poll();
           const id = setInterval(poll, 10000);
+          return () => clearInterval(id);
+        }, []);
+
+        useEffect(() => {
+          const pollPrices = async () => {
+            try {
+              const res = await fetch("/dashboard/market_prices");
+              const data = await res.json();
+              setPrices(data);
+            } catch (e) {
+              console.error("market_prices fetch error", e);
+            }
+          };
+          pollPrices();
+          const id = setInterval(pollPrices, 30000);
           return () => clearInterval(id);
         }, []);
 
@@ -127,21 +143,46 @@
         const godark = flow.godark || {};
         const macro = flow.macro || {};
 
+        const markets = (prices && prices.markets) || [];
+        const pickMarket = (sym) => markets.find((m) => m.symbol === sym) || {};
+        const fmtPrice = (m) => {
+          const v = m && typeof m.price === "number" ? m.price : null;
+          if (!v || !isFinite(v)) return "—";
+          return v.toFixed(v >= 100 ? 1 : 4);
+        };
+        const xrp = pickMarket("XRP");
+        const eth = pickMarket("ETH");
+        const spy = pickMarket("SPY");
+        const qqq = pickMarket("QQQ");
+
+        const level = (v, fallback) => (v || fallback || "").toString().toLowerCase();
+        const godarkLevel = level(godark.risk_level, "normal");
+        const macroLevel = level(macro.risk_level, "normal");
+        const palette = {
+          critical: "#b91c1c", // red-700
+          high: "#f97316",     // orange-500
+          elevated: "#eab308", // yellow-500
+          normal: "#10b981",   // emerald-500
+        };
+        const godarkAccent = palette[godarkLevel] || "#6b7280";
+        const macroAccent = palette[macroLevel] || "#6b7280";
+
         return (
           <div
             style={{
-              padding: 40,
+              padding: 32,
               minHeight: "100vh",
               boxSizing: "border-box",
-              background: "radial-gradient(circle at top, #111 0, #000 55%)",
+              background: "#020617",
             }}
           >
             <h1
               style={{
-                fontSize: 40,
+                fontSize: 28,
                 textAlign: "center",
-                marginBottom: 32,
-                letterSpacing: 1,
+                marginBottom: 24,
+                letterSpacing: 0.5,
+                fontWeight: 600,
               }}
             >
               ZK AlphaFlow — Live Regime Map
@@ -149,31 +190,56 @@
 
             <div
               style={{
+                maxWidth: 820,
+                margin: "0 auto 16px",
+                fontSize: 12,
+                opacity: 0.75,
+                textAlign: "center",
+              }}
+            >
+              Monitoring <strong>Ethereum mainnet zk-proof flows</strong> for GoDark risk and
+              <strong> ES / NQ CME futures notional</strong> for macro execution waves.
+            </div>
+
+            <div
+              style={{
                 display: "flex",
-                gap: 32,
+                gap: 24,
                 justifyContent: "center",
                 flexWrap: "wrap",
-                marginBottom: 24,
+                marginBottom: 16,
               }}
             >
               {/* GoDark Tile */}
               <div
                 style={{
-                  background: "linear-gradient(135deg, #3b0000, #8b0000)",
-                  padding: 24,
-                  borderRadius: 16,
-                  minWidth: 280,
-                  textAlign: "center",
-                  boxShadow: "0 20px 40px rgba(0,0,0,0.6)",
+                  background: "#020617",
+                  padding: 20,
+                  borderRadius: 12,
+                  minWidth: 260,
+                  maxWidth: 360,
+                  textAlign: "left",
+                  border: "1px solid #1f2937", // gray-800
+                  boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
                 }}
               >
-                <h2 style={{ marginBottom: 8 }}>GoDark Risk</h2>
-                <div style={{ fontSize: 56, fontWeight: "bold", color: "#fee2e2" }}>
+                <div style={{ fontSize: 12, textTransform: "uppercase", opacity: 0.7 }}>
+                  On-Chain ZK Flow
+                </div>
+                <h2 style={{ margin: "4px 0 8px", fontSize: 18 }}>GoDark Risk</h2>
+                <div
+                  style={{
+                    fontSize: 40,
+                    fontWeight: 600,
+                    color: godarkAccent,
+                    lineHeight: 1.1,
+                  }}
+                >
                   {Math.round((godark.confidence || 0) * 100)}%
                 </div>
                 <div
                   style={{
-                    background: "#ef4444",
+                    background: godarkAccent,
                     color: "#fff",
                     padding: "6px 14px",
                     borderRadius: 999,
@@ -188,26 +254,41 @@
                 <p style={{ marginTop: 12, fontSize: 13, opacity: 0.85 }}>
                   {godark.summary}
                 </p>
+                <p style={{ marginTop: 4, fontSize: 12, opacity: 0.7 }}>
+                  Universe: Ethereum mainnet zk verifier calls and partner custody wallets.
+                </p>
               </div>
 
               {/* Macro Tile */}
               <div
                 style={{
-                  background: "linear-gradient(135deg, #001f3f, #1d4ed8)",
-                  padding: 24,
-                  borderRadius: 16,
-                  minWidth: 280,
-                  textAlign: "center",
-                  boxShadow: "0 20px 40px rgba(0,0,0,0.6)",
+                  background: "#020617",
+                  padding: 20,
+                  borderRadius: 12,
+                  minWidth: 260,
+                  maxWidth: 360,
+                  textAlign: "left",
+                  border: "1px solid #1f2937",
+                  boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
                 }}
               >
-                <h2 style={{ marginBottom: 8 }}>Macro Regime</h2>
-                <div style={{ fontSize: 56, fontWeight: "bold", color: "#dbeafe" }}>
+                <div style={{ fontSize: 12, textTransform: "uppercase", opacity: 0.7 }}>
+                  Futures Macro Flow
+                </div>
+                <h2 style={{ margin: "4px 0 8px", fontSize: 18 }}>Macro Regime</h2>
+                <div
+                  style={{
+                    fontSize: 40,
+                    fontWeight: 600,
+                    color: macroAccent,
+                    lineHeight: 1.1,
+                  }}
+                >
                   {(macro.urgency || 0).toFixed(0)}
                 </div>
                 <div
                   style={{
-                    background: "#3b82f6",
+                    background: macroAccent,
                     color: "#fff",
                     padding: "6px 14px",
                     borderRadius: 999,
@@ -222,11 +303,128 @@
                 <p style={{ marginTop: 12, fontSize: 13, opacity: 0.85 }}>
                   {macro.label}
                 </p>
+                <p style={{ marginTop: 4, fontSize: 12, opacity: 0.7 }}>
+                  Universe: ES (CME E-mini S&P 500) and NQ (CME E-mini Nasdaq-100) via Databento.
+                </p>
               </div>
             </div>
 
             <div style={{ textAlign: "center", fontSize: 12, opacity: 0.7 }}>
               Updated at {flow.updated_at}
+            </div>
+
+            <div
+              style={{
+                maxWidth: 820,
+                margin: "24px auto 0",
+                fontSize: 12,
+                opacity: 0.85,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
+                Tracked instruments
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+                <div style={{ minWidth: 220 }}>
+                  <div style={{ fontWeight: 500 }}>On-chain (GoDark)</div>
+                  <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                    <li>Ethereum mainnet zk verifier calls</li>
+                    <li>Partner & custody wallet flows</li>
+                  </ul>
+                </div>
+                <div style={{ minWidth: 220 }}>
+                  <div style={{ fontWeight: 500 }}>Macro (Futures)</div>
+                  <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                    <li>ES – CME E-mini S&amp;P 500</li>
+                    <li>NQ – CME E-mini Nasdaq-100</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                maxWidth: 820,
+                margin: "24px auto 0",
+                fontSize: 12,
+                opacity: 0.9,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
+                Market snapshot
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 16,
+                }}
+              >
+                <div
+                  style={{
+                    flex: "1 1 160px",
+                    minWidth: 160,
+                    padding: 12,
+                    borderRadius: 10,
+                    border: "1px solid #1f2937",
+                    background: "#020617",
+                  }}
+                >
+                  <div style={{ fontSize: 11, opacity: 0.7 }}>Crypto</div>
+                  <div style={{ fontSize: 14, fontWeight: 500 }}>XRP</div>
+                  <div style={{ fontSize: 20, fontWeight: 600, marginTop: 4 }}>
+                    {fmtPrice(xrp)}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    flex: "1 1 160px",
+                    minWidth: 160,
+                    padding: 12,
+                    borderRadius: 10,
+                    border: "1px solid #1f2937",
+                    background: "#020617",
+                  }}
+                >
+                  <div style={{ fontSize: 11, opacity: 0.7 }}>Crypto</div>
+                  <div style={{ fontSize: 14, fontWeight: 500 }}>ETH</div>
+                  <div style={{ fontSize: 20, fontWeight: 600, marginTop: 4 }}>
+                    {fmtPrice(eth)}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    flex: "1 1 160px",
+                    minWidth: 160,
+                    padding: 12,
+                    borderRadius: 10,
+                    border: "1px solid #1f2937",
+                    background: "#020617",
+                  }}
+                >
+                  <div style={{ fontSize: 11, opacity: 0.7 }}>Index</div>
+                  <div style={{ fontSize: 14, fontWeight: 500 }}>S&amp;P 500 (SPY)</div>
+                  <div style={{ fontSize: 20, fontWeight: 600, marginTop: 4 }}>
+                    {fmtPrice(spy)}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    flex: "1 1 160px",
+                    minWidth: 160,
+                    padding: 12,
+                    borderRadius: 10,
+                    border: "1px solid #1f2937",
+                    background: "#020617",
+                  }}
+                >
+                  <div style={{ fontSize: 11, opacity: 0.7 }}>Index</div>
+                  <div style={{ fontSize: 14, fontWeight: 500 }}>Nasdaq 100 (QQQ)</div>
+                  <div style={{ fontSize: 20, fontWeight: 600, marginTop: 4 }}>
+                    {fmtPrice(qqq)}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <SDUIFeed />

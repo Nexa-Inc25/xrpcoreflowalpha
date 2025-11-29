@@ -177,3 +177,8 @@ CORS_ALLOW_ORIGINS = ["*"] if _CORS_ORIGINS_RAW == ["*"] else _CORS_ORIGINS_RAW
 CORS_ALLOW_CREDENTIALS = os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
 CORS_ALLOW_METHODS = [m.strip().upper() for m in os.getenv("CORS_ALLOW_METHODS", "*").split(",") if m.strip()]
 CORS_ALLOW_HEADERS = [h.strip() for h in os.getenv("CORS_ALLOW_HEADERS", "*").split(",") if h.strip()]
+
+# Telegram alerts (Redis -> Telegram worker)
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+TELEGRAM_MIN_CONFIDENCE = int(os.getenv("TELEGRAM_MIN_CONFIDENCE", "85"))

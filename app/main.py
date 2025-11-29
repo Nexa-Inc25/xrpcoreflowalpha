@@ -15,6 +15,8 @@ from api.billing import router as billing_router
 from api.admin import router as admin_router
 from api.db_health import router as db_health_router
 from api.dashboard import router as dashboard_router
+from api.flows import router as flows_router
+from api.analytics import router as analytics_router
 from fastapi.staticfiles import StaticFiles
 from observability.impact import start_binance_depth_worker
 from api.export import router as export_router
@@ -24,6 +26,7 @@ from api.onchain import router as onchain_router
 from billing.onchain_watchers import start_solana_onchain_watcher, start_eth_onchain_watcher, start_onchain_maintenance
 from api.notify import router as notify_router
 from notifications.push_worker import start_push_worker
+from notifications.telegram_worker import start_telegram_worker
 from api.history import router as history_router
 from api.qr import router as qr_router
 from api.user import router as user_router
@@ -87,6 +90,8 @@ app.include_router(debug_router)
 app.include_router(health_router)
 app.include_router(db_health_router)
 app.include_router(dashboard_router)
+app.include_router(flows_router)
+app.include_router(analytics_router)
 app.mount("/static", StaticFiles(directory="clients"), name="static")
 app.middleware("http")(api_key_middleware)
 
@@ -129,6 +134,8 @@ async def _startup():
         zk_flow_confidence_score.labels(protocol="godark").set(0.0)
     except Exception:
         pass
+    # Telegram dark-flow alerts (optional)
+    asyncio.create_task(start_telegram_worker())
 
 @app.get("/health")
 async def health():
