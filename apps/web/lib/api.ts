@@ -63,3 +63,26 @@ export async function fetchEthCloseForecast(input: {
   }
   return res.json();
 }
+
+export async function fetchFlowState(): Promise<any> {
+  const res = await fetch(apiBaseTrimmed() + '/dashboard/flow_state', {
+    headers: { Accept: 'application/json' },
+    // cache a little on the client; underlying gauges move slowly
+    next: { revalidate: 15 },
+  } as any);
+  if (!res.ok) {
+    throw new Error('Failed to fetch flow_state');
+  }
+  return res.json();
+}
+
+export async function fetchMarketPrices(): Promise<any> {
+  const res = await fetch(apiBaseTrimmed() + '/dashboard/market_prices', {
+    headers: { Accept: 'application/json' },
+    next: { revalidate: 30 },
+  } as any);
+  if (!res.ok) {
+    throw new Error('Failed to fetch market_prices');
+  }
+  return res.json();
+}

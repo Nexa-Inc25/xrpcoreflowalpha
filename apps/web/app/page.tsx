@@ -3,9 +3,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
-import { fetchUI } from '../lib/api';
+import { fetchUI, fetchFlowState, fetchMarketPrices } from '../lib/api';
 import EventList from '../components/EventList';
 import ImpactForecastCard from '../components/ImpactForecastCard';
+import MacroPanel from '../components/MacroPanel';
+import MarketStrip from '../components/MarketStrip';
 
 interface UIChild {
   type: string;
@@ -20,6 +22,18 @@ export default function DashboardPage() {
   const { data: uiData } = useQuery({
     queryKey: ['ui'],
     queryFn: fetchUI,
+  });
+
+  const { data: flowStateData } = useQuery({
+    queryKey: ['flow_state'],
+    queryFn: fetchFlowState,
+    staleTime: 15_000,
+  });
+
+  const { data: marketPricesData } = useQuery({
+    queryKey: ['market_prices'],
+    queryFn: fetchMarketPrices,
+    staleTime: 30_000,
   });
 
   const [liveEvents, setLiveEvents] = useState<any[]>([]);
@@ -90,6 +104,14 @@ export default function DashboardPage() {
             )}
           </div>
         </header>
+
+        <section className="space-y-4">
+          <MacroPanel state={flowStateData} />
+          <MarketStrip
+            markets={marketPricesData?.markets}
+            updatedAt={marketPricesData?.updated_at}
+          />
+        </section>
 
         <main className="grid gap-6 lg:grid-cols-[minmax(0,2.1fr)_minmax(0,1.2fr)] lg:items-start">
           <section className="rounded-xl border border-slate-800 bg-slate-900/60 shadow-xl shadow-black/40">
