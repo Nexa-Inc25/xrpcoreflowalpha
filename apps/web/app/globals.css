@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* Global styles for ZK Alpha Flow web dashboard */
 
 html, body {
