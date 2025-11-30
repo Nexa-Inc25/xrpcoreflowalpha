@@ -69,7 +69,7 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
             # Hard reject unrealistic amounts (drop silently)
             if xrp > 5_000_000_000:
                 return
-            if xrp >= 5_000_000:
+            if xrp >= 100_000:
                 flow = XRPFlow(
                     amount_xrp=xrp,
                     usd_value=0.0,
