@@ -70,6 +70,20 @@ def _format_event(sig: Dict[str, Any]) -> Dict[str, Any]:
         ask = sig.get("ask_depth_usd")
         sp = sig.get("spread_bps")
         msg = f"OB {pair}: bid ${float(bid or 0):,.0f} | ask ${float(ask or 0):,.0f} | spread {sp if sp is not None else 'n/a'} bps"
+    elif stype == "xrp":
+        try:
+            features = {
+                "amount_xrp": float(sig.get("amount_xrp") or 0.0),
+                "usd_value": float(sig.get("usd_value") or 0.0),
+                "tx_hash": sig.get("tx_hash") or "",
+                "source": sig.get("source") or "",
+                "destination": sig.get("destination") or "",
+                "destination_tag": sig.get("destination_tag"),
+            }
+        except Exception:
+            features = {}
+        base_msg = sig.get("summary") or "XRP flow"
+        msg = base_msg
     elif stype == "zk":
         try:
             features = {
