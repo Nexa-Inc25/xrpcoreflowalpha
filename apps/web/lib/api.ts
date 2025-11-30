@@ -27,6 +27,17 @@ export async function fetchFlowsByTx(txHash: string): Promise<any> {
   return res.json();
 }
 
+export async function fetchXrplFlowsHistory(): Promise<any> {
+  const url =
+    apiBaseTrimmed() +
+    '/flows?types=xrp,trustline,orderbook,rwa_amm&page_size=100&window_seconds=86400';
+  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!res.ok) {
+    throw new Error('Failed to fetch XRPL flows');
+  }
+  return res.json();
+}
+
 export async function fetchEthOhlcvLatest(): Promise<{
   open: number;
   high: number;

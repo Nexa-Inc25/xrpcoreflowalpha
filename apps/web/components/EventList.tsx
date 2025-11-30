@@ -1,8 +1,9 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useState } from 'react';
+import { fetchXrplFlowsHistory } from '../lib/api';
 
 interface EventListProps {
   events: any[];
@@ -11,6 +12,13 @@ interface EventListProps {
 export default function EventList({ events }: EventListProps) {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'all' | 'zk' | 'xrpl_iso'>('all');
+
+  const { data: xrplHistory } = useQuery({
+    queryKey: ['xrpl_flows_history'],
+    queryFn: fetchXrplFlowsHistory,
+    enabled: filter === 'xrpl_iso',
+    staleTime: 60_000,
+  });
 
   const prefetchFlow = (txHash?: string) => {
     if (!txHash) return;
@@ -42,6 +50,16 @@ export default function EventList({ events }: EventListProps) {
     }
     return true;
   });
+
+  let displayEvents = filteredEvents;
+
+  if (filter === 'xrpl_iso' && xrplHistory?.items) {
+    const baseIds = new Set(filteredEvents.map((e: any) => e.id));
+    const extra = (xrplHistory.items as any[]).filter(
+      (evt) => evt && !baseIds.has(evt.id),
+    );
+    displayEvents = [...filteredEvents, ...extra];
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -96,7 +114,7 @@ export default function EventList({ events }: EventListProps) {
       </div>
       <div className="flex-1 overflow-y-auto">
         <ul className="divide-y divide-slate-800/70">
-          {filteredEvents.map((event) => {
+          {displayEvents.map((event) => {
             const txHash = event.features?.tx_hash || event.features?.txHash;
             const conf = String(event.confidence || '').toLowerCase();
             const type = String(event.type || '').toLowerCase();
