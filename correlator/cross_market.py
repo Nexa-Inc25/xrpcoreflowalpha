@@ -11,7 +11,11 @@ from app.config import REDIS_URL, CROSS_SIGNAL_DEDUP_TTL
 from utils.retry import async_retry
 from bus.signal_bus import fetch_recent_signals, publish_cross_signal
 from ml.impact_predictor import predict_xrp_impact
-from ml.flow_predictor import predict_impact_ml
+try:
+    from ml.flow_predictor import predict_impact_ml
+except Exception:
+    def predict_impact_ml(cross: Dict) -> None:  # type: ignore[func-returns-value]
+        return None
 from app.config import EXECUTION_ENABLED
 from execution.engine import XRPFlowAlphaExecution
 

@@ -12,7 +12,13 @@ from scanners.rwa_amm_liquidity_monitor import start_rwa_amm_monitor
 from scanners.xrpl_orderbook_monitor import start_xrpl_orderbook_monitor
 from godark.dynamic_ingest import run_dynamic_ingest
 from correlator.cross_market import run_correlation_loop
-from ml.flow_predictor import live_gru_training
+try:
+    from ml.flow_predictor import live_gru_training
+except Exception:
+    async def live_gru_training() -> None:
+        while True:
+            print("[ML] Torch not available – GRU training disabled (import failed)")
+            await asyncio.sleep(600)
 from xrpl.asyncio.clients import AsyncJsonRpcClient
 from xrpl.models.requests import Ledger
 
