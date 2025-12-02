@@ -207,16 +207,33 @@ async def get_labeled_batch(limit: int = 64) -> List[Tuple[List[float], float]]:
     return xs
 
 
-class BiGRUFlowPredictor(nn.Module):  # type: ignore[misc]
-    def __init__(self, input_size: int = _INPUT_DIM, hidden_size: int = 512, num_layers: int = 2):
-        super().__init__()
-        self.gru = nn.GRU(input_size, hidden_size, num_layers,
-                          batch_first=True, bidirectional=True, dropout=0.3)
-        self.fc = nn.Linear(hidden_size * 2, 1)
+if TORCH_AVAILABLE:
+    class BiGRUFlowPredictor(nn.Module):  # type: ignore[misc]
+        def __init__(self, input_size: int = _INPUT_DIM, hidden_size: int = 512, num_layers: int = 2):
+            super().__init__()
+            self.gru = nn.GRU(
+                input_size,
+                hidden_size,
+                num_layers,
+                batch_first=True,
+                bidirectional=True,
+                dropout=0.3,
+            )
+            self.fc = nn.Linear(hidden_size * 2, 1)
 
-    def forward(self, x: "torch.Tensor") -> "torch.Tensor":  # type: ignore[name-defined]
-        out, _ = self.gru(x)
-        return self.fc(out[:, -1, :]).squeeze(-1)
+        def forward(self, x: "torch.Tensor") -> "torch.Tensor":  # type: ignore[name-defined]
+            out, _ = self.gru(x)
+            return self.fc(out[:, -1, :]).squeeze(-1)
+else:
+    class BiGRUFlowPredictor:  # type: ignore[misc]
+        """Stub used when torch is unavailable.
+
+        Live GRU training and ML inference are disabled via TORCH_AVAILABLE,
+        so this class should never be instantiated in that mode.
+        """
+
+        def __init__(self, *args: object, **kwargs: object) -> None:  # pragma: no cover
+            raise RuntimeError("Torch not available – BiGRUFlowPredictor is disabled")
 
 
 _MODEL: Optional[BiGRUFlowPredictor] = None
