@@ -45,7 +45,11 @@ try:
 except Exception:
     async def start_alpha_macro_tracker(symbols=None):
         return
-from predictors.yahoo_macro_tracker import start_yahoo_macro_tracker
+try:
+    from predictors.yahoo_macro_tracker import start_yahoo_macro_tracker
+except Exception:
+    async def start_yahoo_macro_tracker(symbols=None):
+        return
 from scanners.zk_scanner import start_zk_scanner
 from observability.metrics import (
     zk_dominant_frequency_hz,
