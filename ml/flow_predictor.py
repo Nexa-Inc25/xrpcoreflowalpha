@@ -31,6 +31,15 @@ except Exception:
     nn = None  # type: ignore
     F = None  # type: ignore
 
+if nn is None:
+    class _DummyModule:
+        pass
+
+    class _DummyNN:
+        Module = _DummyModule
+
+    nn = _DummyNN()
+
 
 _TAG_VOCAB = [
     "godark", "godark partner", "godark prep", "godark likely",
