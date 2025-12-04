@@ -1,7 +1,6 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useUser } from '@clerk/nextjs';
 import {
   fetchFlowsByTx,
   fetchEthOhlcvLatest,
@@ -13,8 +12,7 @@ interface PageProps {
 }
 
 export default function FlowDetailPage({ params }: PageProps) {
-  const { user } = useUser();
-  const isPremium = (user?.publicMetadata as any)?.tier === 'premium';
+  const isPremium = false;
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['flow', params.txHash],

@@ -2,7 +2,6 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { useUser } from '@clerk/nextjs';
 import { fetchUI, fetchFlowState, fetchMarketPrices } from '../lib/api';
 import EventList from '../components/EventList';
 import ImpactForecastCard from '../components/ImpactForecastCard';
@@ -16,8 +15,7 @@ interface UIChild {
 }
 
 export default function DashboardPage() {
-  const { user } = useUser();
-  const isPremium = (user?.publicMetadata as any)?.tier === 'premium';
+  const isPremium = false;
 
   const { data: uiData } = useQuery({
     queryKey: ['ui'],

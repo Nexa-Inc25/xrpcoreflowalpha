@@ -8,14 +8,16 @@ export const metadata: Metadata = {
   description: 'Live ZK dark flow tracker.',
 };
 
+const enableClerk = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <ClerkProvider>
-      <html lang="en">
-        <body className="bg-slate-950 text-slate-100">
-          <ReactQueryProvider>{children}</ReactQueryProvider>
-        </body>
-      </html>
-    </ClerkProvider>
+  const content = (
+    <html lang="en">
+      <body className="bg-slate-950 text-slate-100">
+        <ReactQueryProvider>{children}</ReactQueryProvider>
+      </body>
+    </html>
   );
+
+  return enableClerk ? <ClerkProvider>{content}</ClerkProvider> : content;
 }
