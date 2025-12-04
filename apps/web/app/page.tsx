@@ -39,10 +39,12 @@ export default function DashboardPage() {
   const [liveEvents, setLiveEvents] = useState<any[]>([]);
 
   useEffect(() => {
+    let isMounted = true;
     const base = process.env.NEXT_PUBLIC_API_WS_BASE || 'wss://api.zkalphaflow.com';
     const socket = new WebSocket(base.replace(/\/$/, '') + '/events');
 
     socket.onmessage = (msg) => {
+      if (!isMounted) return;
       try {
         const evt = JSON.parse(msg.data);
         setLiveEvents((prev) => {
@@ -54,7 +56,10 @@ export default function DashboardPage() {
       }
     };
 
-    return () => socket.close();
+    return () => {
+      isMounted = false;
+      socket.close();
+    };
   }, []);
 
   const children: UIChild[] = uiData?.children ?? [];
