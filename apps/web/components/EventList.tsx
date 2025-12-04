@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useState } from 'react';
 import { fetchXrplFlowsHistory } from '../lib/api';
+import IsoFlowCard from './IsoFlowCard';
 
 interface EventListProps {
   events: any[];
@@ -122,6 +123,10 @@ export default function EventList({ events }: EventListProps) {
             const usd = event.features?.usd_value as number | undefined;
             const ruleScore = event.rule_score as number | undefined;
 
+            const isIsoFlow =
+              filter === 'xrpl_iso' &&
+              ['xrp', 'trustline', 'orderbook', 'rwa_amm'].includes(type);
+
             const confidenceClasses =
               conf === 'high'
                 ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
@@ -145,49 +150,55 @@ export default function EventList({ events }: EventListProps) {
                 }}
               >
                 <Link href={txHash ? `/flow/${txHash}` : '#'} className="flex flex-col gap-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="line-clamp-2 text-sm leading-snug text-slate-50 group-hover:text-sky-100">
-                      {event.message}
-                    </p>
-                    <div className="flex flex-none flex-col items-end gap-1 text-[11px] text-slate-400">
-                      {ruleScore != null && (
-                        <span className="rounded-full border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-purple-200">
-                          Score {ruleScore.toFixed(0)}
+                  {isIsoFlow ? (
+                    <IsoFlowCard event={event} />
+                  ) : (
+                    <>
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="line-clamp-2 text-sm leading-snug text-slate-50 group-hover:text-sky-100">
+                          {event.message}
+                        </p>
+                        <div className="flex flex-none flex-col items-end gap-1 text-[11px] text-slate-400">
+                          {ruleScore != null && (
+                            <span className="rounded-full border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-purple-200">
+                              Score {ruleScore.toFixed(0)}
+                            </span>
+                          )}
+                          {sizeLabel && (
+                            <span className="rounded-full border border-slate-600/60 bg-slate-800/80 px-2 py-0.5 text-slate-200">
+                              {sizeLabel}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 capitalize ${confidenceClasses}`}
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                          {conf || 'unknown'}
                         </span>
-                      )}
-                      {sizeLabel && (
-                        <span className="rounded-full border border-slate-600/60 bg-slate-800/80 px-2 py-0.5 text-slate-200">
-                          {sizeLabel}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 capitalize ${confidenceClasses}`}
-                    >
-                      <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                      {conf || 'unknown'}
-                    </span>
-                    {type && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-800/80 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-slate-300">
-                        {type}
-                      </span>
-                    )}
-                    {network && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2 py-0.5 text-slate-400">
-                        {String(network).toUpperCase()}
-                      </span>
-                    )}
-                    {event.timestamp && (
-                      <span className="text-slate-500">
-                        {new Date(event.timestamp).toLocaleTimeString(undefined, {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                    )}
-                  </div>
+                        {type && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-800/80 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-slate-300">
+                            {type}
+                          </span>
+                        )}
+                        {network && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2 py-0.5 text-slate-400">
+                            {String(network).toUpperCase()}
+                          </span>
+                        )}
+                        {event.timestamp && (
+                          <span className="text-slate-500">
+                            {new Date(event.timestamp).toLocaleTimeString(undefined, {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </Link>
               </li>
             );

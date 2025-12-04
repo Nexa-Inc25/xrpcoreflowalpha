@@ -11,6 +11,7 @@ from utils.retry import async_retry
 from predictors.markov_predictor import zk_hmm, classify_observation
 from predictors.frequency_fingerprinter import zk_fingerprinter
 from observability.metrics import zk_flow_confidence_score
+from predictors.xrp_iso_predictor import enrich_iso_signal
 
 _redis: Optional[redis.Redis] = None
 
@@ -87,6 +88,13 @@ async def publish_signal(signal: Dict[str, Any]) -> None:
         except Exception:
             pass
         signal["zk_markov_imminent_prob"] = float(round(float(prob), 4))
+    except Exception:
+        pass
+    # ISO / XRPL predictor enrichment (XRPL payments, trustlines, RWA AMMs, OB)
+    try:
+        stype = str(_safe_get(signal, "type") or "").lower()
+        if stype in ("xrp", "trustline", "rwa_amm", "orderbook"):
+            signal = enrich_iso_signal(signal)
     except Exception:
         pass
     data = json.dumps(signal, separators=(",", ":"))

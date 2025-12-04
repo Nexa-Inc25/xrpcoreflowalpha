@@ -138,6 +138,17 @@ def _format_event(sig: Dict[str, Any]) -> Dict[str, Any]:
         msg = sig.get("summary") or f"SOLANA AMM activity tx {(sig.get('tx_sig') or '')[:8]}..."
     else:
         msg = sig.get("summary") or f"{stype.upper()} event"
+    # Attach ISO / XRPL predictor fields when present
+    try:
+        iso_conf = sig.get("iso_confidence")
+        if iso_conf is not None:
+            features["iso_confidence"] = int(iso_conf)
+        for k in ("iso_direction", "iso_timeframe", "iso_expected_move_pct", "iso_state", "iso_amount_usd"):
+            v = sig.get(k)
+            if v is not None:
+                features[k] = v
+    except Exception:
+        pass
     out = {
         "timestamp": _iso(sig.get("timestamp")),
         "message": msg,
