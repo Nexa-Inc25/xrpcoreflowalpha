@@ -97,3 +97,18 @@ export async function fetchMarketPrices(): Promise<any> {
   }
   return res.json();
 }
+
+export async function fetchAssetPriceHistory(
+  symbol: 'xrp' | 'eth',
+  days = 1,
+): Promise<{ t: number; p: number }[]> {
+  const id = symbol === 'xrp' ? 'ripple' : 'ethereum';
+  const url = `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=${days}&interval=minute`;
+  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!res.ok) {
+    throw new Error('Failed to fetch price history');
+  }
+  const data = await res.json();
+  const prices = (data.prices ?? []) as [number, number][];
+  return prices.map(([ts, price]) => ({ t: ts, p: price }));
+}
