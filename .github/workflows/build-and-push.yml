@@ -1,0 +1,50 @@
+name: Build & Push Docker images to DigitalOcean Container Registry
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+env:
+  REGISTRY: registry.digitalocean.com/zkalphaflow
+  IMAGE_API: registry.digitalocean.com/zkalphaflow/api
+  IMAGE_WORKER: registry.digitalocean.com/zkalphaflow/worker
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to DigitalOcean Container Registry
+        env:
+          DO_CR_TOKEN: ${{ secrets.DO_CR_TOKEN }}
+        run: |
+          if [ -z "${DO_CR_TOKEN}" ]; then
+            echo "DO_CR_TOKEN secret is not set" >&2
+            exit 1
+          fi
+          echo "${DO_CR_TOKEN}" | docker login "$REGISTRY" -u doctl --password-stdin
+
+      - name: Build api image
+        run: |
+          docker build \
+            -t "$IMAGE_API:${GITHUB_SHA}" \
+            -t "$IMAGE_API:latest" .
+
+      - name: Build worker image
+        run: |
+          docker build \
+            -t "$IMAGE_WORKER:${GITHUB_SHA}" \
+            -t "$IMAGE_WORKER:latest" .
+
+      - name: Push api image
+        run: |
+          docker push "$IMAGE_API:${GITHUB_SHA}"
+          docker push "$IMAGE_API:latest"
+
+      - name: Push worker image
+        run: |
+          docker push "$IMAGE_WORKER:${GITHUB_SHA}"
+          docker push "$IMAGE_WORKER:latest"
