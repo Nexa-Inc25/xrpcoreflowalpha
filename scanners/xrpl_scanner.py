@@ -92,6 +92,7 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
                     usd = 0.0
                 summary = f"{xrp/1_000_000:.1f}M XRP → {txn.get('Destination','')[:6]}..."
                 dest_tag = txn.get("DestinationTag")
+                tags = ["xrpl", "xrpl payment"]
                 await publish_signal({
                     "type": "xrp",
                     "sub_type": "payment",
@@ -103,6 +104,7 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
                     "destination": flow.destination,
                     "source": flow.source,
                     "destination_tag": dest_tag,
+                    "tags": tags,
                 })
                 await send_slack_alert(build_rich_slack_payload({"type": "xrp", "flow": flow}))
                 return
@@ -117,6 +119,7 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
         if not ok:
             return
         print(f"[XRPL] Institutional signal: {ttype}")
+        tags = ["xrpl", ttype.lower()]
         await publish_signal({
             "type": "xrp",
             "sub_type": ttype.lower(),
@@ -124,4 +127,5 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
             "summary": f"XRPL {ttype}",
             "usd_value": None,
             "tx_hash": tx_hash,
+            "tags": tags,
         })
