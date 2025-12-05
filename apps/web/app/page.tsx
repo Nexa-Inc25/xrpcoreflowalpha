@@ -1,12 +1,18 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import dynamic from 'next/dynamic';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Activity, Zap, TrendingUp, Shield, Radio, Wifi, WifiOff } from 'lucide-react';
 import { fetchUI, fetchFlowState, fetchMarketPrices } from '../lib/api';
-import EventList from '../components/EventList';
-import ImpactForecastCard from '../components/ImpactForecastCard';
-import MacroPanel from '../components/MacroPanel';
-import MarketStrip from '../components/MarketStrip';
+import { cn } from '../lib/utils';
+
+// Dynamic imports for heavy components with SSR disabled
+const EventList = dynamic(() => import('../components/EventList'), { ssr: false });
+const ImpactForecastCard = dynamic(() => import('../components/ImpactForecastCard'), { ssr: false });
+const MacroPanel = dynamic(() => import('../components/MacroPanel'), { ssr: false });
+const MarketStrip = dynamic(() => import('../components/MarketStrip'), { ssr: false });
 
 interface UIChild {
   type: string;
@@ -16,116 +22,281 @@ interface UIChild {
 
 export default function DashboardPage() {
   const isPremium = false;
+  const [isConnected, setIsConnected] = useState(false);
+  const [liveEvents, setLiveEvents] = useState<any[]>([]);
+  const [newEventFlash, setNewEventFlash] = useState(false);
 
-  const { data: uiData } = useQuery({
+  const { data: uiData, isLoading: uiLoading } = useQuery({
     queryKey: ['ui'],
     queryFn: fetchUI,
+    refetchInterval: 30_000,
   });
 
   const { data: flowStateData } = useQuery({
     queryKey: ['flow_state'],
     queryFn: fetchFlowState,
     staleTime: 15_000,
+    refetchInterval: 15_000,
   });
 
   const { data: marketPricesData } = useQuery({
     queryKey: ['market_prices'],
     queryFn: fetchMarketPrices,
     staleTime: 30_000,
+    refetchInterval: 30_000,
   });
 
-  const [liveEvents, setLiveEvents] = useState<any[]>([]);
+  const handleNewEvent = useCallback((evt: any) => {
+    setLiveEvents((prev) => {
+      if (prev.length && prev[0]?.id === evt.id) return prev;
+      return [evt, ...prev].slice(0, 50);
+    });
+    setNewEventFlash(true);
+    setTimeout(() => setNewEventFlash(false), 1000);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
-    const base = process.env.NEXT_PUBLIC_API_WS_BASE || 'wss://api.zkalphaflow.com';
-    const socket = new WebSocket(base.replace(/\/$/, '') + '/events');
+    let reconnectTimeout: NodeJS.Timeout;
+    
+    const connect = () => {
+      const base = process.env.NEXT_PUBLIC_API_WS_BASE || 'wss://api.zkalphaflow.com';
+      const socket = new WebSocket(base.replace(/\/$/, '') + '/events');
 
-    socket.onmessage = (msg) => {
-      if (!isMounted) return;
-      try {
-        const evt = JSON.parse(msg.data);
-        setLiveEvents((prev) => {
-          if (prev.length && prev[0]?.id === evt.id) return prev;
-          return [evt, ...prev];
-        });
-      } catch {
-        // ignore malformed events
-      }
+      socket.onopen = () => {
+        if (isMounted) setIsConnected(true);
+      };
+
+      socket.onclose = () => {
+        if (isMounted) {
+          setIsConnected(false);
+          reconnectTimeout = setTimeout(connect, 3000);
+        }
+      };
+
+      socket.onerror = () => {
+        if (isMounted) setIsConnected(false);
+      };
+
+      socket.onmessage = (msg) => {
+        if (!isMounted) return;
+        try {
+          const evt = JSON.parse(msg.data);
+          handleNewEvent(evt);
+        } catch {
+          // ignore malformed events
+        }
+      };
+
+      return socket;
     };
+
+    const socket = connect();
 
     return () => {
       isMounted = false;
+      clearTimeout(reconnectTimeout);
       socket.close();
     };
-  }, []);
+  }, [handleNewEvent]);
 
   const children: UIChild[] = uiData?.children ?? [];
   const eventListChild = children.find((c) => c.type === 'EventList');
   const impactCardChild = children.find((c) => c.type === 'ImpactForecastCard');
-  const headerChild = children.find((c) => c.type === 'Header');
   const liveCounterChild = children.find((c) => c.type === 'LiveCounter');
   const predictiveBannerChild = children.find((c) => c.type === 'PredictiveBanner');
 
-  const title = headerChild?.title ?? 'ZK Alpha Flow Dashboard';
-  const subtitle =
-    headerChild?.subtitle ?? 'Live ZK dark flow, macro regime, and impact forecasts.';
-
   const initialEvents = eventListChild?.events ?? [];
   const mergedEvents = liveEvents.length ? liveEvents : initialEvents;
+  const surgeMode = predictiveBannerChild?.visible ?? false;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 lg:py-8">
-        <header className="flex flex-col justify-between gap-4 border-b border-slate-800 pb-4 lg:flex-row lg:items-end">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-400">
-              zkAlphaFlow
-            </p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight lg:text-3xl">{title}</h1>
-            <p className="mt-1 max-w-xl text-sm text-slate-400">{subtitle}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            {liveCounterChild && (
-              <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs">
-                <div className="text-slate-400">
-                  {liveCounterChild.label ?? 'Events (window)'}
-                </div>
-                <div className="mt-1 text-lg font-semibold text-slate-50">
-                  {liveCounterChild.value ?? 0}
-                </div>
+    <div className="min-h-screen text-slate-50">
+      {/* Animated background orbs */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-brand-purple/20 rounded-full blur-[100px] animate-pulse-slow" />
+        <div className="absolute top-1/2 -left-40 w-96 h-96 bg-brand-sky/15 rounded-full blur-[120px] animate-pulse-slow" style={{ animationDelay: '1s' }} />
+        <div className="absolute -bottom-20 right-1/3 w-72 h-72 bg-brand-emerald/10 rounded-full blur-[100px] animate-pulse-slow" style={{ animationDelay: '2s' }} />
+      </div>
+
+      <div className="relative mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 lg:px-6 lg:py-8">
+        {/* Header */}
+        <motion.header 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end"
+        >
+          <div className="flex items-start gap-4">
+            {/* Logo mark */}
+            <div className="relative flex-shrink-0">
+              <div className={cn(
+                "w-12 h-12 rounded-xl glass-card flex items-center justify-center",
+                surgeMode && "glow-ring-critical"
+              )}>
+                <Zap className={cn(
+                  "w-6 h-6",
+                  surgeMode ? "text-rose-400" : "text-brand-sky"
+                )} />
               </div>
-            )}
-            {predictiveBannerChild && predictiveBannerChild.visible && (
-              <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-amber-400" />
-                <span>
-                  {predictiveBannerChild.text ??
-                    'High-volume ZK flow detected – preparing market impact forecast'}
+              {surgeMode && (
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full animate-pulse" />
+              )}
+            </div>
+            
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-semibold tracking-tight lg:text-3xl bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+                  ZK Alpha Flow
+                </h1>
+                <span className="px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest rounded-full bg-brand-purple/20 text-brand-purple border border-brand-purple/30">
+                  Beta
                 </span>
               </div>
-            )}
+              <p className="mt-1 max-w-lg text-sm text-slate-400">
+                Real-time ZK dark pool detection · Institutional flow signals · 30-90s alpha
+              </p>
+            </div>
           </div>
-        </header>
 
-        <section className="space-y-4">
+          {/* Status indicators */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Connection status */}
+            <div className={cn(
+              "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium glass-subtle",
+              isConnected 
+                ? "text-emerald-300 border border-emerald-500/30" 
+                : "text-rose-300 border border-rose-500/30"
+            )}>
+              {isConnected ? (
+                <>
+                  <Wifi className="w-3.5 h-3.5" />
+                  <span>Live</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                </>
+              ) : (
+                <>
+                  <WifiOff className="w-3.5 h-3.5" />
+                  <span>Reconnecting...</span>
+                </>
+              )}
+            </div>
+
+            {/* Live counter */}
+            {liveCounterChild && (
+              <motion.div 
+                className={cn(
+                  "glass-card rounded-xl px-4 py-2",
+                  newEventFlash && "glow-ring-high"
+                )}
+                animate={newEventFlash ? { scale: [1, 1.02, 1] } : {}}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="flex items-center gap-3">
+                  <Activity className="w-4 h-4 text-slate-400" />
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500">
+                      {liveCounterChild.label ?? 'Events (5min)'}
+                    </div>
+                    <div className="text-xl font-semibold tabular-nums text-slate-50">
+                      {liveCounterChild.value ?? 0}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Surge mode banner */}
+            <AnimatePresence>
+              {surgeMode && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9, x: 20 }}
+                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, x: 20 }}
+                  className="surge-banner rounded-full px-4 py-2 flex items-center gap-2"
+                >
+                  <Radio className="w-4 h-4 text-rose-400 animate-pulse" />
+                  <span className="text-xs font-medium text-rose-200">
+                    {predictiveBannerChild?.text ?? 'Surge Mode Active'}
+                  </span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </motion.header>
+
+        {/* Divider */}
+        <div className="h-px bg-gradient-to-r from-transparent via-slate-700/50 to-transparent" />
+
+        {/* Macro panels */}
+        <motion.section 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="space-y-4"
+        >
           <MacroPanel state={flowStateData} />
           <MarketStrip
             markets={marketPricesData?.markets}
             updatedAt={marketPricesData?.updated_at}
           />
-        </section>
+        </motion.section>
 
-        <main className="grid gap-6 lg:grid-cols-[minmax(0,2.1fr)_minmax(0,1.2fr)] lg:items-start">
-          <section className="rounded-xl border border-slate-800 bg-slate-900/60 shadow-xl shadow-black/40">
-            <EventList events={mergedEvents} />
+        {/* Main content */}
+        <motion.main 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="grid gap-6 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)] lg:items-start"
+        >
+          {/* Event feed */}
+          <section className="glass-card rounded-2xl overflow-hidden shadow-2xl shadow-black/40">
+            <EventList events={mergedEvents} isLoading={uiLoading} />
           </section>
-          <aside className="space-y-4">
+
+          {/* Sidebar */}
+          <aside className="space-y-4 lg:sticky lg:top-6">
             {impactCardChild && (
               <ImpactForecastCard card={impactCardChild} isPremium={isPremium} />
             )}
+            
+            {/* Quick stats card */}
+            <div className="glass-card rounded-2xl p-4">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-slate-400 mb-3">
+                <Shield className="w-4 h-4" />
+                <span>Detection Stats</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-surface-1/50 rounded-lg p-3">
+                  <div className="text-2xl font-semibold text-slate-50 tabular-nums">
+                    {mergedEvents.filter(e => e.confidence === 'high').length}
+                  </div>
+                  <div className="text-[10px] uppercase tracking-wider text-emerald-400">High Conf</div>
+                </div>
+                <div className="bg-surface-1/50 rounded-lg p-3">
+                  <div className="text-2xl font-semibold text-slate-50 tabular-nums">
+                    {mergedEvents.filter(e => e.type === 'zk').length}
+                  </div>
+                  <div className="text-[10px] uppercase tracking-wider text-brand-sky">ZK Proofs</div>
+                </div>
+              </div>
+            </div>
           </aside>
-        </main>
+        </motion.main>
+
+        {/* Footer */}
+        <footer className="mt-4 pt-4 border-t border-slate-800/50">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>zkalphaflow.com · Real-time institutional flow detection</span>
+            </div>
+            <div className="flex items-center gap-4">
+              <span>Public data only</span>
+              <span>·</span>
+              <span>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            </div>
+          </div>
+        </footer>
       </div>
     </div>
   );

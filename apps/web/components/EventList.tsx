@@ -3,16 +3,37 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  ExternalLink, 
+  Zap, 
+  Coins, 
+  TrendingUp, 
+  Clock, 
+  Layers,
+  ChevronRight,
+  Loader2
+} from 'lucide-react';
 import { fetchXrplFlowsHistory } from '../lib/api';
+import { cn, timeAgo, formatUSD } from '../lib/utils';
 import IsoFlowCard from './IsoFlowCard';
 
 interface EventListProps {
   events: any[];
+  isLoading?: boolean;
 }
 
-export default function EventList({ events }: EventListProps) {
+const filterOptions = [
+  { id: 'all', label: 'All Flows', icon: Layers },
+  { id: 'zk', label: 'ZK / ETH', icon: Zap },
+  { id: 'xrpl_iso', label: 'XRPL / ISO', icon: Coins },
+] as const;
+
+type FilterType = typeof filterOptions[number]['id'];
+
+export default function EventList({ events, isLoading }: EventListProps) {
   const queryClient = useQueryClient();
-  const [filter, setFilter] = useState<'all' | 'zk' | 'xrpl_iso'>('all');
+  const [filter, setFilter] = useState<FilterType>('all');
 
   const { data: xrplHistory } = useQuery({
     queryKey: ['xrpl_flows_history'],
@@ -64,147 +85,234 @@ export default function EventList({ events }: EventListProps) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-white/5 px-5 py-4">
         <div>
-          <h2 className="text-sm font-semibold tracking-tight">Recent Dark Flow</h2>
-          <p className="mt-0.5 text-xs text-slate-400">
-            Live ZK, Solana AMM, and macro events ranked by confidence and size.
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-brand-sky" />
+            <h2 className="text-base font-semibold tracking-tight">Dark Flow Feed</h2>
+          </div>
+          <p className="mt-1 text-xs text-slate-400">
+            Live detection of ZK proofs, dark pool activity, and institutional flows
           </p>
         </div>
-        <div className="flex items-center gap-3 text-[11px] text-slate-400">
-          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-emerald-200">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-            Live
-          </span>
-          <div className="inline-flex items-center rounded-full border border-slate-700 bg-slate-900/70 p-0.5">
-            <button
-              type="button"
-              className={`px-2 py-0.5 rounded-full ${
-                filter === 'all'
-                  ? 'bg-slate-800 text-slate-100'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              onClick={() => setFilter('all')}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              className={`px-2 py-0.5 rounded-full ${
-                filter === 'zk'
-                  ? 'bg-slate-800 text-slate-100'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              onClick={() => setFilter('zk')}
-            >
-              ZK / ETH
-            </button>
-            <button
-              type="button"
-              className={`px-2 py-0.5 rounded-full ${
-                filter === 'xrpl_iso'
-                  ? 'bg-slate-800 text-slate-100'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              onClick={() => setFilter('xrpl_iso')}
-            >
-              XRPL / ISO 20022
-            </button>
-          </div>
-        </div>
-      </div>
-      <div className="flex-1 overflow-y-auto">
-        <ul className="divide-y divide-slate-800/70">
-          {displayEvents.map((event) => {
-            const txHash = event.features?.tx_hash || event.features?.txHash;
-            const conf = String(event.confidence || '').toLowerCase();
-            const type = String(event.type || '').toLowerCase();
-            const network = event.network || event.features?.network;
-            const usd = event.features?.usd_value as number | undefined;
-            const ruleScore = event.rule_score as number | undefined;
-
-            const isIsoFlow =
-              filter === 'xrpl_iso' &&
-              ['xrp', 'trustline', 'orderbook', 'rwa_amm'].includes(type);
-
-            const confidenceClasses =
-              conf === 'high'
-                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
-                : conf === 'medium'
-                ? 'bg-amber-500/10 text-amber-200 border-amber-500/40'
-                : 'bg-slate-700/40 text-slate-200 border-slate-600/60';
-
-            let sizeLabel = '';
-            if (typeof usd === 'number') {
-              if (usd >= 50_000_000) sizeLabel = '>50m';
-              else if (usd >= 10_000_000) sizeLabel = '10–50m';
-              else if (usd >= 1_000_000) sizeLabel = '1–10m';
-            }
-
+        
+        {/* Filter tabs */}
+        <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-1/80 border border-white/5">
+          {filterOptions.map((opt) => {
+            const Icon = opt.icon;
+            const isActive = filter === opt.id;
             return (
-              <li
-                key={event.id}
-                className="group cursor-pointer bg-slate-900/40 px-4 py-3 transition-colors hover:bg-slate-900/90"
-                onMouseEnter={() => {
-                  if (conf === 'high') prefetchFlow(txHash);
-                }}
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setFilter(opt.id)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                  isActive 
+                    ? "bg-brand-sky/20 text-brand-sky shadow-sm" 
+                    : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                )}
               >
-                <Link href={txHash ? `/flow/${txHash}` : '#'} className="flex flex-col gap-1">
-                  {isIsoFlow ? (
-                    <IsoFlowCard event={event} />
-                  ) : (
-                    <>
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="line-clamp-2 text-sm leading-snug text-slate-50 group-hover:text-sky-100">
-                          {event.message}
-                        </p>
-                        <div className="flex flex-none flex-col items-end gap-1 text-[11px] text-slate-400">
-                          {ruleScore != null && (
-                            <span className="rounded-full border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-purple-200">
-                              Score {ruleScore.toFixed(0)}
-                            </span>
-                          )}
-                          {sizeLabel && (
-                            <span className="rounded-full border border-slate-600/60 bg-slate-800/80 px-2 py-0.5 text-slate-200">
-                              {sizeLabel}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 capitalize ${confidenceClasses}`}
-                        >
-                          <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                          {conf || 'unknown'}
-                        </span>
-                        {type && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-800/80 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-slate-300">
-                            {type}
-                          </span>
-                        )}
-                        {network && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2 py-0.5 text-slate-400">
-                            {String(network).toUpperCase()}
-                          </span>
-                        )}
-                        {event.timestamp && (
-                          <span className="text-slate-500">
-                            {new Date(event.timestamp).toLocaleTimeString(undefined, {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </Link>
-              </li>
+                <Icon className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{opt.label}</span>
+              </button>
             );
           })}
-        </ul>
+        </div>
+      </div>
+
+      {/* Event list */}
+      <div className="flex-1 overflow-y-auto">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-6 h-6 text-slate-400 animate-spin" />
+          </div>
+        ) : displayEvents.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+            <Layers className="w-10 h-10 mb-3 opacity-50" />
+            <p className="text-sm">No events detected</p>
+            <p className="text-xs mt-1">Waiting for dark flow signals...</p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-white/5">
+            <AnimatePresence mode="popLayout" initial={false}>
+              {displayEvents.map((event, index) => (
+                <EventRow 
+                  key={event.id} 
+                  event={event} 
+                  index={index}
+                  filter={filter}
+                  onHover={prefetchFlow}
+                />
+              ))}
+            </AnimatePresence>
+          </ul>
+        )}
+      </div>
+
+      {/* Footer stats */}
+      <div className="border-t border-white/5 px-5 py-3 flex items-center justify-between text-xs text-slate-500">
+        <span>{displayEvents.length} events</span>
+        <span className="flex items-center gap-1">
+          <Clock className="w-3 h-3" />
+          Real-time
+        </span>
       </div>
     </div>
+  );
+}
+
+function EventRow({ 
+  event, 
+  index, 
+  filter,
+  onHover 
+}: { 
+  event: any; 
+  index: number;
+  filter: FilterType;
+  onHover: (txHash?: string) => void;
+}) {
+  const txHash = event.features?.tx_hash || event.features?.txHash;
+  const conf = String(event.confidence || '').toLowerCase();
+  const type = String(event.type || '').toLowerCase();
+  const network = event.network || event.features?.network;
+  const usd = event.features?.usd_value as number | undefined;
+  const ruleScore = event.rule_score as number | undefined;
+
+  const isIsoFlow =
+    filter === 'xrpl_iso' &&
+    ['xrp', 'trustline', 'orderbook', 'rwa_amm'].includes(type);
+
+  const isHighConf = conf === 'high';
+  const isMediumConf = conf === 'medium';
+
+  const getTypeIcon = () => {
+    if (type === 'zk') return <Zap className="w-4 h-4" />;
+    if (type === 'xrp' || type === 'trustline') return <Coins className="w-4 h-4" />;
+    return <TrendingUp className="w-4 h-4" />;
+  };
+
+  const getTypeColor = () => {
+    if (type === 'zk') return 'text-purple-400 bg-purple-500/10 border-purple-500/30';
+    if (type === 'xrp') return 'text-blue-400 bg-blue-500/10 border-blue-500/30';
+    if (type === 'solana_amm') return 'text-green-400 bg-green-500/10 border-green-500/30';
+    return 'text-slate-400 bg-slate-500/10 border-slate-500/30';
+  };
+
+  return (
+    <motion.li
+      layout
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      transition={{ 
+        duration: 0.2, 
+        delay: index < 5 ? index * 0.03 : 0 
+      }}
+      className={cn(
+        "group relative event-row-hover",
+        isHighConf && "bg-emerald-500/[0.03]",
+        isMediumConf && "bg-amber-500/[0.02]"
+      )}
+      onMouseEnter={() => {
+        if (isHighConf) onHover(txHash);
+      }}
+    >
+      {/* Left accent bar for high confidence */}
+      {isHighConf && (
+        <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b from-emerald-400 to-emerald-600" />
+      )}
+
+      <Link 
+        href={txHash ? `/flow/${txHash}` : '#'} 
+        className="flex items-start gap-4 px-5 py-4"
+      >
+        {/* Type icon */}
+        <div className={cn(
+          "flex-shrink-0 w-9 h-9 rounded-lg border flex items-center justify-center mt-0.5",
+          getTypeColor()
+        )}>
+          {getTypeIcon()}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          {isIsoFlow ? (
+            <IsoFlowCard event={event} />
+          ) : (
+            <>
+              {/* Message */}
+              <p className="text-sm leading-relaxed text-slate-200 group-hover:text-white transition-colors line-clamp-2">
+                {event.message}
+              </p>
+
+              {/* Meta row */}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {/* Confidence badge */}
+                <span className={cn(
+                  "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium",
+                  isHighConf && "badge-high",
+                  isMediumConf && "badge-medium",
+                  !isHighConf && !isMediumConf && "badge-low"
+                )}>
+                  <span className={cn(
+                    "w-1.5 h-1.5 rounded-full",
+                    isHighConf && "bg-emerald-400",
+                    isMediumConf && "bg-amber-400",
+                    !isHighConf && !isMediumConf && "bg-slate-400"
+                  )} />
+                  {conf || 'low'}
+                </span>
+
+                {/* Type */}
+                <span className="px-2 py-0.5 rounded-full bg-surface-2/80 text-[10px] font-medium uppercase tracking-wider text-slate-300">
+                  {type}
+                </span>
+
+                {/* Network */}
+                {network && (
+                  <span className="px-2 py-0.5 rounded-full bg-surface-1 text-[10px] text-slate-400 border border-white/5">
+                    {String(network).toUpperCase()}
+                  </span>
+                )}
+
+                {/* USD value */}
+                {typeof usd === 'number' && usd > 0 && (
+                  <span className="text-[11px] font-mono text-slate-400">
+                    {formatUSD(usd)}
+                  </span>
+                )}
+
+                {/* Time */}
+                {event.timestamp && (
+                  <span className="text-[11px] text-slate-500 ml-auto">
+                    {timeAgo(event.timestamp)}
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Right side: score + arrow */}
+        <div className="flex-shrink-0 flex flex-col items-end gap-2">
+          {ruleScore != null && ruleScore >= 50 && (
+            <div className={cn(
+              "px-2 py-1 rounded-lg text-xs font-semibold tabular-nums",
+              ruleScore >= 80 
+                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" 
+                : ruleScore >= 60 
+                  ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                  : "bg-slate-700/50 text-slate-300 border border-slate-600/50"
+            )}>
+              {ruleScore.toFixed(0)}
+            </div>
+          )}
+          <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-slate-400 group-hover:translate-x-0.5 transition-all" />
+        </div>
+      </Link>
+    </motion.li>
   );
 }
