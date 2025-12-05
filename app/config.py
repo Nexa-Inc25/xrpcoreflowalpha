@@ -55,9 +55,10 @@ SENTRY_DSN = os.getenv("SENTRY_DSN", "")
 # Equities detection threshold (shares)
 EQUITY_BLOCK_MIN_SHARES = int(os.getenv("EQUITY_BLOCK_MIN_SHARES", "100000"))
 
-# Pricing (Coingecko)
-COINGECKO_API_BASE = os.getenv("COINGECKO_API_BASE", "https://api.coingecko.com/api/v3")
+# Pricing (Coingecko) - Use Pro API if key is set
 COINGECKO_API_KEY = os.getenv("COINGECKO_API_KEY", "")
+_DEFAULT_CG_BASE = "https://pro-api.coingecko.com/api/v3" if COINGECKO_API_KEY else "https://api.coingecko.com/api/v3"
+COINGECKO_API_BASE = os.getenv("COINGECKO_API_BASE", _DEFAULT_CG_BASE)
 
 # Correlation dedup
 CROSS_SIGNAL_DEDUP_TTL = int(os.getenv("CROSS_SIGNAL_DEDUP_TTL", "21600"))  # 6h
