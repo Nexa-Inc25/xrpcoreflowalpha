@@ -1,0 +1,47 @@
+# Dependencies
+node_modules
+apps/web/node_modules
+apps/web/.next
+__pycache__
+*.pyc
+.pytest_cache
+venv
+.venv
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Logs
+*.log
+logs
+
+# Environment
+.env.local
+.env.*.local
+
+# Docker
+Dockerfile*
+docker-compose*
+.docker
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test/Coverage
+coverage
+.coverage
+htmlcov
+.tox
+
+# Build artifacts
+dist
+build
+*.egg-info

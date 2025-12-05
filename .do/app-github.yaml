@@ -1,0 +1,30 @@
+name: zkalphaflow
+region: nyc
+
+services:
+  - name: xrpcoreflowalpha-apps-web
+    github:
+      repo: Nexa-Inc25/xrpcoreflowalpha
+      branch: main
+      deploy_on_push: true
+    source_dir: apps/web
+    build_command: npm install && npm run build
+    run_command: npm start
+    http_port: 8080
+    instance_size_slug: basic-xxs
+    instance_count: 1
+    routes:
+      - path: /
+    envs:
+      - key: NEXT_PUBLIC_API_BASE
+        value: https://api.zkalphaflow.com
+      - key: NEXT_PUBLIC_API_WS_BASE
+        value: wss://api.zkalphaflow.com
+      - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+        value: pk_live_Y2xlcmsuemthbHBoYWZsb3cuY29tJA
+
+domains:
+  - domain: zkalphaflow.com
+    type: PRIMARY
+  - domain: www.zkalphaflow.com
+    type: ALIAS
