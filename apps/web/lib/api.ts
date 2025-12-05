@@ -169,15 +169,15 @@ export async function fetchOrderBookDepth(symbol: string): Promise<{
     }
   }
   
-  // Mock fallback
+  // No data available
   return {
-    bids: [50, 60, 45, 70, 55, 65, 40, 75, 50, 60],
-    asks: [45, 55, 50, 60, 40, 55, 65, 50, 45, 55],
-    bid_depth: 2400000,
-    ask_depth: 1800000,
-    spread: 0.0012,
-    imbalance: 0.25,
-    latency_ms: 45,
+    bids: [],
+    asks: [],
+    bid_depth: 0,
+    ask_depth: 0,
+    spread: 0,
+    imbalance: 0,
+    latency_ms: 0,
   };
 }
 
@@ -201,18 +201,10 @@ export async function fetchManipulationHistory(symbol: string): Promise<{
     // Use fallback
   }
   
-  // Intelligent fallback based on symbol volatility patterns
-  const isHighVolatility = ['ETH', 'BTC', 'SOL'].includes(symbol.toUpperCase());
-  
+  // No data available
   return {
-    patterns: [
-      { type: 'Spoofing', count: isHighVolatility ? 23 : 8, last_seen: '1h ago', severity: 'high' },
-      { type: 'Layering', count: isHighVolatility ? 15 : 5, last_seen: '3h ago', severity: 'medium' },
-      { type: 'Wash Trading', count: isHighVolatility ? 7 : 2, last_seen: '6h ago', severity: 'low' },
-      { type: 'Front Running', count: isHighVolatility ? 67 : 12, last_seen: '12m ago', severity: 'high' },
-      { type: 'Quote Stuffing', count: isHighVolatility ? 34 : 6, last_seen: '45m ago', severity: 'medium' },
-    ],
-    risk_score: isHighVolatility ? 72 : 45,
+    patterns: [],
+    risk_score: 0,
   };
 }
 
@@ -245,43 +237,14 @@ export async function fetchEventForecast(event: any): Promise<{
     // Use intelligent fallback
   }
   
-  // Generate intelligent forecast based on event data
-  const confidence = event.confidence || event.features?.confidence || 50;
-  const valueUsd = event.value_usd || event.features?.value_usd || 0;
-  const isLargeFlow = valueUsd > 1000000;
-  const isHighConfidence = confidence >= 80;
-  
-  // Predict impact based on flow size and confidence
-  let predictedImpact = 0;
-  if (isLargeFlow && isHighConfidence) {
-    predictedImpact = 2.5 + Math.random() * 1.5;
-  } else if (isLargeFlow) {
-    predictedImpact = 1.2 + Math.random() * 1.0;
-  } else if (isHighConfidence) {
-    predictedImpact = 0.8 + Math.random() * 0.8;
-  } else {
-    predictedImpact = 0.3 + Math.random() * 0.5;
-  }
-  
-  // Determine signal based on event type
-  const signals: Record<string, string> = {
-    zk: 'ZK proof detected indicates institutional accumulation. Historical data shows 73% correlation with positive price movement within 15 minutes.',
-    xrp: 'Large XRPL flow detected. Cross-border settlement pattern suggests institutional positioning ahead of market move.',
-    trustline: 'Trustline activity spike indicates smart money movement. Similar patterns preceded 2.1% average moves.',
-    orderbook: 'Order book imbalance detected. Algorithm identifies potential sweep pattern with 68% directional accuracy.',
-    default: 'Dark pool flow detected. Pattern analysis suggests institutional activity with moderate impact probability.',
-  };
-  
-  const eventType = String(event.type || '').toLowerCase();
-  const signal = signals[eventType] || signals.default;
-  
+  // No forecast data available
   return {
-    predicted_impact: predictedImpact,
-    confidence: Math.min(95, confidence + 10),
-    signal,
-    horizon: '15m',
-    model: 'HMM-Markov-v3',
-    updated: 'Just now',
+    predicted_impact: 0,
+    confidence: 0,
+    signal: '',
+    horizon: '',
+    model: '',
+    updated: '',
   };
 }
 
