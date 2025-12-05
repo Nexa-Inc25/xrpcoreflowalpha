@@ -66,13 +66,15 @@ export default function EventList({ events, isLoading }: EventListProps) {
     const t = String(event.type || '').toLowerCase();
     const net = String(event.network || event.features?.network || '').toLowerCase();
     if (filter === 'zk') {
-      return t === 'zk';
+      return t === 'zk' || t === 'dark_pool';
     }
     if (filter === 'xrpl_iso') {
-      if (['xrp', 'trustline', 'orderbook', 'rwa_amm'].includes(t)) return true;
+      // Include XRPL-related types and networks
+      if (['xrp', 'trustline', 'orderbook', 'rwa_amm', 'event'].includes(t)) return true;
       if (['xrpl', 'xrp', 'xlm', 'xdc', 'hbar'].includes(net)) return true;
       return false;
     }
+    // 'all' filter shows everything
     return true;
   });
 
