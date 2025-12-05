@@ -24,6 +24,7 @@ import { useClerk, useUser } from '@clerk/nextjs';
 const navItems = [
   { href: '/', label: 'Dashboard', icon: Activity, badge: 'Live' },
   { href: '/analytics', label: 'Analytics', icon: BarChart3 },
+  { href: '/backtest', label: 'Backtest', icon: TrendingUp },
   { href: '/watchlist', label: 'Watchlist', icon: Star },
   { href: '/alerts', label: 'Alerts', icon: Bell, badge: '3' },
   { href: '/wallets', label: 'Wallets', icon: Wallet },
