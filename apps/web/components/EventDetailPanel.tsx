@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -112,13 +112,18 @@ function OrderBookViz({ bids, asks }: { bids: number[]; asks: number[] }) {
 export default function EventDetailPanel({ event, onClose }: EventDetailPanelProps) {
   const [activeTab, setActiveTab] = useState<'chart' | 'orderbook' | 'history' | 'forecast'>('chart');
   
-  // Determine asset symbol from event
-  const symbol = event.features?.symbol || 
-    (event.network === 'ethereum' ? 'ETH' : 
-     event.network === 'xrpl' ? 'XRP' : 
-     event.type === 'zk' ? 'ETH' : 'ETH');
-  
-  const assetId = symbol.toLowerCase() === 'xrp' ? 'xrp' : 'eth';
+  // Memoize symbol and assetId for stable hook dependencies
+  const { symbol, assetId, eventId } = useMemo(() => {
+    const sym = event?.features?.symbol || 
+      (event?.network === 'ethereum' ? 'ETH' : 
+       event?.network === 'xrpl' ? 'XRP' : 
+       event?.type === 'zk' ? 'ETH' : 'ETH');
+    return {
+      symbol: sym,
+      assetId: sym.toLowerCase() === 'xrp' ? 'xrp' as const : 'eth' as const,
+      eventId: event?.id || 'unknown'
+    };
+  }, [event?.features?.symbol, event?.network, event?.type, event?.id]);
   
   // Fetch price history
   const { data: priceHistory, isLoading: priceLoading } = useQuery({
@@ -144,7 +149,7 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
   
   // Fetch forecast
   const { data: forecast, isLoading: forecastLoading } = useQuery({
-    queryKey: ['forecast', event.id],
+    queryKey: ['forecast', eventId],
     queryFn: () => fetchEventForecast(event),
     staleTime: 30_000,
   });

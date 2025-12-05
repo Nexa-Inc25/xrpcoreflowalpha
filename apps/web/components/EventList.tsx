@@ -168,6 +168,7 @@ export default function EventList({ events, isLoading }: EventListProps) {
       <AnimatePresence>
         {selectedEvent && (
           <EventDetailPanel 
+            key={selectedEvent.id || 'detail'}
             event={selectedEvent} 
             onClose={() => setSelectedEvent(null)} 
           />
