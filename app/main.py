@@ -51,6 +51,9 @@ except Exception:
     async def start_yahoo_macro_tracker(symbols=None):
         return
 from scanners.zk_scanner import start_zk_scanner
+from scanners.xrpl_scanner import start_xrpl_scanner
+from scanners.xrpl_trustline_watcher import start_trustline_watcher
+from scanners.xrpl_orderbook_monitor import start_xrpl_orderbook_monitor
 from observability.metrics import (
     zk_dominant_frequency_hz,
     zk_frequency_confidence,
@@ -119,6 +122,11 @@ async def _startup():
     asyncio.create_task(start_onchain_maintenance())
     if ALCHEMY_WS_URL:
         asyncio.create_task(start_zk_scanner())
+    # XRPL scanners for XRP flows, trustlines, and orderbook
+    if XRPL_WSS:
+        asyncio.create_task(start_xrpl_scanner())
+        asyncio.create_task(start_trustline_watcher())
+        asyncio.create_task(start_xrpl_orderbook_monitor())
     asyncio.create_task(start_binance_futures_tracker())
     if DATABENTO_API_KEY:
         asyncio.create_task(start_databento_macro_tracker())
