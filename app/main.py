@@ -58,6 +58,7 @@ from scanners.futures_scanner import start_futures_scanner
 from scanners.forex_scanner import start_forex_scanner
 from scanners.nansen_scanner import start_nansen_scanner
 from scanners.dune_scanner import start_dune_scanner
+from scanners.whale_alert_scanner import run_whale_alert_scanner
 from observability.metrics import (
     zk_dominant_frequency_hz,
     zk_frequency_confidence,
@@ -138,6 +139,7 @@ async def _startup():
     asyncio.create_task(start_forex_scanner())     # Alpha Vantage: EUR/USD, DXY proxy, news
     asyncio.create_task(start_nansen_scanner())    # Nansen: Whale labels, smart money
     asyncio.create_task(start_dune_scanner())      # Dune: DEX volume, stablecoin flows
+    asyncio.create_task(run_whale_alert_scanner()) # Whale Alert: Large transfers, confidence
     
     if DATABENTO_API_KEY:
         asyncio.create_task(start_databento_macro_tracker())

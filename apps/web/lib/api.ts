@@ -248,6 +248,27 @@ export async function fetchEventForecast(event: any): Promise<{
   };
 }
 
+// ============ WHALE TRANSFERS API ============
+
+export async function fetchWhaleTransfers(params?: {
+  chain?: string;
+  min_value?: number;
+  limit?: number;
+}): Promise<any> {
+  const searchParams = new URLSearchParams();
+  if (params?.chain) searchParams.set('chain', params.chain);
+  if (params?.min_value) searchParams.set('min_value', params.min_value.toString());
+  if (params?.limit) searchParams.set('limit', params.limit.toString());
+  
+  const url = apiBaseTrimmed() + '/dashboard/whale_transfers?' + searchParams.toString();
+  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!res.ok) {
+    console.warn('Failed to fetch whale transfers');
+    return { transfers: [], count: 0 };
+  }
+  return res.json();
+}
+
 // ============ REAL DATA API FUNCTIONS ============
 
 // Fetch recent signals for analytics - REAL DATA

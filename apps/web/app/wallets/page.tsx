@@ -2,64 +2,70 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import {
   Wallet,
-  Plus,
   Search,
   ExternalLink,
   Copy,
   Check,
   TrendingUp,
   TrendingDown,
-  Activity,
+  RefreshCw,
+  Loader2,
+  ArrowRight,
   Zap,
-  Link2,
-  GitBranch,
-  Eye,
-  MoreVertical,
 } from 'lucide-react';
-import { cn, formatUSD, timeAgo } from '../../lib/utils';
+import { cn, formatUSD } from '../../lib/utils';
+import { fetchWhaleTransfers } from '../../lib/api';
 
-interface TrackedWallet {
+interface WhaleTransfer {
   id: string;
-  address: string;
-  label: string;
-  network: 'ethereum' | 'xrpl' | 'solana';
-  cluster?: string;
-  balance: number;
-  balanceChange24h: number;
-  txCount24h: number;
-  lastActivity: string;
-  risk: 'low' | 'medium' | 'high';
-  tags: string[];
+  hash: string;
+  blockchain: string;
+  symbol: string;
+  amount: number;
+  amount_usd: number;
+  timestamp: number;
+  from: {
+    address: string;
+    owner: string;
+    owner_type: string;
+  };
+  to: {
+    address: string;
+    owner: string;
+    owner_type: string;
+  };
+  confidence: number;
+  direction: string;
 }
-
-interface WalletCluster {
-  id: string;
-  name: string;
-  walletCount: number;
-  totalBalance: number;
-  risk: 'low' | 'medium' | 'high';
-}
-
-// No mock data - empty initial state
-const mockWallets: TrackedWallet[] = [];
-const mockClusters: WalletCluster[] = [];
 
 export default function WalletsPage() {
-  const [wallets] = useState<TrackedWallet[]>(mockWallets);
-  const [clusters] = useState<WalletCluster[]>(mockClusters);
   const [searchQuery, setSearchQuery] = useState('');
-  const [view, setView] = useState<'list' | 'clusters'>('list');
+  const [chainFilter, setChainFilter] = useState<string>('all');
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
-  const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
 
-  const filteredWallets = wallets.filter(w => {
-    const matchesSearch = !searchQuery || 
-      w.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      w.address.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCluster = !selectedCluster || w.cluster === selectedCluster;
-    return matchesSearch && matchesCluster;
+  // Fetch real whale transfers from API
+  const { data: whaleData, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ['whale-transfers', chainFilter],
+    queryFn: () => fetchWhaleTransfers({ 
+      chain: chainFilter !== 'all' ? chainFilter : undefined,
+      limit: 50 
+    }),
+    refetchInterval: 60000,
+  });
+
+  const transfers: WhaleTransfer[] = whaleData?.transfers || [];
+  
+  const filteredTransfers = transfers.filter(t => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return t.from?.owner?.toLowerCase().includes(q) || 
+           t.to?.owner?.toLowerCase().includes(q) ||
+           t.from?.address?.toLowerCase().includes(q) ||
+           t.to?.address?.toLowerCase().includes(q) ||
+           t.symbol?.toLowerCase().includes(q);
   });
 
   const copyAddress = async (address: string) => {
@@ -68,22 +74,33 @@ export default function WalletsPage() {
     setTimeout(() => setCopiedAddress(null), 2000);
   };
 
-  const getRiskColor = (risk: string) => {
-    switch (risk) {
-      case 'high': return 'text-red-400 bg-red-500/10 border-red-500/30';
-      case 'medium': return 'text-amber-400 bg-amber-500/10 border-amber-500/30';
-      default: return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
-    }
-  };
-
-  const getNetworkColor = (network: string) => {
-    switch (network) {
+  const getChainColor = (chain: string) => {
+    switch (chain) {
       case 'ethereum': return 'bg-blue-500/20 text-blue-400';
-      case 'xrpl': return 'bg-cyan-500/20 text-cyan-400';
+      case 'ripple': return 'bg-cyan-500/20 text-cyan-400';
+      case 'bitcoin': return 'bg-orange-500/20 text-orange-400';
       case 'solana': return 'bg-purple-500/20 text-purple-400';
       default: return 'bg-slate-500/20 text-slate-400';
     }
   };
+
+  const getDirectionColor = (dir: string) => {
+    if (dir === 'BULLISH') return 'text-emerald-400 bg-emerald-500/10';
+    if (dir === 'BEARISH') return 'text-red-400 bg-red-500/10';
+    return 'text-slate-400 bg-slate-500/10';
+  };
+
+  const getExplorerUrl = (chain: string, hash: string) => {
+    switch (chain) {
+      case 'ethereum': return `https://etherscan.io/tx/${hash}`;
+      case 'ripple': return `https://xrpscan.com/tx/${hash}`;
+      case 'bitcoin': return `https://blockchain.com/btc/tx/${hash}`;
+      case 'solana': return `https://solscan.io/tx/${hash}`;
+      default: return '#';
+    }
+  };
+
+  const chains = ['all', 'ethereum', 'ripple', 'bitcoin', 'solana'];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -99,265 +116,190 @@ export default function WalletsPage() {
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-sky/20 to-blue-500/20 border border-brand-sky/30 flex items-center justify-center">
                 <Wallet className="w-5 h-5 text-brand-sky" />
               </div>
-              <h1 className="text-2xl font-semibold">Wallet Tracking</h1>
+              <h1 className="text-2xl font-semibold">Whale Transfers</h1>
             </div>
-            <p className="text-slate-400">Monitor wallet activity, clusters, and flow patterns</p>
+            <p className="text-slate-400">Real-time large transaction tracking via Whale Alert API</p>
           </div>
-          <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-sky text-white font-medium hover:bg-brand-sky/90 transition-colors">
-            <Plus className="w-4 h-4" />
-            Track Wallet
+          <button 
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-sky text-white font-medium hover:bg-brand-sky/90 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={cn("w-4 h-4", isFetching && "animate-spin")} />
+            Refresh
           </button>
         </motion.div>
 
-        {/* Search & Filters */}
+        {/* Search & Chain Filter */}
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <input
               type="text"
-              placeholder="Search by label or address..."
+              placeholder="Search by owner, address, or symbol..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-surface-1 border border-white/5 text-sm placeholder:text-slate-500 focus:outline-none focus:border-brand-sky/50"
             />
           </div>
           <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-1 border border-white/5">
-            <button
-              onClick={() => setView('list')}
-              className={cn(
-                "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                view === 'list' ? "bg-brand-sky/20 text-brand-sky" : "text-slate-400 hover:text-white"
-              )}
-            >
-              List View
-            </button>
-            <button
-              onClick={() => setView('clusters')}
-              className={cn(
-                "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                view === 'clusters' ? "bg-brand-sky/20 text-brand-sky" : "text-slate-400 hover:text-white"
-              )}
-            >
-              Clusters
-            </button>
-          </div>
-        </div>
-
-        {/* Cluster Pills */}
-        {view === 'list' && (
-          <div className="flex flex-wrap gap-2 mb-6">
-            <button
-              onClick={() => setSelectedCluster(null)}
-              className={cn(
-                "px-3 py-1.5 rounded-full text-sm font-medium transition-colors",
-                !selectedCluster 
-                  ? "bg-brand-sky/20 text-brand-sky border border-brand-sky/30"
-                  : "bg-surface-1 text-slate-400 hover:text-white"
-              )}
-            >
-              All Wallets
-            </button>
-            {clusters.map((cluster) => (
+            {chains.map((chain) => (
               <button
-                key={cluster.id}
-                onClick={() => setSelectedCluster(cluster.name)}
+                key={chain}
+                onClick={() => setChainFilter(chain)}
                 className={cn(
-                  "px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-1.5",
-                  selectedCluster === cluster.name
-                    ? "bg-brand-sky/20 text-brand-sky border border-brand-sky/30"
-                    : "bg-surface-1 text-slate-400 hover:text-white"
+                  "px-3 py-2 rounded-lg text-xs font-medium transition-colors capitalize",
+                  chainFilter === chain ? "bg-brand-sky/20 text-brand-sky" : "text-slate-400 hover:text-white"
                 )}
               >
-                <GitBranch className="w-3 h-3" />
-                {cluster.name}
-                <span className="text-xs opacity-60">({cluster.walletCount})</span>
+                {chain === 'all' ? 'All Chains' : chain}
               </button>
             ))}
           </div>
-        )}
+        </div>
 
-        {/* Content */}
-        <AnimatePresence mode="wait">
-          {view === 'list' ? (
-            <motion.div
-              key="list"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="space-y-4"
-            >
-              {filteredWallets.length === 0 ? (
-                <div className="text-center py-16">
-                  <Wallet className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-slate-300 mb-2">No wallets tracked</h3>
-                  <p className="text-sm text-slate-500">Add wallets to track their activity and flows</p>
-                </div>
-              ) : filteredWallets.map((wallet, index) => (
-                <motion.div
-                  key={wallet.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className="glass-card p-4 rounded-xl"
-                >
-                  <div className="flex items-start gap-4">
-                    {/* Icon */}
-                    <div className="w-10 h-10 rounded-lg bg-surface-2 flex items-center justify-center flex-shrink-0">
-                      <Wallet className="w-5 h-5 text-slate-400" />
-                    </div>
+        {/* Transfer count */}
+        <div className="mb-4 text-sm text-slate-400">
+          {isLoading ? 'Loading...' : `${filteredTransfers.length} whale transfers found`}
+        </div>
 
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <h3 className="font-medium">{wallet.label}</h3>
-                        <span className={cn(
-                          "px-1.5 py-0.5 rounded text-[10px] uppercase font-medium",
-                          getNetworkColor(wallet.network)
-                        )}>
-                          {wallet.network}
-                        </span>
-                        <span className={cn(
-                          "px-1.5 py-0.5 rounded text-[10px] uppercase font-medium border",
-                          getRiskColor(wallet.risk)
-                        )}>
-                          {wallet.risk} risk
-                        </span>
-                        {wallet.cluster && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-500/20 text-slate-400 flex items-center gap-1">
-                            <GitBranch className="w-2.5 h-2.5" />
-                            {wallet.cluster}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2 text-sm text-slate-400">
-                        <code className="font-mono text-xs bg-surface-2 px-1.5 py-0.5 rounded">
-                          {wallet.address.slice(0, 10)}...{wallet.address.slice(-8)}
-                        </code>
-                        <button
-                          onClick={() => copyAddress(wallet.address)}
-                          className="p-1 hover:bg-white/5 rounded transition-colors"
-                        >
-                          {copiedAddress === wallet.address ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                        <a
-                          href={wallet.network === 'ethereum' 
-                            ? `https://etherscan.io/address/${wallet.address}`
-                            : wallet.network === 'xrpl'
-                            ? `https://xrpscan.com/account/${wallet.address}`
-                            : `https://solscan.io/account/${wallet.address}`
-                          }
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-1 hover:bg-white/5 rounded transition-colors"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      </div>
-
-                      {/* Tags */}
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {wallet.tags.map((tag) => (
-                          <span key={tag} className="px-2 py-0.5 rounded text-[10px] bg-surface-2 text-slate-400">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Stats */}
-                    <div className="flex items-center gap-6 text-sm">
-                      <div className="text-right">
-                        <p className="text-slate-400 text-xs mb-0.5">Balance</p>
-                        <p className="font-medium">{formatUSD(wallet.balance)}</p>
-                        <p className={cn(
-                          "text-xs flex items-center justify-end gap-0.5",
-                          wallet.balanceChange24h >= 0 ? "text-emerald-400" : "text-red-400"
-                        )}>
-                          {wallet.balanceChange24h >= 0 ? (
-                            <TrendingUp className="w-3 h-3" />
-                          ) : (
-                            <TrendingDown className="w-3 h-3" />
-                          )}
-                          {Math.abs(wallet.balanceChange24h)}%
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-slate-400 text-xs mb-0.5">24h Txns</p>
-                        <p className="font-medium">{wallet.txCount24h.toLocaleString()}</p>
-                        <p className="text-xs text-slate-500">{timeAgo(wallet.lastActivity)}</p>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </motion.div>
+        {/* Transfers List */}
+        <div className="space-y-3">
+          {isLoading ? (
+            <div className="text-center py-16">
+              <Loader2 className="w-8 h-8 text-brand-sky mx-auto mb-4 animate-spin" />
+              <p className="text-slate-400">Fetching whale transfers...</p>
+            </div>
+          ) : filteredTransfers.length === 0 ? (
+            <div className="text-center py-16">
+              <Wallet className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-slate-300 mb-2">No whale transfers</h3>
+              <p className="text-sm text-slate-500">
+                {whaleData?.transfers?.length === 0 
+                  ? 'No large transfers detected in the last 10 minutes'
+                  : 'No transfers match your search criteria'}
+              </p>
+            </div>
           ) : (
-            <motion.div
-              key="clusters"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="grid md:grid-cols-2 lg:grid-cols-3 gap-4"
-            >
-              {clusters.length === 0 ? (
-                <div className="col-span-full text-center py-16">
-                  <GitBranch className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-slate-300 mb-2">No wallet clusters</h3>
-                  <p className="text-sm text-slate-500">Clusters will appear as you track related wallets</p>
-                </div>
-              ) : clusters.map((cluster, index) => (
-                <motion.div
-                  key={cluster.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="glass-card p-5 rounded-xl cursor-pointer hover:border-brand-sky/30 transition-colors"
-                  onClick={() => {
-                    setSelectedCluster(cluster.name);
-                    setView('list');
-                  }}
-                >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-lg bg-brand-sky/10 flex items-center justify-center">
-                      <GitBranch className="w-5 h-5 text-brand-sky" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium">{cluster.name}</h3>
-                      <p className="text-xs text-slate-400">{cluster.walletCount} wallets</p>
-                    </div>
+            filteredTransfers.map((transfer, index) => (
+              <motion.div
+                key={transfer.id || transfer.hash || index}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.03 }}
+                className="glass-card p-4 rounded-xl"
+              >
+                <div className="flex items-start gap-4">
+                  {/* Amount Badge */}
+                  <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/30 flex flex-col items-center justify-center flex-shrink-0">
+                    <span className="text-lg font-bold text-amber-400">
+                      {transfer.amount_usd >= 1_000_000_000 
+                        ? `$${(transfer.amount_usd / 1_000_000_000).toFixed(1)}B`
+                        : transfer.amount_usd >= 1_000_000
+                        ? `$${(transfer.amount_usd / 1_000_000).toFixed(1)}M`
+                        : formatUSD(transfer.amount_usd)}
+                    </span>
+                    <span className="text-[10px] text-amber-500">{transfer.symbol}</span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 rounded-lg bg-surface-2/50">
-                      <p className="text-xs text-slate-400 mb-1">Total Balance</p>
-                      <p className="font-semibold">{formatUSD(cluster.totalBalance)}</p>
-                    </div>
-                    <div className="p-3 rounded-lg bg-surface-2/50">
-                      <p className="text-xs text-slate-400 mb-1">Risk Level</p>
-                      <p className={cn(
-                        "font-semibold capitalize",
-                        cluster.risk === 'high' ? "text-red-400" :
-                        cluster.risk === 'medium' ? "text-amber-400" : "text-emerald-400"
+                  {/* Transfer Details */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <span className={cn(
+                        "px-2 py-0.5 rounded text-[10px] uppercase font-medium",
+                        getChainColor(transfer.blockchain)
                       )}>
-                        {cluster.risk}
-                      </p>
+                        {transfer.blockchain}
+                      </span>
+                      <span className={cn(
+                        "px-2 py-0.5 rounded text-[10px] uppercase font-medium",
+                        getDirectionColor(transfer.direction)
+                      )}>
+                        {transfer.direction}
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[10px] bg-purple-500/20 text-purple-400">
+                        {transfer.confidence}% conf
+                      </span>
+                    </div>
+
+                    {/* From -> To */}
+                    <div className="flex items-center gap-2 text-sm mb-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-slate-400 text-[10px] uppercase tracking-wider">From</p>
+                        <p className="font-medium truncate">{transfer.from?.owner || 'Unknown'}</p>
+                        <div className="flex items-center gap-1">
+                          <code className="font-mono text-[10px] text-slate-500">
+                            {transfer.from?.address?.slice(0, 8)}...
+                          </code>
+                          <button
+                            onClick={() => copyAddress(transfer.from?.address || '')}
+                            className="p-0.5 hover:bg-white/5 rounded"
+                          >
+                            {copiedAddress === transfer.from?.address ? (
+                              <Check className="w-3 h-3 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3 h-3 text-slate-500" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <ArrowRight className="w-5 h-5 text-slate-600 flex-shrink-0" />
+                      
+                      <div className="flex-1 min-w-0">
+                        <p className="text-slate-400 text-[10px] uppercase tracking-wider">To</p>
+                        <p className="font-medium truncate">{transfer.to?.owner || 'Unknown'}</p>
+                        <div className="flex items-center gap-1">
+                          <code className="font-mono text-[10px] text-slate-500">
+                            {transfer.to?.address?.slice(0, 8)}...
+                          </code>
+                          <button
+                            onClick={() => copyAddress(transfer.to?.address || '')}
+                            className="p-0.5 hover:bg-white/5 rounded"
+                          >
+                            {copiedAddress === transfer.to?.address ? (
+                              <Check className="w-3 h-3 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3 h-3 text-slate-500" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Time & Link */}
+                    <div className="flex items-center gap-3 text-xs text-slate-500">
+                      <span>{new Date(transfer.timestamp * 1000).toLocaleString()}</span>
+                      <a
+                        href={getExplorerUrl(transfer.blockchain, transfer.hash)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-brand-sky hover:underline"
+                      >
+                        View TX <ExternalLink className="w-3 h-3" />
+                      </a>
                     </div>
                   </div>
 
-                  <div className="mt-4 flex items-center justify-between">
-                    <span className="text-xs text-slate-500">Click to view wallets</span>
-                    <Eye className="w-4 h-4 text-slate-500" />
+                  {/* Confidence Indicator */}
+                  <div className="text-right flex-shrink-0">
+                    <div className={cn(
+                      "w-12 h-12 rounded-full flex items-center justify-center",
+                      transfer.confidence >= 80 ? "bg-emerald-500/20" :
+                      transfer.confidence >= 60 ? "bg-amber-500/20" : "bg-slate-500/20"
+                    )}>
+                      <Zap className={cn(
+                        "w-5 h-5",
+                        transfer.confidence >= 80 ? "text-emerald-400" :
+                        transfer.confidence >= 60 ? "text-amber-400" : "text-slate-400"
+                      )} />
+                    </div>
                   </div>
-                </motion.div>
-              ))}
-            </motion.div>
+                </div>
+              </motion.div>
+            ))
           )}
-        </AnimatePresence>
+        </div>
       </div>
     </div>
   );

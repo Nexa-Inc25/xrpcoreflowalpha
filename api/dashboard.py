@@ -196,3 +196,23 @@ async def market_prices() -> Dict[str, Any]:
         "updated_at": _now_iso(),
         "markets": markets,
     }
+
+
+@router.get("/dashboard/whale_transfers")
+async def whale_transfers(chain: str = None, min_value: int = 1000000, limit: int = 50) -> Dict[str, Any]:
+    """Return recent whale transfers for the wallets tracking page.
+    
+    Uses Whale Alert API to fetch large transactions across chains.
+    """
+    try:
+        from scanners.whale_alert_scanner import get_recent_whale_transfers
+        transfers = await get_recent_whale_transfers(chain=chain, min_value=min_value, limit=limit)
+    except Exception as e:
+        print(f"[Dashboard] Error fetching whale transfers: {e}")
+        transfers = []
+    
+    return {
+        "updated_at": _now_iso(),
+        "transfers": transfers,
+        "count": len(transfers),
+    }

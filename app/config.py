@@ -33,6 +33,10 @@ DATABENTO_API_KEY = os.getenv("DATABENTO_API_KEY", "")
 ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY", "")
 NANSEN_API_KEY = os.getenv("NANSEN_API_KEY", "")
 DUNE_API_KEY = os.getenv("DUNE_API_KEY", "")
+
+# Whale Alert for real-time large transaction tracking
+WHALE_ALERT_API_KEY = os.getenv("WHALE_ALERT_API_KEY", "")
+
 ALERTS_SLACK_WEBHOOK = os.getenv("ALERTS_SLACK_WEBHOOK", "")
 ALERTS_DEDUP_TTL_SECONDS = int(os.getenv("ALERTS_DEDUP_TTL_SECONDS", "300"))
 ALERTS_RATE_WINDOW_SECONDS = int(os.getenv("ALERTS_RATE_WINDOW_SECONDS", "60"))
