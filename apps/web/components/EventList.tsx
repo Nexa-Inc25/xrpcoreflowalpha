@@ -188,6 +188,44 @@ interface EventRowProps {
   onSelect: (event: any) => void;
 }
 
+// Generate meaningful event description
+function getEventDescription(event: any): string {
+  const conf = String(event.confidence || '').toLowerCase();
+  const type = String(event.type || '').toLowerCase();
+  const network = String(event.network || event.features?.network || '').toUpperCase();
+  const usd = event.features?.usd_value;
+  
+  // Build a meaningful description
+  const confLabel = conf === 'high' ? 'High-confidence' : conf === 'medium' ? 'Notable' : 'Detected';
+  
+  if (type === 'zk') {
+    return `${confLabel} ZK proof activity detected on ${network || 'ETH'}. Possible institutional dark pool execution.`;
+  }
+  if (type === 'dark_pool') {
+    return `${confLabel} dark pool flow detected. Large block trade signaling institutional positioning.`;
+  }
+  if (type === 'xrp' || type === 'trustline') {
+    return `${confLabel} XRPL flow detected. Cross-border settlement pattern indicates smart money movement.`;
+  }
+  if (type === 'orderbook') {
+    return `${confLabel} order book imbalance detected. Sweep pattern with directional bias.`;
+  }
+  if (type === 'whale') {
+    return `${confLabel} whale movement detected${usd ? ` (~$${(usd/1e6).toFixed(1)}M)` : ''}. Large holder repositioning.`;
+  }
+  if (type === 'rwa_amm') {
+    return `${confLabel} RWA/AMM flow detected. Tokenized asset liquidity shift.`;
+  }
+  // Default for generic "event" type
+  if (conf === 'high') {
+    return `High-confidence institutional flow detected. Pattern suggests imminent market impact.`;
+  }
+  if (conf === 'medium') {
+    return `Notable flow activity detected. Monitoring for follow-through signals.`;
+  }
+  return `Flow activity detected. Low confidence signal - pattern developing.`;
+}
+
 const EventRow = forwardRef<HTMLLIElement, EventRowProps>(function EventRow({ 
   event, 
   index, 
@@ -201,6 +239,7 @@ const EventRow = forwardRef<HTMLLIElement, EventRowProps>(function EventRow({
   const network = event.network || event.features?.network;
   const usd = event.features?.usd_value as number | undefined;
   const ruleScore = event.rule_score as number | undefined;
+  const description = getEventDescription(event);
 
   const isIsoFlow =
     filter === 'xrpl_iso' &&
@@ -266,9 +305,9 @@ const EventRow = forwardRef<HTMLLIElement, EventRowProps>(function EventRow({
             <IsoFlowCard event={event} />
           ) : (
             <>
-              {/* Message */}
+              {/* Message - use meaningful description */}
               <p className="text-sm leading-relaxed text-slate-200 group-hover:text-white transition-colors line-clamp-2">
-                {event.message}
+                {description}
               </p>
 
               {/* Meta row */}
