@@ -25,7 +25,6 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { useUser } from '@clerk/nextjs';
 
 // Telegram icon component
 function TelegramIcon({ className }: { className?: string }) {
@@ -46,7 +45,6 @@ interface ApiKey {
 }
 
 export default function SettingsPage() {
-  const { user } = useUser();
   const [activeTab, setActiveTab] = useState<'general' | 'api' | 'notifications' | 'billing'>('general');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [showKey, setShowKey] = useState<string | null>(null);
@@ -156,15 +154,15 @@ export default function SettingsPage() {
                 </h3>
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-full bg-gradient-to-br from-brand-sky to-brand-purple flex items-center justify-center text-2xl font-medium text-white">
-                    {user?.firstName?.[0] || user?.emailAddresses?.[0]?.emailAddress?.[0]?.toUpperCase() || 'U'}
+                    P
                   </div>
                   <div>
                     <p className="font-medium text-lg">
-                      {user?.firstName} {user?.lastName}
+                      Pro User
                     </p>
-                    <p className="text-slate-400 text-sm">{user?.emailAddresses?.[0]?.emailAddress}</p>
+                    <p className="text-slate-400 text-sm">pro@zkalphaflow.com</p>
                     <p className="text-xs text-slate-500 mt-1">
-                      Member since {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
+                      Member since Dec 1, 2024
                     </p>
                   </div>
                 </div>
