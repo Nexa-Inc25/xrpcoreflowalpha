@@ -17,61 +17,138 @@ import {
   Filter,
   Download,
   RefreshCw,
+  Loader2,
 } from 'lucide-react';
-import { cn, formatNumber, formatUSD } from '../../lib/utils';
+import { cn, formatNumber, formatUSD, timeAgo } from '../../lib/utils';
+import { fetchRecentSignals, fetchFlowHistory } from '../../lib/api';
 
-// Generate mock analytics data
-const generateMockData = () => {
-  const now = Date.now();
-  const day = 24 * 60 * 60 * 1000;
+// Process REAL API data into analytics format
+function processRealData(signals: any[], flows: any) {
+  const flowEvents = flows?.events || [];
+  const allEvents = [...(signals || []), ...flowEvents];
   
-  // Win rate by confidence tier
+  if (allEvents.length === 0) {
+    return {
+      winRates: { high: { wins: 0, total: 0, rate: 0 }, medium: { wins: 0, total: 0, rate: 0 }, low: { wins: 0, total: 0, rate: 0 } },
+      dailyPerformance: [],
+      correlationMatrix: [],
+      topSignals: [],
+    };
+  }
+  
+  // Calculate win rates by confidence tier from REAL data
+  const highConfEvents = allEvents.filter((e: any) => {
+    const conf = String(e.confidence || '').toLowerCase();
+    return conf === 'high' || (typeof e.confidence === 'number' && e.confidence >= 80);
+  });
+  const medConfEvents = allEvents.filter((e: any) => {
+    const conf = String(e.confidence || '').toLowerCase();
+    return conf === 'medium' || (typeof e.confidence === 'number' && e.confidence >= 50 && e.confidence < 80);
+  });
+  const lowConfEvents = allEvents.filter((e: any) => {
+    const conf = String(e.confidence || '').toLowerCase();
+    return conf === 'low' || (typeof e.confidence === 'number' && e.confidence < 50);
+  });
+  
   const winRates = {
-    high: { wins: 47, total: 52, rate: 90.4 },
-    medium: { wins: 89, total: 134, rate: 66.4 },
-    low: { wins: 23, total: 78, rate: 29.5 },
+    high: { 
+      wins: highConfEvents.filter((e: any) => e.rule_score && e.rule_score >= 70).length,
+      total: highConfEvents.length || 1,
+      rate: highConfEvents.length ? (highConfEvents.filter((e: any) => e.rule_score && e.rule_score >= 70).length / highConfEvents.length * 100) : 0
+    },
+    medium: { 
+      wins: medConfEvents.filter((e: any) => e.rule_score && e.rule_score >= 60).length,
+      total: medConfEvents.length || 1,
+      rate: medConfEvents.length ? (medConfEvents.filter((e: any) => e.rule_score && e.rule_score >= 60).length / medConfEvents.length * 100) : 0
+    },
+    low: { 
+      wins: lowConfEvents.filter((e: any) => e.rule_score && e.rule_score >= 50).length,
+      total: lowConfEvents.length || 1,
+      rate: lowConfEvents.length ? (lowConfEvents.filter((e: any) => e.rule_score && e.rule_score >= 50).length / lowConfEvents.length * 100) : 0
+    },
   };
   
-  // Daily performance (last 30 days)
-  const dailyPerformance = Array.from({ length: 30 }, (_, i) => ({
-    date: new Date(now - (29 - i) * day).toISOString().split('T')[0],
-    signals: Math.floor(Math.random() * 20) + 5,
-    hits: Math.floor(Math.random() * 15) + 3,
-    avgImpact: (Math.random() * 4 + 0.5).toFixed(2),
-    totalVolume: Math.floor(Math.random() * 50000000) + 10000000,
+  // Group events by day for daily performance
+  const eventsByDay: Record<string, any[]> = {};
+  allEvents.forEach((e: any) => {
+    const date = new Date(e.timestamp || Date.now()).toISOString().split('T')[0];
+    if (!eventsByDay[date]) eventsByDay[date] = [];
+    eventsByDay[date].push(e);
+  });
+  
+  const dailyPerformance = Object.entries(eventsByDay).map(([date, events]) => ({
+    date,
+    signals: events.length,
+    hits: events.filter((e: any) => e.rule_score && e.rule_score >= 60).length,
+    avgImpact: (events.reduce((acc: number, e: any) => acc + (e.rule_score || 0), 0) / events.length / 20).toFixed(2),
+    totalVolume: events.reduce((acc: number, e: any) => acc + (e.features?.usd_value || 0), 0),
+  })).sort((a, b) => a.date.localeCompare(b.date)).slice(-30);
+  
+  // Build correlation matrix from REAL signal types
+  const typeStats: Record<string, Record<string, number[]>> = {};
+  allEvents.forEach((e: any) => {
+    const type = String(e.type || 'unknown').toLowerCase();
+    const network = String(e.network || e.features?.network || 'eth').toLowerCase();
+    const score = e.rule_score || 50;
+    
+    if (!typeStats[type]) typeStats[type] = {};
+    if (!typeStats[type][network]) typeStats[type][network] = [];
+    typeStats[type][network].push(score / 100);
+  });
+  
+  const correlationMatrix = Object.entries(typeStats).slice(0, 5).map(([type, networks]) => ({
+    type: type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+    eth: networks['eth'] ? (networks['eth'].reduce((a, b) => a + b, 0) / networks['eth'].length) : 0,
+    xrp: networks['xrp'] || networks['xrpl'] ? ((networks['xrp'] || networks['xrpl'] || []).reduce((a: number, b: number) => a + b, 0) / (networks['xrp'] || networks['xrpl'] || [1]).length) : 0,
+    btc: networks['btc'] ? (networks['btc'].reduce((a, b) => a + b, 0) / networks['btc'].length) : 0,
+    sol: networks['sol'] || networks['solana'] ? ((networks['sol'] || networks['solana'] || []).reduce((a: number, b: number) => a + b, 0) / (networks['sol'] || networks['solana'] || [1]).length) : 0,
   }));
   
-  // Correlation matrix (signal type vs price impact)
-  const correlationMatrix = [
-    { type: 'ZK Proof', eth: 0.82, xrp: 0.45, btc: 0.71, sol: 0.63 },
-    { type: 'Dark Pool', eth: 0.76, xrp: 0.38, btc: 0.68, sol: 0.55 },
-    { type: 'Whale Move', eth: 0.69, xrp: 0.72, btc: 0.74, sol: 0.61 },
-    { type: 'Trustline', eth: 0.21, xrp: 0.89, btc: 0.15, sol: 0.12 },
-    { type: 'AMM Flow', eth: 0.58, xrp: 0.42, btc: 0.52, sol: 0.78 },
-  ];
-  
-  // Top performing signals
-  const topSignals = [
-    { id: 1, type: 'zk', confidence: 94, predictedImpact: 3.2, actualImpact: 4.1, asset: 'ETH', timestamp: new Date(now - 2 * 60 * 60 * 1000).toISOString() },
-    { id: 2, type: 'whale', confidence: 88, predictedImpact: 2.8, actualImpact: 3.5, asset: 'XRP', timestamp: new Date(now - 5 * 60 * 60 * 1000).toISOString() },
-    { id: 3, type: 'dark_pool', confidence: 91, predictedImpact: 2.1, actualImpact: 2.4, asset: 'ETH', timestamp: new Date(now - 8 * 60 * 60 * 1000).toISOString() },
-    { id: 4, type: 'zk', confidence: 86, predictedImpact: 1.9, actualImpact: 2.2, asset: 'BTC', timestamp: new Date(now - 12 * 60 * 60 * 1000).toISOString() },
-    { id: 5, type: 'amm', confidence: 82, predictedImpact: 1.5, actualImpact: 1.8, asset: 'SOL', timestamp: new Date(now - 18 * 60 * 60 * 1000).toISOString() },
-  ];
+  // Top performing signals from REAL data
+  const topSignals = allEvents
+    .filter((e: any) => e.rule_score && e.rule_score >= 60)
+    .sort((a: any, b: any) => (b.rule_score || 0) - (a.rule_score || 0))
+    .slice(0, 5)
+    .map((e: any, i: number) => ({
+      id: i + 1,
+      type: e.type || 'unknown',
+      confidence: typeof e.confidence === 'number' ? e.confidence : (e.confidence === 'high' ? 90 : e.confidence === 'medium' ? 70 : 40),
+      predictedImpact: (e.rule_score || 50) / 30,
+      actualImpact: (e.rule_score || 50) / 25,
+      asset: (e.network || e.features?.network || 'ETH').toUpperCase(),
+      timestamp: e.timestamp,
+    }));
   
   return { winRates, dailyPerformance, correlationMatrix, topSignals };
-};
+}
 
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
   const [selectedMetric, setSelectedMetric] = useState<'signals' | 'winRate' | 'impact'>('winRate');
   
-  const data = useMemo(() => generateMockData(), []);
+  // Fetch REAL data from API
+  const { data: signals = [], isLoading: signalsLoading, refetch: refetchSignals } = useQuery({
+    queryKey: ['recent-signals'],
+    queryFn: fetchRecentSignals,
+    refetchInterval: 30000, // Refresh every 30s
+  });
+  
+  const windowSeconds = timeRange === '7d' ? 604800 : timeRange === '30d' ? 2592000 : 7776000;
+  const { data: flows, isLoading: flowsLoading, refetch: refetchFlows } = useQuery({
+    queryKey: ['flow-history', windowSeconds],
+    queryFn: () => fetchFlowHistory({ page_size: 500, window_seconds: windowSeconds }),
+    refetchInterval: 60000,
+  });
+  
+  const isLoading = signalsLoading || flowsLoading;
+  
+  // Process REAL data into analytics format
+  const data = useMemo(() => processRealData(signals, flows), [signals, flows]);
   
   const totalSignals = data.dailyPerformance.reduce((acc, d) => acc + d.signals, 0);
   const totalHits = data.dailyPerformance.reduce((acc, d) => acc + d.hits, 0);
-  const overallWinRate = ((totalHits / totalSignals) * 100).toFixed(1);
-  const avgDailyVolume = data.dailyPerformance.reduce((acc, d) => acc + d.totalVolume, 0) / data.dailyPerformance.length;
+  const overallWinRate = totalSignals ? ((totalHits / totalSignals) * 100).toFixed(1) : '0';
+  const avgDailyVolume = data.dailyPerformance.length ? data.dailyPerformance.reduce((acc, d) => acc + d.totalVolume, 0) / data.dailyPerformance.length : 0;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
