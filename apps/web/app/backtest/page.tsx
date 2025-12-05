@@ -144,7 +144,7 @@ export default function BacktestPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="w-full max-w-[1400px] mx-auto px-4 lg:px-6 py-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -205,7 +205,7 @@ export default function BacktestPage() {
         </motion.div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
           {[
             { label: 'Total Trades', value: stats.totalTrades, icon: Target, format: 'number' },
             { label: 'Win Rate', value: stats.winRate, icon: Percent, format: 'percent', positive: stats.winRate > 50 },
