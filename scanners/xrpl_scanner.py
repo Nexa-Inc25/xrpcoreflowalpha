@@ -69,7 +69,8 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
             # Hard reject unrealistic amounts (drop silently)
             if xrp > 5_000_000_000:
                 return
-            if xrp >= 100_000:
+            # Only report significant payments (>= 1M XRP = ~$2M USD)
+            if xrp >= 1_000_000:
                 flow = XRPFlow(
                     amount_xrp=xrp,
                     usd_value=0.0,
@@ -90,7 +91,13 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
                     usd = float(px) * xrp
                 except Exception:
                     usd = 0.0
-                summary = f"{xrp/1_000_000:.1f}M XRP → {txn.get('Destination','')[:6]}..."
+                # Format summary based on size
+                if xrp >= 1_000_000_000:
+                    summary = f"{xrp/1_000_000_000:.1f}B XRP → {txn.get('Destination','')[:6]}..."
+                elif xrp >= 1_000_000:
+                    summary = f"{xrp/1_000_000:.1f}M XRP → {txn.get('Destination','')[:6]}..."
+                else:
+                    summary = f"{xrp:,.0f} XRP → {txn.get('Destination','')[:6]}..."
                 dest_tag = txn.get("DestinationTag")
                 tags = ["xrpl", "xrpl payment"]
                 await publish_signal({
