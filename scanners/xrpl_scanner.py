@@ -140,11 +140,16 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
                     return
                 print(f"[XRPL] TrustSet: {limit_value:,.0f} {currency[:8]} issuer={issuer[:8]}...")
                 tags = ["xrpl", "trustset"]
+                # Format summary based on size
+                if limit_value >= 1_000_000_000:
+                    summary = f"TrustLine {limit_value/1_000_000_000:.1f}B {currency[:8]}"
+                else:
+                    summary = f"TrustLine {limit_value/1_000_000:.1f}M {currency[:8]}"
                 await publish_signal({
                     "type": "trustline",
                     "sub_type": "trustset",
                     "timestamp": int(time.time()),
-                    "summary": f"TrustLine {limit_value/1_000_000:.1f}M {currency[:8]}",
+                    "summary": summary,
                     "usd_value": 0,
                     "tx_hash": tx_hash,
                     "limit_value": limit_value,
