@@ -57,10 +57,26 @@ def _format_event(sig: Dict[str, Any]) -> Dict[str, Any]:
         imp = sig.get("predicted_impact_pct")
         msg = f"CROSS: {s1.get('summary','S1')} → {s2.get('summary','S2')} | conf {int(conf or 0)}% | impact {float(imp or 0):+.2f}%"
     elif stype == "trustline":
-        val = sig.get("limit_value")
+        val = sig.get("limit_value") or 0
         cur = sig.get("currency") or "IOU"
-        issuer = (sig.get("issuer") or "")
-        msg = f"TrustSet {float(val or 0):,.0f} {cur} issuer {issuer[:8]}..."
+        issuer = sig.get("issuer") or ""
+        account = sig.get("account") or ""
+        features = {
+            "limit_value": float(val) if val else 0,
+            "currency": cur,
+            "issuer": issuer,
+            "account": account,
+            "tx_hash": sig.get("tx_hash") or "",
+        }
+        # Format value for display
+        fval = float(val) if val else 0
+        if fval >= 1_000_000_000:
+            val_str = f"{fval/1_000_000_000:.1f}B"
+        elif fval >= 1_000_000:
+            val_str = f"{fval/1_000_000:.1f}M"
+        else:
+            val_str = f"{fval:,.0f}"
+        msg = f"TrustLine {val_str} {cur[:8]} → {account[:8]}..."
     elif stype == "rwa_amm":
         chg = (sig.get("amm_liquidity_change") or {}).get("lp_change_pct")
         msg = f"RWA AMM ΔLP {round(float(chg or 0)*100,2)}%"
