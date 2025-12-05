@@ -166,14 +166,53 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
         tx_hash = txn.get("hash", "")
         if not tx_hash:
             return
-        print(f"[XRPL] Institutional signal: {ttype}")
+        
+        # Extract amount from transaction
+        amount_xrp = 0.0
+        if ttype in {"EscrowCreate", "EscrowFinish"}:
+            # Escrow amounts are in drops
+            amt = txn.get("Amount")
+            if isinstance(amt, str) and amt.isdigit():
+                amount_xrp = int(amt) / 1_000_000
+        elif ttype in {"AMMDeposit", "AMMWithdraw"}:
+            # AMM can have Amount or Amount2 (drops for XRP)
+            amt = txn.get("Amount")
+            if isinstance(amt, str) and amt.isdigit():
+                amount_xrp = int(amt) / 1_000_000
+            amt2 = txn.get("Amount2")
+            if isinstance(amt2, str) and amt2.isdigit():
+                amount_xrp = max(amount_xrp, int(amt2) / 1_000_000)
+        
+        # Skip small amounts
+        if amount_xrp < 100_000:  # < 100K XRP
+            return
+            
+        print(f"[XRPL] Institutional signal: {ttype} {amount_xrp:,.0f} XRP")
         tags = ["xrpl", ttype.lower()]
+        
+        # Get USD value
+        usd = 0.0
+        try:
+            px = await get_price_usd("xrp")
+            usd = float(px) * amount_xrp
+        except Exception:
+            pass
+        
+        # Format summary
+        if amount_xrp >= 1_000_000:
+            summary = f"{ttype} {amount_xrp/1_000_000:.1f}M XRP"
+        else:
+            summary = f"{ttype} {amount_xrp/1_000:.0f}K XRP"
+            
         await publish_signal({
             "type": "xrp",
             "sub_type": ttype.lower(),
+            "amount_xrp": amount_xrp,
+            "usd_value": round(usd, 2),
             "timestamp": int(time.time()),
-            "summary": f"XRPL {ttype}",
-            "usd_value": 0,
+            "summary": summary,
             "tx_hash": tx_hash,
+            "source": txn.get("Account", ""),
+            "destination": txn.get("Destination", ""),
             "tags": tags,
         })
