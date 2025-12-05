@@ -55,7 +55,7 @@ function SparklineChart({ data, color = 'cyan' }: { data: number[]; color?: stri
   };
   
   return (
-    <svg viewBox="0 0 100 50" className="w-full h-12" preserveAspectRatio="none">
+    <svg viewBox="0 0 100 50" className="w-full h-20" preserveAspectRatio="none">
       <defs>
         <linearGradient id={`gradient-${color}`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={colorMap[color]} stopOpacity="0.3" />
@@ -83,24 +83,24 @@ function OrderBookViz({ bids, asks }: { bids: number[]; asks: number[] }) {
   const max = Math.max(maxBid, maxAsk);
   
   return (
-    <div className="flex gap-1 h-16">
+    <div className="flex gap-2 h-32">
       {/* Bids (green, left side) */}
-      <div className="flex-1 flex items-end justify-end gap-px">
-        {bids.slice(0, 10).reverse().map((v, i) => (
+      <div className="flex-1 flex items-end justify-end gap-1">
+        {bids.slice(0, 15).reverse().map((v, i) => (
           <div
             key={`bid-${i}`}
-            className="w-2 bg-emerald-500/60 rounded-t"
+            className="flex-1 max-w-4 bg-emerald-500/70 rounded-t hover:bg-emerald-400/80 transition-colors"
             style={{ height: `${(v / max) * 100}%` }}
           />
         ))}
       </div>
-      <div className="w-px bg-white/20" />
+      <div className="w-px bg-white/30" />
       {/* Asks (red, right side) */}
-      <div className="flex-1 flex items-end gap-px">
-        {asks.slice(0, 10).map((v, i) => (
+      <div className="flex-1 flex items-end gap-1">
+        {asks.slice(0, 15).map((v, i) => (
           <div
             key={`ask-${i}`}
-            className="w-2 bg-red-500/60 rounded-t"
+            className="flex-1 max-w-4 bg-red-500/70 rounded-t hover:bg-red-400/80 transition-colors"
             style={{ height: `${(v / max) * 100}%` }}
           />
         ))}
@@ -191,7 +191,7 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-        className="relative w-full max-w-3xl max-h-[85vh] overflow-hidden rounded-2xl border border-white/10 bg-surface-1/95 backdrop-blur-xl shadow-2xl"
+        className="relative w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-2xl border border-white/10 bg-surface-1/95 backdrop-blur-xl shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -356,8 +356,8 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
                     </span>
                   </div>
                   {orderBookLoading ? (
-                    <div className="h-20 flex items-center justify-center">
-                      <RefreshCw className="w-5 h-5 animate-spin text-slate-400" />
+                    <div className="h-32 flex items-center justify-center">
+                      <RefreshCw className="w-6 h-6 animate-spin text-slate-400" />
                     </div>
                   ) : (
                     <OrderBookViz 
