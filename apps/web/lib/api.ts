@@ -296,7 +296,9 @@ export async function fetchRecentSignals(): Promise<any[]> {
     console.warn('Failed to fetch recent signals, returning empty array');
     return [];
   }
-  return res.json();
+  const data = await res.json();
+  // API returns { recent: [], count: N } - extract the recent array
+  return data.recent || [];
 }
 
 // Fetch flow history with filters - REAL DATA
@@ -316,7 +318,9 @@ export async function fetchFlowHistory(params?: {
     console.warn('Failed to fetch flow history');
     return { events: [] };
   }
-  return res.json();
+  const data = await res.json();
+  // API returns { items: [], page, total } - normalize to events format
+  return { events: data.items || [] };
 }
 
 // Fetch historical replay for backtesting - REAL DATA

@@ -20,7 +20,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { cn, formatNumber, formatUSD, timeAgo } from '../../lib/utils';
-import { fetchRecentSignals, fetchFlowHistory } from '../../lib/api';
+import { fetchRecentSignals, fetchFlowHistory, fetchUI } from '../../lib/api';
 
 // Process REAL API data into analytics format
 function processRealData(signals: any, flows: any) {
@@ -128,23 +128,40 @@ export default function AnalyticsPage() {
   const [selectedMetric, setSelectedMetric] = useState<'signals' | 'winRate' | 'impact'>('winRate');
   
   // Fetch REAL data from API
-  const { data: signals = [], isLoading: signalsLoading, refetch: refetchSignals } = useQuery({
+  const { data: signals = [], isLoading: signalsLoading } = useQuery({
     queryKey: ['recent-signals'],
     queryFn: fetchRecentSignals,
-    refetchInterval: 30000, // Refresh every 30s
+    refetchInterval: 30000,
+  });
+  
+  // Also fetch from /ui which has actual events
+  const { data: uiData, isLoading: uiLoading } = useQuery({
+    queryKey: ['ui-data'],
+    queryFn: fetchUI,
+    refetchInterval: 30000,
   });
   
   const windowSeconds = timeRange === '7d' ? 604800 : timeRange === '30d' ? 2592000 : 7776000;
-  const { data: flows, isLoading: flowsLoading, refetch: refetchFlows } = useQuery({
+  const { data: flows, isLoading: flowsLoading } = useQuery({
     queryKey: ['flow-history', windowSeconds],
     queryFn: () => fetchFlowHistory({ page_size: 500, window_seconds: windowSeconds }),
     refetchInterval: 60000,
   });
   
-  const isLoading = signalsLoading || flowsLoading;
+  const isLoading = signalsLoading || flowsLoading || uiLoading;
   
-  // Process REAL data into analytics format
-  const data = useMemo(() => processRealData(signals, flows), [signals, flows]);
+  // Extract events from UI data (nested in EventList component)
+  const uiEvents = useMemo(() => {
+    if (!uiData?.children) return [];
+    const eventList = uiData.children.find((c: any) => c.type === 'EventList');
+    return eventList?.events || [];
+  }, [uiData]);
+  
+  // Process REAL data into analytics format - combine all sources
+  const data = useMemo(() => {
+    const combinedFlows = { events: [...(flows?.events || []), ...uiEvents] };
+    return processRealData(signals, combinedFlows);
+  }, [signals, flows, uiEvents]);
   
   const totalSignals = data.dailyPerformance.reduce((acc, d) => acc + d.signals, 0);
   const totalHits = data.dailyPerformance.reduce((acc, d) => acc + d.hits, 0);
