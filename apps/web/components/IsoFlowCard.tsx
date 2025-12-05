@@ -64,12 +64,16 @@ export default function IsoFlowCard({ event }: IsoFlowCardProps) {
     if (type === 'trustline') {
       const val = typeof features.limit_value === 'number' ? features.limit_value : undefined;
       const cur = features.currency as string | undefined;
-      if (val !== undefined && cur) {
-        return `${val.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${cur}`;
+      if (val !== undefined && val > 0) {
+        const m = val / 1_000_000;
+        const curDisplay = cur ? (cur.length > 8 ? cur.slice(0, 6) + '...' : cur) : 'TOKEN';
+        if (m >= 1) return `${m.toFixed(1)}M ${curDisplay}`;
+        return `${val.toLocaleString()} ${curDisplay}`;
       }
+      return event.summary || 'TrustLine Activity';
     }
-    return event.message || 'ISO flow';
-  }, [type, features, event.message]);
+    return event.summary || event.message || 'ISO flow';
+  }, [type, features, event.message, event.summary]);
 
   const destination: string =
     (features.destination as string) || (features.account as string) || '';
@@ -136,13 +140,33 @@ export default function IsoFlowCard({ event }: IsoFlowCardProps) {
       };
     }
 
+    // TrustLine specific insights
+    if (type === 'trustline') {
+      const limitVal = features.limit_value as number || 0;
+      const cur = features.currency as string || '';
+      if (limitVal > 100_000_000) {
+        return {
+          signal: 'LIQUIDITY INJECTION' as const,
+          text: `Large trustline (${(limitVal/1e6).toFixed(0)}M ${cur.slice(0,6)}) – institutional token setup`,
+          timeframe: '6–24 hours',
+          confidence: 78,
+        };
+      }
+      return {
+        signal: 'MONITOR' as const,
+        text: `TrustLine created – new token liquidity pathway`,
+        timeframe: '6–24 hours',
+        confidence: 65,
+      };
+    }
+
     return {
       signal: 'MONITOR' as const,
       text: 'Large ISO movement – watch price action',
       timeframe: '1–12h',
       confidence: 72,
     };
-  }, [amountUsd, destination, issuer, features]);
+  }, [amountUsd, destination, issuer, features, type]);
 
   const config = SIGNAL_CONFIG[insight.signal] || SIGNAL_CONFIG['MONITOR'];
   const SignalIcon = config.icon;

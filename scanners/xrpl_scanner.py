@@ -121,14 +121,45 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
                 await send_slack_alert(build_rich_slack_payload({"type": "xrp", "flow": flow}))
                 return
 
-    # Other institutional signals to extend in Phase 1
-    if ttype in {"AMMDeposit", "AMMWithdraw", "EscrowCreate", "EscrowFinish", "TrustSet"}:
+    # TrustSet - institutional trustline activity
+    if ttype == "TrustSet":
+        limit_amount = txn.get("LimitAmount", {})
+        if isinstance(limit_amount, dict):
+            currency = limit_amount.get("currency", "")
+            issuer = limit_amount.get("issuer", "")
+            value = limit_amount.get("value", "0")
+            try:
+                limit_value = float(value)
+            except:
+                limit_value = 0
+            # Only report significant trustlines (>1M value)
+            if limit_value >= 1_000_000:
+                xrpl_tx_processed.labels(type="trustset").inc()
+                tx_hash = txn.get("hash", "")
+                if not tx_hash:
+                    return
+                print(f"[XRPL] TrustSet: {limit_value:,.0f} {currency[:8]} issuer={issuer[:8]}...")
+                tags = ["xrpl", "trustset"]
+                await publish_signal({
+                    "type": "trustline",
+                    "sub_type": "trustset",
+                    "timestamp": int(time.time()),
+                    "summary": f"TrustLine {limit_value/1_000_000:.1f}M {currency[:8]}",
+                    "usd_value": 0,
+                    "tx_hash": tx_hash,
+                    "limit_value": limit_value,
+                    "currency": currency,
+                    "issuer": issuer,
+                    "account": txn.get("Account", ""),
+                    "tags": tags,
+                })
+        return
+
+    # Other institutional signals
+    if ttype in {"AMMDeposit", "AMMWithdraw", "EscrowCreate", "EscrowFinish"}:
         xrpl_tx_processed.labels(type=ttype.lower()).inc()
         tx_hash = txn.get("hash", "")
         if not tx_hash:
-            return
-        ok = await validate_tx("xrpl", tx_hash, timeout_sec=10)
-        if not ok:
             return
         print(f"[XRPL] Institutional signal: {ttype}")
         tags = ["xrpl", ttype.lower()]
@@ -137,7 +168,7 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
             "sub_type": ttype.lower(),
             "timestamp": int(time.time()),
             "summary": f"XRPL {ttype}",
-            "usd_value": None,
+            "usd_value": 0,
             "tx_hash": tx_hash,
             "tags": tags,
         })
