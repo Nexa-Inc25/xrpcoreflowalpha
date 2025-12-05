@@ -51,43 +51,9 @@ interface BacktestStats {
   avgHoldingPeriod: string;
 }
 
-// Generate mock backtest data
+// No mock data - return empty array
 function generateMockResults(): BacktestResult[] {
-  const assets = ['ETH', 'XRP', 'BTC', 'SOL'];
-  const signalTypes = ['zk', 'dark_pool', 'whale', 'trustline'];
-  const results: BacktestResult[] = [];
-  const now = Date.now();
-
-  for (let i = 0; i < 50; i++) {
-    const asset = assets[Math.floor(Math.random() * assets.length)];
-    const signalType = signalTypes[Math.floor(Math.random() * signalTypes.length)];
-    const confidence = 60 + Math.floor(Math.random() * 35);
-    const entryPrice = 1000 + Math.random() * 3000;
-    const predictedImpact = 0.5 + Math.random() * 3;
-    const actualImpact = predictedImpact * (0.5 + Math.random() * 1.2);
-    const hit = actualImpact >= predictedImpact * 0.7;
-    const exitPrice = entryPrice * (1 + actualImpact / 100);
-    const holdingMinutes = 5 + Math.floor(Math.random() * 60);
-
-    results.push({
-      id: `bt-${i}`,
-      signalType,
-      asset,
-      entryTime: new Date(now - (50 - i) * 60 * 60 * 1000).toISOString(),
-      exitTime: new Date(now - (50 - i) * 60 * 60 * 1000 + holdingMinutes * 60 * 1000).toISOString(),
-      entryPrice,
-      exitPrice,
-      confidence,
-      predictedImpact,
-      actualImpact,
-      pnl: (exitPrice - entryPrice) * 100,
-      pnlPercent: actualImpact,
-      holdingPeriod: `${holdingMinutes}m`,
-      hit,
-    });
-  }
-
-  return results.reverse();
+  return [];
 }
 
 function calculateStats(results: BacktestResult[]): BacktestStats {
@@ -120,7 +86,7 @@ function calculateStats(results: BacktestResult[]): BacktestStats {
     sharpeRatio: stdDev > 0 ? avgRet / stdDev : 0,
     maxDrawdown,
     profitFactor: grossLoss > 0 ? grossProfit / grossLoss : grossProfit,
-    avgHoldingPeriod: '23m',
+    avgHoldingPeriod: '—',
   };
 }
 
@@ -323,7 +289,15 @@ export default function BacktestPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredResults.slice(0, 20).map((result, i) => (
+                {filteredResults.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-16 text-center">
+                      <History className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-slate-300 mb-2">No backtest data</h3>
+                      <p className="text-sm text-slate-500">Run a backtest to see historical signal performance</p>
+                    </td>
+                  </tr>
+                ) : filteredResults.slice(0, 20).map((result, i) => (
                   <motion.tr
                     key={result.id}
                     initial={{ opacity: 0 }}

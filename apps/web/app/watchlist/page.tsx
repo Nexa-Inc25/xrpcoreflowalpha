@@ -36,51 +36,8 @@ interface WatchItem {
   addedAt: string;
 }
 
-// Mock data - in production this would come from backend/localStorage
-const mockWatchlist: WatchItem[] = [
-  {
-    id: '1',
-    type: 'wallet',
-    address: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D',
-    label: 'Uniswap V2 Router',
-    network: 'ethereum',
-    alertsEnabled: true,
-    lastActivity: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-    balance: 12500000,
-    addedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
-  },
-  {
-    id: '2',
-    type: 'wallet',
-    address: 'rN7n3473SaZBCG4dFL83w7LaaK9cejpqTN',
-    label: 'XRPL Whale #1',
-    network: 'xrpl',
-    alertsEnabled: true,
-    lastActivity: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-    balance: 45000000,
-    addedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
-  },
-  {
-    id: '3',
-    type: 'token',
-    address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-    label: 'WETH',
-    network: 'ethereum',
-    alertsEnabled: false,
-    priceChange24h: 2.34,
-    addedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 14).toISOString(),
-  },
-  {
-    id: '4',
-    type: 'contract',
-    address: '0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45',
-    label: 'Uniswap Universal Router',
-    network: 'ethereum',
-    alertsEnabled: true,
-    lastActivity: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-    addedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
-  },
-];
+// No mock data - empty initial state
+const mockWatchlist: WatchItem[] = [];
 
 export default function WatchlistPage() {
   const [items, setItems] = useState<WatchItem[]>(mockWatchlist);

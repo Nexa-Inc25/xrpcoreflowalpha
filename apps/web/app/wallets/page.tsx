@@ -42,65 +42,9 @@ interface WalletCluster {
   risk: 'low' | 'medium' | 'high';
 }
 
-const mockWallets: TrackedWallet[] = [
-  {
-    id: '1',
-    address: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D',
-    label: 'Uniswap V2 Router',
-    network: 'ethereum',
-    cluster: 'DEX Routers',
-    balance: 45000000,
-    balanceChange24h: 12.5,
-    txCount24h: 1247,
-    lastActivity: new Date(Date.now() - 1000 * 60 * 2).toISOString(),
-    risk: 'low',
-    tags: ['DEX', 'High Volume', 'Verified'],
-  },
-  {
-    id: '2',
-    address: '0x28C6c06298d514Db089934071355E5743bf21d60',
-    label: 'Binance Hot Wallet',
-    network: 'ethereum',
-    cluster: 'Exchange',
-    balance: 2100000000,
-    balanceChange24h: -3.2,
-    txCount24h: 856,
-    lastActivity: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-    risk: 'medium',
-    tags: ['CEX', 'Hot Wallet', 'Large Holdings'],
-  },
-  {
-    id: '3',
-    address: 'rN7n3473SaZBCG4dFL83w7LaaK9cejpqTN',
-    label: 'XRPL Whale #1',
-    network: 'xrpl',
-    balance: 125000000,
-    balanceChange24h: 8.7,
-    txCount24h: 34,
-    lastActivity: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-    risk: 'high',
-    tags: ['Whale', 'Active Trader'],
-  },
-  {
-    id: '4',
-    address: '0x3DdfA8eC3052539b6C9549F12cEA2C295cfF5296',
-    label: 'Unknown Whale',
-    network: 'ethereum',
-    cluster: 'Suspected Fund',
-    balance: 78000000,
-    balanceChange24h: 45.2,
-    txCount24h: 12,
-    lastActivity: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-    risk: 'high',
-    tags: ['Whale', 'New Activity', 'ZK User'],
-  },
-];
-
-const mockClusters: WalletCluster[] = [
-  { id: '1', name: 'DEX Routers', walletCount: 8, totalBalance: 120000000, risk: 'low' },
-  { id: '2', name: 'Exchange', walletCount: 24, totalBalance: 5600000000, risk: 'medium' },
-  { id: '3', name: 'Suspected Fund', walletCount: 5, totalBalance: 340000000, risk: 'high' },
-];
+// No mock data - empty initial state
+const mockWallets: TrackedWallet[] = [];
+const mockClusters: WalletCluster[] = [];
 
 export default function WalletsPage() {
   const [wallets] = useState<TrackedWallet[]>(mockWallets);
@@ -242,7 +186,13 @@ export default function WalletsPage() {
               exit={{ opacity: 0, y: -10 }}
               className="space-y-4"
             >
-              {filteredWallets.map((wallet, index) => (
+              {filteredWallets.length === 0 ? (
+                <div className="text-center py-16">
+                  <Wallet className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-slate-300 mb-2">No wallets tracked</h3>
+                  <p className="text-sm text-slate-500">Add wallets to track their activity and flows</p>
+                </div>
+              ) : filteredWallets.map((wallet, index) => (
                 <motion.div
                   key={wallet.id}
                   initial={{ opacity: 0, y: 10 }}
@@ -354,7 +304,13 @@ export default function WalletsPage() {
               exit={{ opacity: 0, y: -10 }}
               className="grid md:grid-cols-2 lg:grid-cols-3 gap-4"
             >
-              {clusters.map((cluster, index) => (
+              {clusters.length === 0 ? (
+                <div className="col-span-full text-center py-16">
+                  <GitBranch className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-slate-300 mb-2">No wallet clusters</h3>
+                  <p className="text-sm text-slate-500">Clusters will appear as you track related wallets</p>
+                </div>
+              ) : clusters.map((cluster, index) => (
                 <motion.div
                   key={cluster.id}
                   initial={{ opacity: 0, y: 10 }}

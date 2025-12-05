@@ -41,67 +41,9 @@ interface AlertHistory {
   read: boolean;
 }
 
-const mockAlerts: Alert[] = [
-  {
-    id: '1',
-    name: 'High Confidence ZK',
-    type: 'confidence',
-    condition: 'Confidence ≥',
-    threshold: 90,
-    enabled: true,
-    triggered: 12,
-    lastTriggered: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
-  },
-  {
-    id: '2',
-    name: 'Whale Movement',
-    type: 'volume',
-    condition: 'Volume ≥',
-    threshold: 1000000,
-    enabled: true,
-    triggered: 5,
-    lastTriggered: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
-  },
-  {
-    id: '3',
-    name: 'Dark Pool Pattern',
-    type: 'pattern',
-    condition: 'Pattern =',
-    threshold: 0,
-    enabled: false,
-    triggered: 23,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 14).toISOString(),
-  },
-];
-
-const mockHistory: AlertHistory[] = [
-  {
-    id: '1',
-    alertId: '1',
-    alertName: 'High Confidence ZK',
-    message: 'ZK proof detected with 94% confidence on ETH',
-    timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-    read: false,
-  },
-  {
-    id: '2',
-    alertId: '2',
-    alertName: 'Whale Movement',
-    message: '$2.4M transfer detected from institutional wallet',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-    read: false,
-  },
-  {
-    id: '3',
-    alertId: '1',
-    alertName: 'High Confidence ZK',
-    message: 'ZK proof detected with 91% confidence on XRP',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-    read: true,
-  },
-];
+// No mock data - empty initial state
+const mockAlerts: Alert[] = [];
+const mockHistory: AlertHistory[] = [];
 
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState<Alert[]>(mockAlerts);
