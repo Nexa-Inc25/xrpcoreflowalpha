@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, forwardRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ExternalLink, 
@@ -180,19 +180,21 @@ export default function EventList({ events, isLoading }: EventListProps) {
   );
 }
 
-function EventRow({ 
+interface EventRowProps {
+  event: any;
+  index: number;
+  filter: FilterType;
+  onHover: (txHash?: string) => void;
+  onSelect: (event: any) => void;
+}
+
+const EventRow = forwardRef<HTMLLIElement, EventRowProps>(function EventRow({ 
   event, 
   index, 
   filter,
   onHover,
   onSelect
-}: { 
-  event: any; 
-  index: number;
-  filter: FilterType;
-  onHover: (txHash?: string) => void;
-  onSelect: (event: any) => void;
-}) {
+}, ref) {
   const txHash = event.features?.tx_hash || event.features?.txHash;
   const conf = String(event.confidence || '').toLowerCase();
   const type = String(event.type || '').toLowerCase();
@@ -222,6 +224,7 @@ function EventRow({
 
   return (
     <motion.li
+      ref={ref}
       layout
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
@@ -338,4 +341,4 @@ function EventRow({
       </button>
     </motion.li>
   );
-}
+});
