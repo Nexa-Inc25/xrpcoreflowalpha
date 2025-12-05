@@ -112,12 +112,28 @@ function OrderBookViz({ bids, asks }: { bids: number[]; asks: number[] }) {
 export default function EventDetailPanel({ event, onClose }: EventDetailPanelProps) {
   const [activeTab, setActiveTab] = useState<'chart' | 'orderbook' | 'history' | 'forecast'>('chart');
   
+  // Safety check - return null if no event
+  if (!event) {
+    return null;
+  }
+  
   // Memoize symbol and assetId for stable hook dependencies
   const { symbol, assetId, eventId } = useMemo(() => {
-    const sym = event?.features?.symbol || 
-      (event?.network === 'ethereum' ? 'ETH' : 
-       event?.network === 'xrpl' ? 'XRP' : 
-       event?.type === 'zk' ? 'ETH' : 'ETH');
+    const evtType = event?.type?.toLowerCase() || '';
+    const evtNetwork = event?.network?.toLowerCase() || '';
+    
+    // Determine symbol based on event type and network
+    let sym = event?.features?.symbol || '';
+    if (!sym) {
+      if (evtType === 'trustline' || evtType === 'xrp' || evtNetwork === 'xrpl') {
+        sym = 'XRP';
+      } else if (evtType === 'zk' || evtNetwork === 'ethereum' || evtNetwork === 'eth') {
+        sym = 'ETH';
+      } else {
+        sym = 'ETH'; // Default
+      }
+    }
+    
     return {
       symbol: sym,
       assetId: sym.toLowerCase() === 'xrp' ? 'xrp' as const : 'eth' as const,
@@ -154,21 +170,11 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
     staleTime: 30_000,
   });
   
-  // Generate fallback price data if API fails
-  const generateFallbackPrices = () => {
-    const basePrice = symbol === 'xrp' ? 2.06 : symbol === 'eth' ? 3072 : 100;
-    const volatility = 0.02;
-    return Array.from({ length: 24 }, (_, i) => {
-      const randomWalk = (Math.random() - 0.5) * volatility;
-      return basePrice * (1 + randomWalk + (i / 100) * 0.01);
-    });
-  };
-  
-  const rawPrices = priceHistory?.map(p => p.p) || [];
-  const prices = rawPrices.length >= 2 ? rawPrices : generateFallbackPrices();
-  const currentPrice = prices[prices.length - 1] || 0;
-  const priceChange = prices.length > 1 ? ((currentPrice - prices[0]) / prices[0]) * 100 : 0;
-  const isPositive = priceChange >= 0;
+  // Real prices only - no fallback
+  const prices = priceHistory?.map(p => p.p) || [];
+  const currentPrice = prices.length > 0 ? prices[prices.length - 1] : null;
+  const priceChange = prices.length > 1 ? ((prices[prices.length - 1] - prices[0]) / prices[0]) * 100 : null;
+  const isPositive = (priceChange ?? 0) >= 0;
   
   // Parse confidence - can be string ("high", "medium", "low") or number
   const rawConfidence = event.confidence || event.features?.confidence || 0;
@@ -179,8 +185,14 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
     : 30;
   const confidenceLabel = typeof rawConfidence === 'string' ? rawConfidence : `${confidenceNum}%`;
   
-  const valueUsd = event.value_usd || event.features?.value_usd || event.features?.usd_value || 0;
-  const network = event.network || event.features?.network || symbol;
+  // Extract real values from event
+  const valueUsd = event.value_usd || event.features?.value_usd || event.features?.usd_value || 
+    (event.features?.limit_value ? event.features.limit_value : 0);
+  const network = event.network || event.features?.network || 
+    (symbol === 'XRP' ? 'XRPL' : 'ETH');
+  const txHash = event.features?.tx_hash || event.tx_hash || '';
+  const gasUsed = event.features?.gas_used || 0;
+  const currency = event.features?.currency || '';
   
   const tabs = [
     { id: 'chart', label: 'Price Chart', icon: Activity },
@@ -194,7 +206,7 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={onClose}
     >
       <motion.div
@@ -247,30 +259,49 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
         {/* Quick Stats */}
         <div className="grid grid-cols-4 gap-4 p-5 border-b border-white/5">
           <div className="text-center">
-            <p className="text-xs text-slate-400 uppercase tracking-wider">Price</p>
-            <p className="text-lg font-semibold mt-1">${formatNumber(currentPrice)}</p>
-            <p className={cn(
-              "text-xs flex items-center justify-center gap-1",
-              isPositive ? "text-emerald-400" : "text-red-400"
-            )}>
-              {isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-              {Math.abs(priceChange).toFixed(2)}%
+            <p className="text-xs text-slate-400 uppercase tracking-wider">{symbol} Price</p>
+            <p className="text-lg font-semibold mt-1">
+              {priceLoading ? '...' : currentPrice !== null ? `$${formatNumber(currentPrice)}` : '—'}
+            </p>
+            {priceChange !== null ? (
+              <p className={cn(
+                "text-xs flex items-center justify-center gap-1",
+                isPositive ? "text-emerald-400" : "text-red-400"
+              )}>
+                {isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                {Math.abs(priceChange).toFixed(2)}%
+              </p>
+            ) : (
+              <p className="text-xs text-slate-500">no data</p>
+            )}
+          </div>
+          <div className="text-center">
+            <p className="text-xs text-slate-400 uppercase tracking-wider">
+              {event.type === 'trustline' ? 'Limit' : event.type === 'zk' ? 'Gas' : 'Value'}
+            </p>
+            <p className="text-lg font-semibold mt-1">
+              {event.type === 'zk' && gasUsed ? `${(gasUsed/1000).toFixed(0)}K` : 
+               valueUsd > 1e9 ? `${(valueUsd/1e9).toFixed(1)}B` :
+               valueUsd > 1e6 ? `${(valueUsd/1e6).toFixed(1)}M` :
+               formatUSD(valueUsd)}
+            </p>
+            <p className="text-xs text-slate-400">
+              {event.type === 'zk' ? 'gas used' : event.type === 'trustline' ? 'tokens' : 'notional'}
             </p>
           </div>
           <div className="text-center">
-            <p className="text-xs text-slate-400 uppercase tracking-wider">Value</p>
-            <p className="text-lg font-semibold mt-1">{formatUSD(valueUsd)}</p>
-            <p className="text-xs text-slate-400">notional</p>
+            <p className="text-xs text-slate-400 uppercase tracking-wider">Network</p>
+            <p className="text-lg font-semibold mt-1">{network}</p>
+            <p className="text-xs text-slate-400">{event.type || 'flow'}</p>
           </div>
           <div className="text-center">
-            <p className="text-xs text-slate-400 uppercase tracking-wider">Latency</p>
-            <p className="text-lg font-semibold mt-1">{orderBook?.latency_ms || '—'}ms</p>
-            <p className="text-xs text-slate-400">order book</p>
-          </div>
-          <div className="text-center">
-            <p className="text-xs text-slate-400 uppercase tracking-wider">Impact</p>
-            <p className="text-lg font-semibold mt-1">{forecast?.predicted_impact?.toFixed(2) || '—'}%</p>
-            <p className="text-xs text-slate-400">predicted</p>
+            <p className="text-xs text-slate-400 uppercase tracking-wider">Confidence</p>
+            <p className={cn(
+              "text-lg font-semibold mt-1",
+              confidenceNum >= 85 ? "text-emerald-400" :
+              confidenceNum >= 65 ? "text-amber-400" : "text-slate-300"
+            )}>{confidenceLabel}</p>
+            <p className="text-xs text-slate-400">signal strength</p>
           </div>
         </div>
         
@@ -316,33 +347,39 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
                     <div className="h-24 flex items-center justify-center">
                       <RefreshCw className="w-5 h-5 animate-spin text-slate-400" />
                     </div>
+                  ) : prices.length >= 2 ? (
+                    <>
+                      <SparklineChart data={prices} color={isPositive ? 'green' : 'red'} />
+                      <div className="flex justify-between text-xs text-slate-400 mt-2">
+                        <span>24h ago</span>
+                        <span>Now</span>
+                      </div>
+                    </>
                   ) : (
-                    <SparklineChart data={prices} color={isPositive ? 'green' : 'red'} />
+                    <div className="h-24 flex items-center justify-center text-slate-500 text-sm">
+                      No price data available
+                    </div>
                   )}
-                  <div className="flex justify-between text-xs text-slate-400 mt-2">
-                    <span>24h ago</span>
-                    <span>Now</span>
-                  </div>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="glass-card p-4 rounded-xl">
-                    <h4 className="text-xs text-slate-400 uppercase tracking-wider mb-2">24h Range</h4>
-                    <div className="flex items-center gap-2">
-                      <span className="text-red-400 text-sm">${formatNumber(Math.min(...prices) || 0)}</span>
-                      <div className="flex-1 h-1 bg-gradient-to-r from-red-500/50 via-slate-500/50 to-emerald-500/50 rounded-full" />
-                      <span className="text-emerald-400 text-sm">${formatNumber(Math.max(...prices) || 0)}</span>
+                {prices.length >= 2 && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="glass-card p-4 rounded-xl">
+                      <h4 className="text-xs text-slate-400 uppercase tracking-wider mb-2">24h Range</h4>
+                      <div className="flex items-center gap-2">
+                        <span className="text-red-400 text-sm">${formatNumber(Math.min(...prices))}</span>
+                        <div className="flex-1 h-1 bg-gradient-to-r from-red-500/50 via-slate-500/50 to-emerald-500/50 rounded-full" />
+                        <span className="text-emerald-400 text-sm">${formatNumber(Math.max(...prices))}</span>
+                      </div>
+                    </div>
+                    <div className="glass-card p-4 rounded-xl">
+                      <h4 className="text-xs text-slate-400 uppercase tracking-wider mb-2">Volatility</h4>
+                      <p className="text-lg font-semibold">
+                        {((Math.max(...prices) - Math.min(...prices)) / Math.min(...prices) * 100).toFixed(2)}%
+                      </p>
                     </div>
                   </div>
-                  <div className="glass-card p-4 rounded-xl">
-                    <h4 className="text-xs text-slate-400 uppercase tracking-wider mb-2">Volatility</h4>
-                    <p className="text-lg font-semibold">
-                      {prices.length > 1 ? (
-                        ((Math.max(...prices) - Math.min(...prices)) / (Math.min(...prices) || 1) * 100).toFixed(2)
-                      ) : '—'}%
-                    </p>
-                  </div>
-                </div>
+                )}
               </motion.div>
             )}
             
@@ -370,38 +407,47 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
                     <div className="h-32 flex items-center justify-center">
                       <RefreshCw className="w-6 h-6 animate-spin text-slate-400" />
                     </div>
+                  ) : orderBook?.bids && orderBook?.asks ? (
+                    <>
+                      <OrderBookViz bids={orderBook.bids} asks={orderBook.asks} />
+                      <div className="flex justify-between text-xs text-slate-400 mt-2">
+                        <span className="text-emerald-400">Bids</span>
+                        <span>Spread: {orderBook.spread?.toFixed(4) ?? '—'}%</span>
+                        <span className="text-red-400">Asks</span>
+                      </div>
+                    </>
                   ) : (
-                    <OrderBookViz 
-                      bids={orderBook?.bids || [50, 60, 45, 70, 55, 65, 40, 75, 50, 60]} 
-                      asks={orderBook?.asks || [45, 55, 50, 60, 40, 55, 65, 50, 45, 55]} 
-                    />
+                    <div className="h-32 flex items-center justify-center text-slate-500 text-sm">
+                      No order book data available
+                    </div>
                   )}
-                  <div className="flex justify-between text-xs text-slate-400 mt-2">
-                    <span className="text-emerald-400">Bids</span>
-                    <span>Spread: {orderBook?.spread?.toFixed(4) || '0.0012'}%</span>
-                    <span className="text-red-400">Asks</span>
-                  </div>
                 </div>
                 
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="glass-card p-4 rounded-xl text-center">
-                    <h4 className="text-xs text-slate-400 uppercase mb-1">Bid Depth</h4>
-                    <p className="text-lg font-semibold text-emerald-400">{formatUSD(orderBook?.bid_depth || 2400000)}</p>
+                {orderBook && (
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="glass-card p-4 rounded-xl text-center">
+                      <h4 className="text-xs text-slate-400 uppercase mb-1">Bid Depth</h4>
+                      <p className="text-lg font-semibold text-emerald-400">
+                        {orderBook.bid_depth ? formatUSD(orderBook.bid_depth) : '—'}
+                      </p>
+                    </div>
+                    <div className="glass-card p-4 rounded-xl text-center">
+                      <h4 className="text-xs text-slate-400 uppercase mb-1">Ask Depth</h4>
+                      <p className="text-lg font-semibold text-red-400">
+                        {orderBook.ask_depth ? formatUSD(orderBook.ask_depth) : '—'}
+                      </p>
+                    </div>
+                    <div className="glass-card p-4 rounded-xl text-center">
+                      <h4 className="text-xs text-slate-400 uppercase mb-1">Imbalance</h4>
+                      <p className={cn(
+                        "text-lg font-semibold",
+                        (orderBook.imbalance ?? 0) > 0 ? "text-emerald-400" : "text-red-400"
+                      )}>
+                        {orderBook.imbalance != null ? `${(orderBook.imbalance * 100).toFixed(1)}%` : '—'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="glass-card p-4 rounded-xl text-center">
-                    <h4 className="text-xs text-slate-400 uppercase mb-1">Ask Depth</h4>
-                    <p className="text-lg font-semibold text-red-400">{formatUSD(orderBook?.ask_depth || 1800000)}</p>
-                  </div>
-                  <div className="glass-card p-4 rounded-xl text-center">
-                    <h4 className="text-xs text-slate-400 uppercase mb-1">Imbalance</h4>
-                    <p className={cn(
-                      "text-lg font-semibold",
-                      (orderBook?.imbalance || 0.25) > 0 ? "text-emerald-400" : "text-red-400"
-                    )}>
-                      {((orderBook?.imbalance || 0.25) * 100).toFixed(1)}%
-                    </p>
-                  </div>
-                </div>
+                )}
               </motion.div>
             )}
             
@@ -419,14 +465,9 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
                     <div className="h-20 flex items-center justify-center">
                       <RefreshCw className="w-5 h-5 animate-spin text-slate-400" />
                     </div>
-                  ) : (
+                  ) : manipHistory?.patterns && manipHistory.patterns.length > 0 ? (
                     <div className="space-y-3">
-                      {(manipHistory?.patterns || [
-                        { type: 'Spoofing', count: 12, last_seen: '2h ago', severity: 'high' },
-                        { type: 'Layering', count: 8, last_seen: '4h ago', severity: 'medium' },
-                        { type: 'Wash Trading', count: 3, last_seen: '1d ago', severity: 'low' },
-                        { type: 'Front Running', count: 45, last_seen: '15m ago', severity: 'high' },
-                      ]).map((pattern: any, i: number) => (
+                      {manipHistory.patterns.map((pattern: any, i: number) => (
                         <div key={i} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
                           <div className="flex items-center gap-3">
                             <AlertTriangle className={cn(
@@ -446,21 +487,27 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
                         </div>
                       ))}
                     </div>
+                  ) : (
+                    <div className="h-20 flex items-center justify-center text-slate-500 text-sm">
+                      No manipulation patterns detected
+                    </div>
                   )}
                 </div>
                 
-                <div className="glass-card p-4 rounded-xl">
-                  <h4 className="text-xs text-slate-400 uppercase tracking-wider mb-2">Risk Assessment</h4>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-emerald-500 via-amber-500 to-red-500"
-                        style={{ width: `${manipHistory?.risk_score || 65}%` }}
-                      />
+                {manipHistory?.risk_score != null && (
+                  <div className="glass-card p-4 rounded-xl">
+                    <h4 className="text-xs text-slate-400 uppercase tracking-wider mb-2">Risk Assessment</h4>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-emerald-500 via-amber-500 to-red-500"
+                          style={{ width: `${manipHistory.risk_score}%` }}
+                        />
+                      </div>
+                      <span className="text-sm font-medium">{manipHistory.risk_score}/100</span>
                     </div>
-                    <span className="text-sm font-medium">{manipHistory?.risk_score || 65}/100</span>
                   </div>
-                </div>
+                )}
               </motion.div>
             )}
             
@@ -484,52 +531,58 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
                     <div className="h-20 flex items-center justify-center">
                       <RefreshCw className="w-5 h-5 animate-spin text-slate-400" />
                     </div>
-                  ) : (
+                  ) : forecast ? (
                     <div className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="text-center p-3 rounded-lg bg-white/5">
                           <p className="text-xs text-slate-400 mb-1">Predicted Impact</p>
                           <p className={cn(
                             "text-2xl font-bold",
-                            (forecast?.predicted_impact || 2.3) > 0 ? "text-emerald-400" : "text-red-400"
+                            (forecast.predicted_impact ?? 0) > 0 ? "text-emerald-400" : "text-red-400"
                           )}>
-                            {(forecast?.predicted_impact || 2.3) > 0 ? '+' : ''}{(forecast?.predicted_impact || 2.3).toFixed(2)}%
+                            {forecast.predicted_impact != null ? `${forecast.predicted_impact > 0 ? '+' : ''}${forecast.predicted_impact.toFixed(2)}%` : '—'}
                           </p>
-                          <p className="text-xs text-slate-400 mt-1">within 15 min</p>
+                          <p className="text-xs text-slate-400 mt-1">{forecast.horizon || 'forecast'}</p>
                         </div>
                         <div className="text-center p-3 rounded-lg bg-white/5">
                           <p className="text-xs text-slate-400 mb-1">Confidence</p>
                           <p className="text-2xl font-bold text-brand-sky">
-                            {forecast?.confidence || 78}%
+                            {forecast.confidence != null ? `${forecast.confidence}%` : '—'}
                           </p>
                           <p className="text-xs text-slate-400 mt-1">model accuracy</p>
                         </div>
                       </div>
                       
-                      <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Target className="w-4 h-4 text-emerald-400" />
-                          <span className="text-sm font-medium text-emerald-300">Signal</span>
+                      {forecast.signal && (
+                        <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Target className="w-4 h-4 text-emerald-400" />
+                            <span className="text-sm font-medium text-emerald-300">Signal</span>
+                          </div>
+                          <p className="text-sm text-slate-300">{forecast.signal}</p>
                         </div>
-                        <p className="text-sm text-slate-300">
-                          {forecast?.signal || 'High probability of upward price movement following institutional dark pool execution. Historical correlation shows 73% accuracy for similar patterns.'}
-                        </p>
-                      </div>
+                      )}
                       
-                      <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                        <div className="p-2 rounded bg-white/5">
-                          <p className="text-slate-400">Time Horizon</p>
-                          <p className="font-medium">{forecast?.horizon || '15m'}</p>
+                      {(forecast.horizon || forecast.model) && (
+                        <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                          <div className="p-2 rounded bg-white/5">
+                            <p className="text-slate-400">Time Horizon</p>
+                            <p className="font-medium">{forecast.horizon || '—'}</p>
+                          </div>
+                          <div className="p-2 rounded bg-white/5">
+                            <p className="text-slate-400">Model</p>
+                            <p className="font-medium">{forecast.model || '—'}</p>
+                          </div>
+                          <div className="p-2 rounded bg-white/5">
+                            <p className="text-slate-400">Last Updated</p>
+                            <p className="font-medium">{forecast.updated || '—'}</p>
+                          </div>
                         </div>
-                        <div className="p-2 rounded bg-white/5">
-                          <p className="text-slate-400">Model</p>
-                          <p className="font-medium">{forecast?.model || 'HMM-v3'}</p>
-                        </div>
-                        <div className="p-2 rounded bg-white/5">
-                          <p className="text-slate-400">Last Updated</p>
-                          <p className="font-medium">{forecast?.updated || 'Now'}</p>
-                        </div>
-                      </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="h-20 flex items-center justify-center text-slate-500 text-sm">
+                      No forecast data available
                     </div>
                   )}
                 </div>

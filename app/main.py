@@ -54,6 +54,10 @@ from scanners.zk_scanner import start_zk_scanner
 from scanners.xrpl_scanner import start_xrpl_scanner
 from scanners.xrpl_trustline_watcher import start_trustline_watcher
 from scanners.xrpl_orderbook_monitor import start_xrpl_orderbook_monitor
+from scanners.futures_scanner import start_futures_scanner
+from scanners.forex_scanner import start_forex_scanner
+from scanners.nansen_scanner import start_nansen_scanner
+from scanners.dune_scanner import start_dune_scanner
 from observability.metrics import (
     zk_dominant_frequency_hz,
     zk_frequency_confidence,
@@ -128,6 +132,13 @@ async def _startup():
         asyncio.create_task(start_trustline_watcher())
         asyncio.create_task(start_xrpl_orderbook_monitor())
     asyncio.create_task(start_binance_futures_tracker())
+    
+    # Multi-asset scanners for cross-market correlation
+    asyncio.create_task(start_futures_scanner())   # Databento: ES, NQ, VIX, Gold, Oil
+    asyncio.create_task(start_forex_scanner())     # Alpha Vantage: EUR/USD, DXY proxy, news
+    asyncio.create_task(start_nansen_scanner())    # Nansen: Whale labels, smart money
+    asyncio.create_task(start_dune_scanner())      # Dune: DEX volume, stablecoin flows
+    
     if DATABENTO_API_KEY:
         asyncio.create_task(start_databento_macro_tracker())
     elif POLYGON_API_KEY:

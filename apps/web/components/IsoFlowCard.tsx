@@ -84,8 +84,11 @@ export default function IsoFlowCard({ event }: IsoFlowCardProps) {
       const cur = features.currency as string | undefined;
       const curDisplay = decodeCurrency(cur);
       if (val !== undefined && val > 0) {
-        if (val >= 1_000_000_000) return `${(val/1_000_000_000).toFixed(1)}B ${curDisplay}`;
-        if (val >= 1_000_000) return `${(val/1_000_000).toFixed(1)}M ${curDisplay}`;
+        // Format with T/B/M for large numbers
+        if (val >= 1e15) return `MAX ${curDisplay}`; // Unlimited trustline
+        if (val >= 1e12) return `${(val/1e12).toFixed(1)}T ${curDisplay}`;
+        if (val >= 1e9) return `${(val/1e9).toFixed(1)}B ${curDisplay}`;
+        if (val >= 1e6) return `${(val/1e6).toFixed(1)}M ${curDisplay}`;
         return `${val.toLocaleString()} ${curDisplay}`;
       }
       return event.summary || `TrustLine ${curDisplay}`;
