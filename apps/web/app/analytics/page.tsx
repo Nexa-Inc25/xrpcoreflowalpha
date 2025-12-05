@@ -23,9 +23,10 @@ import { cn, formatNumber, formatUSD, timeAgo } from '../../lib/utils';
 import { fetchRecentSignals, fetchFlowHistory } from '../../lib/api';
 
 // Process REAL API data into analytics format
-function processRealData(signals: any[], flows: any) {
-  const flowEvents = flows?.events || [];
-  const allEvents = [...(signals || []), ...flowEvents];
+function processRealData(signals: any, flows: any) {
+  const signalArray = Array.isArray(signals) ? signals : [];
+  const flowEvents = Array.isArray(flows?.events) ? flows.events : [];
+  const allEvents = [...signalArray, ...flowEvents];
   
   if (allEvents.length === 0) {
     return {
