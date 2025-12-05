@@ -19,7 +19,6 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useState } from 'react';
-import { useClerk, useUser } from '@clerk/nextjs';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: Activity, badge: 'Live' },
@@ -34,8 +33,10 @@ const navItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const { signOut } = useClerk();
-  const { user } = useUser();
+  
+  const handleSignOut = () => {
+    window.location.href = '/sign-in';
+  };
 
   return (
     <motion.aside
@@ -124,20 +125,20 @@ export default function Sidebar() {
           collapsed && "justify-center"
         )}>
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-sky to-brand-purple flex items-center justify-center text-xs font-medium text-white flex-shrink-0">
-            {user?.firstName?.[0] || user?.emailAddresses?.[0]?.emailAddress?.[0]?.toUpperCase() || 'U'}
+            P
           </div>
           {!collapsed && (
             <>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white truncate">
-                  {user?.firstName || user?.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'User'}
+                  Pro User
                 </p>
                 <p className="text-[11px] text-slate-500 truncate">
-                  {user?.emailAddresses?.[0]?.emailAddress || 'Loading...'}
+                  pro@zkalphaflow.com
                 </p>
               </div>
               <button
-                onClick={() => signOut()}
+                onClick={handleSignOut}
                 className="p-1.5 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
                 title="Sign out"
               >

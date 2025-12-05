@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { ClerkProvider } from '@clerk/nextjs';
 import ReactQueryProvider from '../components/ReactQueryProvider';
+import AppLayout from '../components/AppLayout';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -58,7 +59,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body className="bg-surface-0 text-slate-100 min-h-screen">
-        <ReactQueryProvider>{children}</ReactQueryProvider>
+        <ReactQueryProvider>
+          <AppLayout>{children}</AppLayout>
+        </ReactQueryProvider>
       </body>
     </html>
   );
