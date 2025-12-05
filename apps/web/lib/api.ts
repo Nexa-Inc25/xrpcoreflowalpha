@@ -284,3 +284,100 @@ export async function fetchEventForecast(event: any): Promise<{
     updated: 'Just now',
   };
 }
+
+// ============ REAL DATA API FUNCTIONS ============
+
+// Fetch recent signals for analytics - REAL DATA
+export async function fetchRecentSignals(): Promise<any[]> {
+  const res = await fetch(apiBaseTrimmed() + '/debug/recent_signals', {
+    headers: { Accept: 'application/json' },
+  });
+  if (!res.ok) {
+    console.warn('Failed to fetch recent signals, returning empty array');
+    return [];
+  }
+  return res.json();
+}
+
+// Fetch flow history with filters - REAL DATA
+export async function fetchFlowHistory(params?: {
+  types?: string;
+  page_size?: number;
+  window_seconds?: number;
+}): Promise<any> {
+  const searchParams = new URLSearchParams();
+  if (params?.types) searchParams.set('types', params.types);
+  if (params?.page_size) searchParams.set('page_size', params.page_size.toString());
+  if (params?.window_seconds) searchParams.set('window_seconds', params.window_seconds.toString());
+  
+  const url = apiBaseTrimmed() + '/flows?' + searchParams.toString();
+  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!res.ok) {
+    console.warn('Failed to fetch flow history');
+    return { events: [] };
+  }
+  return res.json();
+}
+
+// Fetch historical replay for backtesting - REAL DATA
+export async function fetchHistoryReplay(params: {
+  start_ts?: number;
+  end_ts?: number;
+  types?: string;
+}): Promise<any> {
+  const searchParams = new URLSearchParams();
+  if (params.start_ts) searchParams.set('start_ts', params.start_ts.toString());
+  if (params.end_ts) searchParams.set('end_ts', params.end_ts.toString());
+  if (params.types) searchParams.set('types', params.types);
+  
+  const res = await fetch(apiBaseTrimmed() + '/history/replay?' + searchParams.toString(), {
+    headers: { Accept: 'application/json' },
+  });
+  if (!res.ok) {
+    console.warn('Failed to fetch history replay');
+    return { events: [] };
+  }
+  return res.json();
+}
+
+// User preferences - REAL DATA
+export async function fetchUserPreferences(): Promise<any> {
+  const res = await fetch(apiBaseTrimmed() + '/user/preferences', {
+    headers: { Accept: 'application/json' },
+  });
+  if (!res.ok) {
+    return {}; // Return empty if not authenticated
+  }
+  return res.json();
+}
+
+export async function updateUserPreferences(prefs: any): Promise<any> {
+  const res = await fetch(apiBaseTrimmed() + '/user/preferences', {
+    method: 'POST',
+    headers: { 
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(prefs),
+  });
+  if (!res.ok) {
+    throw new Error('Failed to update preferences');
+  }
+  return res.json();
+}
+
+// Register for push notifications - REAL DATA
+export async function registerNotifications(token: string): Promise<any> {
+  const res = await fetch(apiBaseTrimmed() + '/notify/register', {
+    method: 'POST',
+    headers: { 
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    throw new Error('Failed to register notifications');
+  }
+  return res.json();
+}
