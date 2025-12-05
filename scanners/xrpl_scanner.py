@@ -69,6 +69,11 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
             # Hard reject unrealistic amounts (drop silently)
             if xrp > 5_000_000_000:
                 return
+            # Skip self-payments (spam/noise)
+            source = txn.get("Account", "")
+            dest = txn.get("Destination", "")
+            if source == dest:
+                return
             # Only report significant payments (>= 1M XRP = ~$2M USD)
             if xrp >= 1_000_000:
                 flow = XRPFlow(
