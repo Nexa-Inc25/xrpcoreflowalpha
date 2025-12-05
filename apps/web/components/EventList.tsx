@@ -12,11 +12,13 @@ import {
   Clock, 
   Layers,
   ChevronRight,
-  Loader2
+  Loader2,
+  BarChart3
 } from 'lucide-react';
 import { fetchXrplFlowsHistory } from '../lib/api';
 import { cn, timeAgo, formatUSD } from '../lib/utils';
 import IsoFlowCard from './IsoFlowCard';
+import EventDetailPanel from './EventDetailPanel';
 
 interface EventListProps {
   events: any[];
@@ -34,6 +36,7 @@ type FilterType = typeof filterOptions[number]['id'];
 export default function EventList({ events, isLoading }: EventListProps) {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<FilterType>('all');
+  const [selectedEvent, setSelectedEvent] = useState<any>(null);
 
   const { data: xrplHistory } = useQuery({
     queryKey: ['xrpl_flows_history'],
@@ -144,6 +147,7 @@ export default function EventList({ events, isLoading }: EventListProps) {
                   index={index}
                   filter={filter}
                   onHover={prefetchFlow}
+                  onSelect={setSelectedEvent}
                 />
               ))}
             </AnimatePresence>
@@ -159,6 +163,16 @@ export default function EventList({ events, isLoading }: EventListProps) {
           Real-time
         </span>
       </div>
+
+      {/* Event Detail Panel */}
+      <AnimatePresence>
+        {selectedEvent && (
+          <EventDetailPanel 
+            event={selectedEvent} 
+            onClose={() => setSelectedEvent(null)} 
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -167,12 +181,14 @@ function EventRow({
   event, 
   index, 
   filter,
-  onHover 
+  onHover,
+  onSelect
 }: { 
   event: any; 
   index: number;
   filter: FilterType;
   onHover: (txHash?: string) => void;
+  onSelect: (event: any) => void;
 }) {
   const txHash = event.features?.tx_hash || event.features?.txHash;
   const conf = String(event.confidence || '').toLowerCase();
@@ -225,9 +241,10 @@ function EventRow({
         <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b from-emerald-400 to-emerald-600" />
       )}
 
-      <Link 
-        href={txHash ? `/flow/${txHash}` : '#'} 
-        className="flex items-start gap-4 px-5 py-4"
+      <button
+        type="button"
+        onClick={() => onSelect(event)}
+        className="flex items-start gap-4 px-5 py-4 w-full text-left"
       >
         {/* Type icon */}
         <div className={cn(
@@ -296,7 +313,7 @@ function EventRow({
           )}
         </div>
 
-        {/* Right side: score + arrow */}
+        {/* Right side: score + expand icon */}
         <div className="flex-shrink-0 flex flex-col items-end gap-2">
           {ruleScore != null && ruleScore >= 50 && (
             <div className={cn(
@@ -310,9 +327,12 @@ function EventRow({
               {ruleScore.toFixed(0)}
             </div>
           )}
-          <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-slate-400 group-hover:translate-x-0.5 transition-all" />
+          <div className="flex items-center gap-1">
+            <BarChart3 className="w-4 h-4 text-slate-600 group-hover:text-brand-sky transition-colors" />
+            <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-slate-400 group-hover:translate-x-0.5 transition-all" />
+          </div>
         </div>
-      </Link>
+      </button>
     </motion.li>
   );
 }
