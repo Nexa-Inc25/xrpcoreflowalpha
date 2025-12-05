@@ -159,8 +159,17 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
   const priceChange = prices.length > 1 ? ((currentPrice - prices[0]) / prices[0]) * 100 : 0;
   const isPositive = priceChange >= 0;
   
-  const confidence = event.confidence || event.features?.confidence || 0;
-  const valueUsd = event.value_usd || event.features?.value_usd || 0;
+  // Parse confidence - can be string ("high", "medium", "low") or number
+  const rawConfidence = event.confidence || event.features?.confidence || 0;
+  const confidenceNum = typeof rawConfidence === 'number' 
+    ? rawConfidence 
+    : rawConfidence === 'high' ? 85 
+    : rawConfidence === 'medium' ? 65 
+    : 30;
+  const confidenceLabel = typeof rawConfidence === 'string' ? rawConfidence : `${confidenceNum}%`;
+  
+  const valueUsd = event.value_usd || event.features?.value_usd || event.features?.usd_value || 0;
+  const network = event.network || event.features?.network || symbol;
   
   const tabs = [
     { id: 'chart', label: 'Price Chart', icon: Activity },
@@ -190,29 +199,29 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
           <div className="flex items-center gap-4">
             <div className={cn(
               "flex h-12 w-12 items-center justify-center rounded-xl",
-              confidence >= 85 ? "bg-emerald-500/20" : 
-              confidence >= 70 ? "bg-amber-500/20" : "bg-slate-500/20"
+              confidenceNum >= 85 ? "bg-emerald-500/20" : 
+              confidenceNum >= 70 ? "bg-amber-500/20" : "bg-slate-500/20"
             )}>
               <Zap className={cn(
                 "w-6 h-6",
-                confidence >= 85 ? "text-emerald-400" : 
-                confidence >= 70 ? "text-amber-400" : "text-slate-400"
+                confidenceNum >= 85 ? "text-emerald-400" : 
+                confidenceNum >= 70 ? "text-amber-400" : "text-slate-400"
               )} />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-semibold">{symbol}</h2>
                 <span className={cn(
-                  "px-2 py-0.5 rounded-full text-xs font-medium",
-                  confidence >= 85 ? "bg-emerald-500/20 text-emerald-300" :
-                  confidence >= 70 ? "bg-amber-500/20 text-amber-300" :
+                  "px-2 py-0.5 rounded-full text-xs font-medium capitalize",
+                  confidenceNum >= 85 ? "bg-emerald-500/20 text-emerald-300" :
+                  confidenceNum >= 70 ? "bg-amber-500/20 text-amber-300" :
                   "bg-slate-500/20 text-slate-300"
                 )}>
-                  {confidence}% confidence
+                  {confidenceLabel} confidence
                 </span>
               </div>
               <p className="text-sm text-slate-400 mt-0.5">
-                {event.type?.toUpperCase()} • {event.network || 'Unknown'} • {timeAgo(event.timestamp || event.ts)}
+                {event.type?.toUpperCase()} • {network} • {timeAgo(event.timestamp || event.ts)}
               </p>
             </div>
           </div>
