@@ -178,6 +178,19 @@ async def _startup():
     # Telegram dark-flow alerts (optional)
     asyncio.create_task(start_telegram_worker())
 
+
+@app.on_event("shutdown")
+async def _shutdown():
+    """Graceful shutdown - close database connections."""
+    print("[SHUTDOWN] Closing database connections...")
+    try:
+        from db.connection import close_pool
+        await close_pool()
+    except Exception as e:
+        print(f"[SHUTDOWN] Error closing DB pool: {e}")
+    print("[SHUTDOWN] Complete")
+
+
 @app.get("/health")
 async def health():
     chains = []

@@ -31,16 +31,35 @@ async def store_signal(signal: Dict[str, Any]) -> Optional[str]:
         # Extract signal fields
         sig_type = signal.get("type", "unknown")
         sub_type = signal.get("sub_type")
-        network = signal.get("network", "eth")
+        network = signal.get("network") or signal.get("blockchain", "eth")
         summary = signal.get("summary", "")
         confidence = signal.get("confidence") or signal.get("iso_confidence") or 50
-        predicted_dir = signal.get("iso_direction", "neutral")
+        predicted_dir = signal.get("direction") or signal.get("iso_direction", "neutral")
         predicted_move = signal.get("iso_expected_move_pct", 0.0)
-        amount_usd = signal.get("usd_value") or signal.get("iso_amount_usd") or 0.0
-        amount_native = signal.get("amount_xrp") or signal.get("amount_eth") or 0.0
-        native_symbol = "XRP" if "xrp" in sig_type.lower() else "ETH"
-        source = signal.get("source", "")
-        dest = signal.get("destination", "")
+        
+        # USD value - check multiple field names used by different scanners
+        amount_usd = (
+            signal.get("amount_usd") or 
+            signal.get("usd_value") or 
+            signal.get("iso_amount_usd") or 
+            0.0
+        )
+        
+        # Native amount - check multiple field names
+        amount_native = (
+            signal.get("amount") or
+            signal.get("amount_xrp") or 
+            signal.get("amount_eth") or 
+            0.0
+        )
+        
+        # Determine native symbol
+        symbol = signal.get("symbol", "")
+        native_symbol = symbol if symbol else ("XRP" if "xrp" in sig_type.lower() else "ETH")
+        
+        # Source/destination addresses
+        source = signal.get("source") or signal.get("from_address") or signal.get("from_owner", "")
+        dest = signal.get("destination") or signal.get("to_address") or signal.get("to_owner", "")
         tx_hash = signal.get("tx_hash", "")
         tags = signal.get("tags", [])
         features = signal.get("features", {})
