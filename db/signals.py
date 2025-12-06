@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from db.connection import execute, fetch, fetchrow, fetchval
+from db.connection import execute, fetch, fetchrow, fetchval, is_sqlite
 from utils.price import get_price_usd
 
 
@@ -45,25 +45,44 @@ async def store_signal(signal: Dict[str, Any]) -> Optional[str]:
         tags = signal.get("tags", [])
         features = signal.get("features", {})
         
-        # Insert into database
-        await execute(
-            """
-            INSERT INTO signals (
-                signal_id, type, sub_type, network, summary, confidence,
-                predicted_direction, predicted_move_pct, amount_usd, amount_native,
-                native_symbol, entry_price_xrp, entry_price_eth, entry_price_btc,
-                source_address, dest_address, tx_hash, tags, features
-            ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                $11, $12, $13, $14, $15, $16, $17, $18, $19
+        # Insert into database - use appropriate syntax for SQLite vs PostgreSQL
+        tags_str = json.dumps(tags) if isinstance(tags, list) else str(tags)
+        features_str = json.dumps(features) if isinstance(features, dict) else str(features)
+        
+        if is_sqlite():
+            await execute(
+                """
+                INSERT OR IGNORE INTO signals (
+                    signal_id, type, sub_type, network, summary, confidence,
+                    predicted_direction, predicted_move_pct, amount_usd, amount_native,
+                    native_symbol, entry_price_xrp, entry_price_eth, entry_price_btc,
+                    source_address, dest_address, tx_hash, tags, features
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                signal_id, sig_type, sub_type, network, summary, confidence,
+                predicted_dir, predicted_move, amount_usd, amount_native,
+                native_symbol, entry_xrp, entry_eth, 0.0,
+                source, dest, tx_hash, tags_str, features_str
             )
-            ON CONFLICT (signal_id) DO NOTHING
-            """,
-            signal_id, sig_type, sub_type, network, summary, confidence,
-            predicted_dir, predicted_move, amount_usd, amount_native,
-            native_symbol, entry_xrp, entry_eth, 0.0,  # BTC placeholder
-            source, dest, tx_hash, tags, json.dumps(features)
-        )
+        else:
+            await execute(
+                """
+                INSERT INTO signals (
+                    signal_id, type, sub_type, network, summary, confidence,
+                    predicted_direction, predicted_move_pct, amount_usd, amount_native,
+                    native_symbol, entry_price_xrp, entry_price_eth, entry_price_btc,
+                    source_address, dest_address, tx_hash, tags, features
+                ) VALUES (
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                    $11, $12, $13, $14, $15, $16, $17, $18, $19
+                )
+                ON CONFLICT (signal_id) DO NOTHING
+                """,
+                signal_id, sig_type, sub_type, network, summary, confidence,
+                predicted_dir, predicted_move, amount_usd, amount_native,
+                native_symbol, entry_xrp, entry_eth, 0.0,
+                source, dest, tx_hash, tags, features_str
+            )
         
         print(f"[DB] Stored signal {signal_id[:16]}... type={sig_type} conf={confidence}")
         return signal_id
@@ -168,28 +187,55 @@ async def get_analytics_summary(days: int = 30) -> Dict[str, Any]:
     """
     try:
         cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff_str = cutoff.isoformat()  # For SQLite TEXT comparison
+        
+        # Use different queries for SQLite vs PostgreSQL
+        use_sqlite = is_sqlite()
         
         # Total signals and outcomes
-        total_signals = await fetchval(
-            "SELECT COUNT(*) FROM signals WHERE detected_at >= $1", cutoff
-        ) or 0
+        if use_sqlite:
+            total_signals = await fetchval(
+                "SELECT COUNT(*) FROM signals WHERE detected_at >= ?", cutoff_str
+            ) or 0
+        else:
+            total_signals = await fetchval(
+                "SELECT COUNT(*) FROM signals WHERE detected_at >= $1", cutoff
+            ) or 0
         
         # Win rates by confidence tier
-        win_rate_query = """
-            SELECT 
-                CASE 
-                    WHEN s.confidence >= 70 THEN 'high'
-                    WHEN s.confidence >= 50 THEN 'medium'
-                    ELSE 'low'
-                END as tier,
-                COUNT(DISTINCT s.signal_id) as total,
-                COUNT(DISTINCT CASE WHEN o.hit = true THEN s.signal_id END) as hits
-            FROM signals s
-            LEFT JOIN signal_outcomes o ON s.signal_id = o.signal_id AND o.interval_hours = 4
-            WHERE s.detected_at >= $1
-            GROUP BY tier
-        """
-        tier_rows = await fetch(win_rate_query, cutoff)
+        if use_sqlite:
+            # SQLite uses 1/0 for boolean, not true/false
+            win_rate_query = """
+                SELECT 
+                    CASE 
+                        WHEN s.confidence >= 70 THEN 'high'
+                        WHEN s.confidence >= 50 THEN 'medium'
+                        ELSE 'low'
+                    END as tier,
+                    COUNT(DISTINCT s.signal_id) as total,
+                    COUNT(DISTINCT CASE WHEN o.hit = 1 THEN s.signal_id END) as hits
+                FROM signals s
+                LEFT JOIN signal_outcomes o ON s.signal_id = o.signal_id AND o.interval_hours = 4
+                WHERE s.detected_at >= ?
+                GROUP BY tier
+            """
+            tier_rows = await fetch(win_rate_query, cutoff_str)
+        else:
+            win_rate_query = """
+                SELECT 
+                    CASE 
+                        WHEN s.confidence >= 70 THEN 'high'
+                        WHEN s.confidence >= 50 THEN 'medium'
+                        ELSE 'low'
+                    END as tier,
+                    COUNT(DISTINCT s.signal_id) as total,
+                    COUNT(DISTINCT CASE WHEN o.hit = true THEN s.signal_id END) as hits
+                FROM signals s
+                LEFT JOIN signal_outcomes o ON s.signal_id = o.signal_id AND o.interval_hours = 4
+                WHERE s.detected_at >= $1
+                GROUP BY tier
+            """
+            tier_rows = await fetch(win_rate_query, cutoff)
         
         win_rates = {"high": {"total": 0, "hits": 0, "rate": 0}, 
                      "medium": {"total": 0, "hits": 0, "rate": 0},
@@ -202,28 +248,47 @@ async def get_analytics_summary(days: int = 30) -> Dict[str, Any]:
             win_rates[tier] = {"total": total, "hits": hits, "rate": rate}
         
         # Daily performance
-        daily_query = """
-            SELECT 
-                DATE(s.detected_at) as date,
-                COUNT(DISTINCT s.signal_id) as signals,
-                COUNT(DISTINCT CASE WHEN o.hit = true THEN s.signal_id END) as hits,
-                COALESCE(SUM(s.amount_usd), 0) as total_volume,
-                COALESCE(AVG(o.xrp_change_pct), 0) as avg_impact
-            FROM signals s
-            LEFT JOIN signal_outcomes o ON s.signal_id = o.signal_id AND o.interval_hours = 4
-            WHERE s.detected_at >= $1
-            GROUP BY DATE(s.detected_at)
-            ORDER BY date DESC
-            LIMIT 30
-        """
-        daily_rows = await fetch(daily_query, cutoff)
+        if use_sqlite:
+            daily_query = """
+                SELECT 
+                    DATE(s.detected_at) as date,
+                    COUNT(DISTINCT s.signal_id) as signals,
+                    COUNT(DISTINCT CASE WHEN o.hit = 1 THEN s.signal_id END) as hits,
+                    COALESCE(SUM(s.amount_usd), 0) as total_volume,
+                    COALESCE(AVG(o.xrp_change_pct), 0) as avg_impact
+                FROM signals s
+                LEFT JOIN signal_outcomes o ON s.signal_id = o.signal_id AND o.interval_hours = 4
+                WHERE s.detected_at >= ?
+                GROUP BY DATE(s.detected_at)
+                ORDER BY date DESC
+                LIMIT 30
+            """
+            daily_rows = await fetch(daily_query, cutoff_str)
+        else:
+            daily_query = """
+                SELECT 
+                    DATE(s.detected_at) as date,
+                    COUNT(DISTINCT s.signal_id) as signals,
+                    COUNT(DISTINCT CASE WHEN o.hit = true THEN s.signal_id END) as hits,
+                    COALESCE(SUM(s.amount_usd), 0) as total_volume,
+                    COALESCE(AVG(o.xrp_change_pct), 0) as avg_impact
+                FROM signals s
+                LEFT JOIN signal_outcomes o ON s.signal_id = o.signal_id AND o.interval_hours = 4
+                WHERE s.detected_at >= $1
+                GROUP BY DATE(s.detected_at)
+                ORDER BY date DESC
+                LIMIT 30
+            """
+            daily_rows = await fetch(daily_query, cutoff)
         
         daily_performance = []
         for row in daily_rows:
             signals = row["signals"] or 0
             hits = row["hits"] or 0
+            date_val = row["date"]
+            date_str = date_val.isoformat() if hasattr(date_val, 'isoformat') else str(date_val) if date_val else ""
             daily_performance.append({
-                "date": row["date"].isoformat() if row["date"] else "",
+                "date": date_str,
                 "signals": signals,
                 "hits": hits,
                 "hitRate": round((hits / signals * 100), 1) if signals > 0 else 0,
@@ -232,36 +297,60 @@ async def get_analytics_summary(days: int = 30) -> Dict[str, Any]:
             })
         
         # Signal type breakdown
-        type_query = """
-            SELECT type, COUNT(*) as count
-            FROM signals
-            WHERE detected_at >= $1
-            GROUP BY type
-            ORDER BY count DESC
-            LIMIT 10
-        """
-        type_rows = await fetch(type_query, cutoff)
+        if use_sqlite:
+            type_query = """
+                SELECT type, COUNT(*) as count
+                FROM signals
+                WHERE detected_at >= ?
+                GROUP BY type
+                ORDER BY count DESC
+                LIMIT 10
+            """
+            type_rows = await fetch(type_query, cutoff_str)
+        else:
+            type_query = """
+                SELECT type, COUNT(*) as count
+                FROM signals
+                WHERE detected_at >= $1
+                GROUP BY type
+                ORDER BY count DESC
+                LIMIT 10
+            """
+            type_rows = await fetch(type_query, cutoff)
         type_breakdown = {row["type"]: row["count"] for row in type_rows}
         
         # Top performing signals (highest actual moves)
-        top_query = """
-            SELECT s.*, o.xrp_change_pct, o.hit
-            FROM signals s
-            JOIN signal_outcomes o ON s.signal_id = o.signal_id AND o.interval_hours = 4
-            WHERE s.detected_at >= $1 AND o.hit = true
-            ORDER BY ABS(o.xrp_change_pct) DESC
-            LIMIT 5
-        """
-        top_rows = await fetch(top_query, cutoff)
+        if use_sqlite:
+            top_query = """
+                SELECT s.*, o.xrp_change_pct, o.hit
+                FROM signals s
+                JOIN signal_outcomes o ON s.signal_id = o.signal_id AND o.interval_hours = 4
+                WHERE s.detected_at >= ? AND o.hit = 1
+                ORDER BY ABS(o.xrp_change_pct) DESC
+                LIMIT 5
+            """
+            top_rows = await fetch(top_query, cutoff_str)
+        else:
+            top_query = """
+                SELECT s.*, o.xrp_change_pct, o.hit
+                FROM signals s
+                JOIN signal_outcomes o ON s.signal_id = o.signal_id AND o.interval_hours = 4
+                WHERE s.detected_at >= $1 AND o.hit = true
+                ORDER BY ABS(o.xrp_change_pct) DESC
+                LIMIT 5
+            """
+            top_rows = await fetch(top_query, cutoff)
         top_signals = []
         for i, row in enumerate(top_rows):
+            detected_val = row["detected_at"]
+            detected_str = detected_val.isoformat() if hasattr(detected_val, 'isoformat') else str(detected_val) if detected_val else ""
             top_signals.append({
                 "id": i + 1,
                 "type": row["type"],
                 "summary": row["summary"],
                 "confidence": row["confidence"],
-                "actual_move": round(row["xrp_change_pct"], 2),
-                "detected_at": row["detected_at"].isoformat() if row["detected_at"] else ""
+                "actual_move": round(row["xrp_change_pct"] or 0, 2),
+                "detected_at": detected_str
             })
         
         return {

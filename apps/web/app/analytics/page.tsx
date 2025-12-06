@@ -290,7 +290,10 @@ export default function AnalyticsPage() {
               Win Rate by Confidence Tier
             </h3>
             <div className="space-y-4">
-              {Object.entries(data.winRates).map(([tier, stats]) => (
+              {Object.entries(data.winRates).map(([tier, statsRaw]) => {
+                const stats = statsRaw as { wins?: number; hits?: number; total: number; rate: number };
+                const wins = stats.wins ?? stats.hits ?? 0;
+                return (
                 <div key={tier}>
                   <div className="flex items-center justify-between mb-1.5">
                     <span className={cn(
@@ -316,10 +319,10 @@ export default function AnalyticsPage() {
                     />
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1">
-                    {stats.wins} / {stats.total} signals hit target
+                    {wins} / {stats.total} signals hit target
                   </p>
                 </div>
-              ))}
+              );})}
             </div>
           </motion.div>
 
