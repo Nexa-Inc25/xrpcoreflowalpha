@@ -27,11 +27,14 @@ export default function FlowDetailPage({ params }: PageProps) {
     queryFn: () => fetchFlowsByTx(txHash),
   });
 
-  if (isLoading) return <div className="p-4">Loading…</div>;
-  if (error || !flows) return <div className="p-4">Error loading flow</div>;
+  if (isLoading) return <div className="min-h-screen bg-slate-950 text-slate-100 p-8 flex items-center justify-center">Loading…</div>;
+  if (error) return <div className="min-h-screen bg-slate-950 text-slate-100 p-8 flex items-center justify-center">Error loading flow</div>;
 
-  const items = (flows.items || []) as any[];
-  const primary = items[0];
+  const items = (flows?.items || []) as any[];
+  const primary = items[0] || {};
+
+  // Handle case where flow not found in DB (show txHash info anyway)
+  const hasData = items.length > 0;
 
   const baseType = String(primary?.type || '').toLowerCase();
   const network = String(primary?.network || primary?.features?.network || '').toLowerCase();
