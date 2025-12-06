@@ -214,7 +214,7 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-        className="relative w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-2xl border border-white/10 bg-surface-1/95 backdrop-blur-xl shadow-2xl"
+        className="relative w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -325,7 +325,7 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
         </div>
         
         {/* Content */}
-        <div className="p-5 overflow-y-auto max-h-[400px]">
+        <div className="p-5 overflow-y-auto max-h-[400px] bg-slate-900">
           <AnimatePresence mode="wait">
             {activeTab === 'chart' && (
               <motion.div
@@ -335,7 +335,7 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
                 exit={{ opacity: 0, y: -10 }}
                 className="space-y-4"
               >
-                <div className="glass-card p-4 rounded-xl">
+                <div className="p-4 rounded-xl bg-slate-800/80 border border-white/5">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-medium">24h Price Chart</h3>
                     <span className="text-xs text-slate-400">
@@ -364,7 +364,7 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
                 
                 {prices.length >= 2 && (
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="glass-card p-4 rounded-xl">
+                    <div className="p-4 rounded-xl bg-slate-800/80 border border-white/5">
                       <h4 className="text-xs text-slate-400 uppercase tracking-wider mb-2">24h Range</h4>
                       <div className="flex items-center gap-2">
                         <span className="text-red-400 text-sm">${formatNumber(Math.min(...prices))}</span>
@@ -372,7 +372,7 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
                         <span className="text-emerald-400 text-sm">${formatNumber(Math.max(...prices))}</span>
                       </div>
                     </div>
-                    <div className="glass-card p-4 rounded-xl">
+                    <div className="p-4 rounded-xl bg-slate-800/80 border border-white/5">
                       <h4 className="text-xs text-slate-400 uppercase tracking-wider mb-2">Volatility</h4>
                       <p className="text-lg font-semibold">
                         {((Math.max(...prices) - Math.min(...prices)) / Math.min(...prices) * 100).toFixed(2)}%
@@ -391,7 +391,7 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
                 exit={{ opacity: 0, y: -10 }}
                 className="space-y-4"
               >
-                <div className="glass-card p-4 rounded-xl">
+                <div className="p-4 rounded-xl bg-slate-800/80 border border-white/5">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-medium">Order Book Depth</h3>
                     <span className={cn(
@@ -425,19 +425,19 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
                 
                 {orderBook && (
                   <div className="grid grid-cols-3 gap-4">
-                    <div className="glass-card p-4 rounded-xl text-center">
+                    <div className="p-5 rounded-xl bg-slate-800/80 border border-white/5 text-center">
                       <h4 className="text-xs text-slate-400 uppercase mb-1">Bid Depth</h4>
                       <p className="text-lg font-semibold text-emerald-400">
                         {orderBook.bid_depth ? formatUSD(orderBook.bid_depth) : '—'}
                       </p>
                     </div>
-                    <div className="glass-card p-4 rounded-xl text-center">
+                    <div className="p-5 rounded-xl bg-slate-800/80 border border-white/5 text-center">
                       <h4 className="text-xs text-slate-400 uppercase mb-1">Ask Depth</h4>
                       <p className="text-lg font-semibold text-red-400">
                         {orderBook.ask_depth ? formatUSD(orderBook.ask_depth) : '—'}
                       </p>
                     </div>
-                    <div className="glass-card p-4 rounded-xl text-center">
+                    <div className="p-5 rounded-xl bg-slate-800/80 border border-white/5 text-center">
                       <h4 className="text-xs text-slate-400 uppercase mb-1">Imbalance</h4>
                       <p className={cn(
                         "text-lg font-semibold",
@@ -459,7 +459,7 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
                 exit={{ opacity: 0, y: -10 }}
                 className="space-y-4"
               >
-                <div className="glass-card p-4 rounded-xl">
+                <div className="p-4 rounded-xl bg-slate-800/80 border border-white/5">
                   <h3 className="text-sm font-medium mb-3">Manipulation & Algo Pattern History</h3>
                   {manipLoading ? (
                     <div className="h-20 flex items-center justify-center">
@@ -495,7 +495,7 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
                 </div>
                 
                 {manipHistory?.risk_score != null && (
-                  <div className="glass-card p-4 rounded-xl">
+                  <div className="p-4 rounded-xl bg-slate-800/80 border border-white/5">
                     <h4 className="text-xs text-slate-400 uppercase tracking-wider mb-2">Risk Assessment</h4>
                     <div className="flex items-center gap-2">
                       <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
@@ -519,7 +519,7 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
                 exit={{ opacity: 0, y: -10 }}
                 className="space-y-4"
               >
-                <div className="glass-card p-4 rounded-xl">
+                <div className="p-4 rounded-xl bg-slate-800/80 border border-white/5">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-medium">ZK Alpha Forecast</h3>
                     <span className="px-2 py-0.5 rounded-full text-xs bg-brand-sky/20 text-brand-sky">

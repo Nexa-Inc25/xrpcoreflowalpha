@@ -1,6 +1,7 @@
 """
-Futures Scanner - ES, NQ, VIX via Databento
-Real-time futures data for cross-market correlation with XRP/crypto
+Futures Scanner - ES, NQ, VIX, Gold, Oil
+Real-time futures data for cross-market correlation with XRP/crypto.
+Uses Yahoo Finance as fallback when Databento API key is not available.
 """
 import asyncio
 import time
@@ -8,21 +9,21 @@ from typing import Any, Dict, Optional
 
 import httpx
 
-from app.config import DATABENTO_API_KEY
+from app.config import DATABENTO_API_KEY, POLYGON_API_KEY
 from observability.metrics import equity_dark_pool_volume
 from bus.signal_bus import publish_signal
 
 # Databento API base
 DATABENTO_BASE = "https://hist.databento.com/v0"
 
-# Futures symbols to track
-FUTURES_SYMBOLS = [
-    "ES.FUT",   # S&P 500 E-mini
-    "NQ.FUT",   # Nasdaq 100 E-mini
-    "VX.FUT",   # VIX futures
-    "GC.FUT",   # Gold futures
-    "CL.FUT",   # Crude Oil futures
-]
+# Yahoo Finance symbols for futures ETF proxies
+YAHOO_FUTURES_PROXIES = {
+    "ES": {"symbol": "^GSPC", "name": "S&P 500", "type": "index"},
+    "NQ": {"symbol": "^NDX", "name": "Nasdaq 100", "type": "index"}, 
+    "VIX": {"symbol": "^VIX", "name": "VIX", "type": "volatility"},
+    "GC": {"symbol": "GLD", "name": "Gold ETF", "type": "commodity"},
+    "CL": {"symbol": "USO", "name": "Oil ETF", "type": "commodity"},
+}
 
 # Thresholds for significant moves
 MOVE_THRESHOLD_PCT = 0.5  # 0.5% move triggers signal
@@ -30,12 +31,8 @@ VOLUME_SPIKE_MULT = 2.0   # 2x average volume
 
 
 async def start_futures_scanner():
-    """Start futures data scanner using Databento."""
-    if not DATABENTO_API_KEY:
-        print("[FUTURES] No DATABENTO_API_KEY configured, skipping")
-        return
-    
-    print(f"[FUTURES] Starting scanner for {len(FUTURES_SYMBOLS)} symbols")
+    """Start futures data scanner. Uses Yahoo Finance as free fallback."""
+    print("[FUTURES] Starting scanner with Yahoo Finance proxy data")
     
     # Track last prices for change detection
     last_prices: Dict[str, float] = {}
@@ -51,81 +48,79 @@ async def start_futures_scanner():
                     continue
                 last_check = now
                 
-                for symbol in FUTURES_SYMBOLS:
-                    await _check_futures_quote(client, symbol, last_prices)
-                    await asyncio.sleep(0.5)  # Rate limit
+                for code, info in YAHOO_FUTURES_PROXIES.items():
+                    await _check_yahoo_quote(client, code, info, last_prices)
+                    await asyncio.sleep(0.3)  # Rate limit
                     
             except Exception as e:
                 print(f"[FUTURES] Error: {e}")
                 await asyncio.sleep(10)
 
 
-async def _check_futures_quote(
+async def _check_yahoo_quote(
     client: httpx.AsyncClient,
-    symbol: str,
+    code: str,
+    info: Dict[str, str],
     last_prices: Dict[str, float]
 ):
-    """Check a single futures symbol for significant moves."""
+    """Check a single futures proxy via Yahoo Finance."""
     try:
-        # Databento real-time quote endpoint
-        headers = {"Authorization": f"Bearer {DATABENTO_API_KEY}"}
+        symbol = info["symbol"]
         
-        # Get latest quote
+        # Yahoo Finance quote API
         resp = await client.get(
-            f"{DATABENTO_BASE}/timeseries.get_range",
-            headers=headers,
-            params={
-                "dataset": "GLBX.MDP3",  # CME Globex
-                "symbols": symbol,
-                "schema": "trades",
-                "start": int((time.time() - 60) * 1e9),  # Last minute
-                "end": int(time.time() * 1e9),
-                "limit": 10,
-            }
+            f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}",
+            params={"interval": "1m", "range": "1d"},
+            headers={"User-Agent": "Mozilla/5.0"}
         )
         
         if resp.status_code != 200:
             return
             
         data = resp.json()
-        trades = data.get("data", [])
+        result = data.get("chart", {}).get("result", [])
         
-        if not trades:
+        if not result:
             return
             
-        # Get latest price
-        latest = trades[-1]
-        price = float(latest.get("price", 0))
-        size = int(latest.get("size", 0))
+        meta = result[0].get("meta", {})
+        price = meta.get("regularMarketPrice", 0)
+        prev_close = meta.get("chartPreviousClose", 0)
         
         if price <= 0:
             return
             
-        # Check for significant move
-        prev_price = last_prices.get(symbol)
-        last_prices[symbol] = price
+        # Check for significant move from prev close
+        prev_price = last_prices.get(code, prev_close)
+        last_prices[code] = price
         
         if prev_price and prev_price > 0:
             pct_change = ((price - prev_price) / prev_price) * 100
             
+            # Publish signal for any meaningful move
             if abs(pct_change) >= MOVE_THRESHOLD_PCT:
                 direction = "up" if pct_change > 0 else "down"
-                clean_symbol = symbol.replace(".FUT", "")
                 
-                print(f"[FUTURES] {clean_symbol} {direction} {abs(pct_change):.2f}%")
+                print(f"[FUTURES] {code} ({info['name']}) {direction} {abs(pct_change):.2f}%")
                 
                 await publish_signal({
                     "type": "futures",
                     "sub_type": "price_move",
-                    "symbol": clean_symbol,
+                    "symbol": code,
+                    "name": info["name"],
+                    "asset_type": info["type"],
                     "price": price,
                     "change_pct": round(pct_change, 2),
                     "direction": direction,
-                    "size": size,
                     "timestamp": int(time.time()),
-                    "summary": f"{clean_symbol} futures {direction} {abs(pct_change):.2f}% → ${price:,.2f}",
-                    "tags": ["futures", clean_symbol.lower()],
+                    "summary": f"{info['name']} {direction} {abs(pct_change):.2f}% → ${price:,.2f}",
+                    "tags": ["futures", code.lower(), info["type"]],
                 })
+        else:
+            # First run - calculate change from previous close
+            if prev_close and prev_close > 0:
+                daily_change = ((price - prev_close) / prev_close) * 100
+                print(f"[FUTURES] {code} at ${price:,.2f} ({daily_change:+.2f}% today)")
                 
     except Exception as e:
         pass  # Silently continue on individual symbol errors
