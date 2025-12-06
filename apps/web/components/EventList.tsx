@@ -286,9 +286,8 @@ const EventRow = forwardRef<HTMLLIElement, EventRowProps>(function EventRow({
         <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b from-emerald-400 to-emerald-600" />
       )}
 
-      <button
-        type="button"
-        onClick={() => onSelect(event)}
+      <Link
+        href={`/flow/${encodeURIComponent(txHash || event.id || 'unknown')}`}
         className="flex items-start gap-4 px-5 py-4 w-full text-left"
       >
         {/* Type icon */}
@@ -377,7 +376,7 @@ const EventRow = forwardRef<HTMLLIElement, EventRowProps>(function EventRow({
             <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-slate-400 group-hover:translate-x-0.5 transition-all" />
           </div>
         </div>
-      </button>
+      </Link>
     </motion.li>
   );
 });
