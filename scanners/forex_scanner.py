@@ -11,6 +11,7 @@ import httpx
 from app.config import ALPHA_VANTAGE_API_KEY
 from observability.metrics import equity_dark_pool_volume
 from bus.signal_bus import publish_signal
+from workers.scanner_monitor import mark_scanner_connected, record_scanner_signal, mark_scanner_error
 
 # Alpha Vantage API base
 AV_BASE = "https://www.alphavantage.co/query"
@@ -43,6 +44,7 @@ async def start_forex_scanner():
         return
     
     print(f"[FOREX] Starting scanner for {len(FOREX_PAIRS)} pairs")
+    mark_scanner_connected("forex")
     
     last_rates: Dict[str, float] = {}
     last_check = 0

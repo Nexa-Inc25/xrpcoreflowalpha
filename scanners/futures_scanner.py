@@ -12,6 +12,7 @@ import httpx
 from app.config import DATABENTO_API_KEY, POLYGON_API_KEY
 from observability.metrics import equity_dark_pool_volume
 from bus.signal_bus import publish_signal
+from workers.scanner_monitor import mark_scanner_connected, record_scanner_signal, mark_scanner_error
 
 # Databento API base
 DATABENTO_BASE = "https://hist.databento.com/v0"
@@ -33,6 +34,7 @@ VOLUME_SPIKE_MULT = 2.0   # 2x average volume
 async def start_futures_scanner():
     """Start futures data scanner. Uses Yahoo Finance as free fallback."""
     print("[FUTURES] Starting scanner with Yahoo Finance proxy data")
+    mark_scanner_connected("futures")
     
     # Track last prices for change detection
     last_prices: Dict[str, float] = {}

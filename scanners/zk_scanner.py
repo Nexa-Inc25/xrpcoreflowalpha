@@ -12,6 +12,7 @@ from observability.metrics import zk_proof_detected
 from bus.signal_bus import publish_signal
 from utils.price import get_price_usd
 from scanners.renegade_detector import is_renegade_proof, tag_renegade_settlement
+from workers.scanner_monitor import mark_scanner_connected, record_scanner_signal, mark_scanner_error
 
 
 def _is_zk_proof(tx) -> bool:
@@ -36,6 +37,7 @@ async def start_zk_scanner():
     chain_id = w3.eth.chain_id
     chain = "eth" if (chain_id == 1) else str(chain_id)
     print(f"[ZK] Connected. chain_id={chain_id}")
+    mark_scanner_connected("zk_ethereum")
 
     def _selector(inp: str) -> str:
         try:
@@ -148,6 +150,7 @@ async def start_zk_scanner():
                         except Exception:
                             pass
                     await publish_signal(signal)
+                    record_scanner_signal("zk_ethereum")
                     processed += 1
                     if processed % 100 == 0:
                         print(f"[ZK] Heartbeat. processed={processed} chain_id={chain_id}")
