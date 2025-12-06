@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from xrpl.asyncio.clients import AsyncWebsocketClient
 from xrpl.models.requests import Subscribe, ServerInfo
@@ -12,46 +12,105 @@ from bus.signal_bus import publish_signal
 from utils.price import get_price_usd
 from utils.retry import async_retry
 from utils.tx_validate import validate_tx
+from predictors.signal_scorer import enrich_signal_with_score, identify_institution
+from workers.scanner_monitor import mark_scanner_connected, mark_scanner_reconnecting, record_scanner_signal, mark_scanner_error
 import time
+
+
+# Known XRPL institutional addresses for enhanced detection
+XRPL_INSTITUTIONS = {
+    # Ripple corporate
+    "rN7n3473SaZBCG4dFL83w7a1RXtXtbk2D9": "ripple_ops",
+    "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh": "genesis",
+    "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe": "ripple_treasury",
+    # Major exchanges
+    "rEy8TFcrAPvhpKrwyrscNYyqBGUkE9hKaJ": "binance",
+    "rJb5KsHsDHF1YS5B5DU6QCkH5NsPaKQTcy": "bitstamp",
+    "rLHzPsX6oXkzU2qL12kHCH8G8cnZv1rBJh": "kraken",
+    "r9cZA1mLK5R5Am25ArfXFmqgNwjZgnfk59": "bitfinex",
+    "rUobSiUpYH2S97Mgb4E489gFKv46rPjXAK": "coinbase",
+    # Known market makers / OTC
+    "rDsbeomae4FXwgQTJp9Rs64Qg9vDiTCdBv": "b2c2",
+    "rDBhLJc4VJzpWN6v8a7h8K5fvFfHcN7nVk": "galaxy_digital",
+}
+
+
+def get_address_label(address: str) -> str:
+    """Get human-readable label for XRPL address."""
+    return XRPL_INSTITUTIONS.get(address, "unknown")
+
+
+def is_institutional_flow(source: str, dest: str) -> tuple[bool, Optional[str], Optional[str]]:
+    """Check if flow involves institutional addresses."""
+    src_label = XRPL_INSTITUTIONS.get(source)
+    dst_label = XRPL_INSTITUTIONS.get(dest)
+    is_institutional = bool(src_label or dst_label)
+    return (is_institutional, src_label, dst_label)
 
 
 async def start_xrpl_scanner():
     if not XRPL_WSS:
+        print("[XRPL] Scanner disabled - XRPL_WSS not configured")
         return
     assert ("xrplcluster.com" in XRPL_WSS) or ("ripple.com" in XRPL_WSS), "NON-MAINNET WSS – FATAL ABORT"
-    async with AsyncWebsocketClient(XRPL_WSS) as client:
-        @async_retry(max_attempts=5, delay=1, backoff=2)
-        async def _req(payload):
-            return await client.request(payload)
-        # Server info log on startup
+    
+    reconnect_count = 0
+    while True:
         try:
-            info = await _req(ServerInfo())
-            vi = (info.result.get("info", {}).get("validated_ledger", {}) or {}).get("seq") or (info.result.get("info", {}).get("validated_ledger", {}) or {}).get("ledger_index")
-            print(f"[XRPL] Connected. validated_ledger={vi}")
-        except Exception:
-            print("[XRPL] Connected. server_info unavailable")
-        await _req(Subscribe(streams=["transactions"]))
-        async def _keepalive():
-            while True:
+            if reconnect_count > 0:
+                await mark_scanner_reconnecting("xrpl")
+                print(f"[XRPL] Reconnecting (attempt {reconnect_count})...")
+            
+            async with AsyncWebsocketClient(XRPL_WSS) as client:
+                @async_retry(max_attempts=5, delay=1, backoff=2)
+                async def _req(payload):
+                    return await client.request(payload)
+                
+                # Server info log on startup
                 try:
-                    await _req(ServerInfo())
-                except Exception:
-                    pass
-                await asyncio.sleep(20)
-        asyncio.create_task(_keepalive())
-        processed = 0
-        async for msg in client:
-            if isinstance(msg, dict) and msg.get("status") == "success":
-                continue
-            await process_xrpl_transaction(msg)
-            processed += 1
-            if processed % 100 == 0:
-                try:
-                    info = await client.request(ServerInfo())
+                    info = await _req(ServerInfo())
                     vi = (info.result.get("info", {}).get("validated_ledger", {}) or {}).get("seq") or (info.result.get("info", {}).get("validated_ledger", {}) or {}).get("ledger_index")
-                    print(f"[XRPL] Heartbeat. validated_ledger={vi} processed={processed}")
+                    print(f"[XRPL] Connected. validated_ledger={vi}")
                 except Exception:
-                    print(f"[XRPL] Heartbeat. processed={processed}")
+                    print("[XRPL] Connected. server_info unavailable")
+                
+                # Mark as connected
+                await mark_scanner_connected("xrpl")
+                
+                await _req(Subscribe(streams=["transactions"]))
+                
+                async def _keepalive():
+                    while True:
+                        try:
+                            await _req(ServerInfo())
+                        except Exception:
+                            pass
+                        await asyncio.sleep(20)
+                asyncio.create_task(_keepalive())
+                
+                processed = 0
+                async for msg in client:
+                    if isinstance(msg, dict) and msg.get("status") == "success":
+                        continue
+                    await process_xrpl_transaction(msg)
+                    await record_scanner_signal("xrpl")
+                    processed += 1
+                    if processed % 100 == 0:
+                        try:
+                            info = await client.request(ServerInfo())
+                            vi = (info.result.get("info", {}).get("validated_ledger", {}) or {}).get("seq") or (info.result.get("info", {}).get("validated_ledger", {}) or {}).get("ledger_index")
+                            print(f"[XRPL] Heartbeat. validated_ledger={vi} processed={processed}")
+                        except Exception:
+                            print(f"[XRPL] Heartbeat. processed={processed}")
+        
+        except Exception as e:
+            reconnect_count += 1
+            await mark_scanner_error("xrpl", str(e))
+            print(f"[XRPL] Connection error: {e}")
+            # Exponential backoff up to 5 minutes
+            backoff = min(300, 5 * (2 ** min(reconnect_count, 6)))
+            print(f"[XRPL] Reconnecting in {backoff}s...")
+            await asyncio.sleep(backoff)
 
 
 async def process_xrpl_transaction(msg: Dict[str, Any]):
@@ -89,36 +148,66 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
                 if not ok:
                     # Drop silently to avoid noise from fake data
                     return
-                print(f"[XRPL] Large payment: {xrp:,.0f} XRP hash={flow.tx_hash}")
+                
+                # Get USD value
                 usd = 0.0
                 try:
                     px = await get_price_usd("xrp")
                     usd = float(px) * xrp
                 except Exception:
                     usd = 0.0
-                # Format summary based on size
+                
+                # Check for institutional flow
+                is_inst, src_label, dst_label = is_institutional_flow(source, dest)
+                src_name = src_label or source[:8]
+                dst_name = dst_label or dest[:8]
+                
+                # Format summary based on size and institutions
                 if xrp >= 1_000_000_000:
-                    summary = f"{xrp/1_000_000_000:.1f}B XRP → {txn.get('Destination','')[:6]}..."
+                    summary = f"{xrp/1_000_000_000:.1f}B XRP | {src_name} → {dst_name}"
                 elif xrp >= 1_000_000:
-                    summary = f"{xrp/1_000_000:.1f}M XRP → {txn.get('Destination','')[:6]}..."
+                    summary = f"{xrp/1_000_000:.1f}M XRP | {src_name} → {dst_name}"
                 else:
-                    summary = f"{xrp:,.0f} XRP → {txn.get('Destination','')[:6]}..."
+                    summary = f"{xrp:,.0f} XRP | {src_name} → {dst_name}"
+                
                 dest_tag = txn.get("DestinationTag")
-                tags = ["xrpl", "xrpl payment"]
-                await publish_signal({
-                    "type": "xrp",
+                tags = ["xrpl", "xrpl_payment"]
+                if is_inst:
+                    tags.append("institutional")
+                if xrp >= 10_000_000:
+                    tags.append("whale")
+                
+                # Build signal and enrich with scoring
+                signal = {
+                    "type": "xrpl_payment",
                     "sub_type": "payment",
+                    "network": "xrpl",
                     "amount_xrp": xrp,
+                    "amount": xrp,
+                    "amount_usd": round(usd, 2),
                     "usd_value": round(usd, 2),
                     "tx_hash": flow.tx_hash,
                     "timestamp": flow.timestamp,
                     "summary": summary,
                     "destination": flow.destination,
                     "source": flow.source,
+                    "from_owner": src_label or "unknown",
+                    "to_owner": dst_label or "unknown",
                     "destination_tag": dest_tag,
+                    "is_institutional": is_inst,
                     "tags": tags,
-                })
-                await send_slack_alert(build_rich_slack_payload({"type": "xrp", "flow": flow}))
+                }
+                
+                # Apply ML-driven scoring
+                signal = enrich_signal_with_score(signal)
+                
+                print(f"[XRPL] Payment: {xrp/1e6:.1f}M XRP | {src_name} → {dst_name} | conf={signal.get('confidence', 50)}%")
+                
+                await publish_signal(signal)
+                
+                # High-confidence signals get Slack alerts
+                if signal.get("confidence", 0) >= 70 or xrp >= 10_000_000:
+                    await send_slack_alert(build_rich_slack_payload({"type": "xrp", "flow": flow, "signal": signal}))
                 return
 
     # TrustSet - institutional trustline activity

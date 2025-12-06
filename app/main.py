@@ -14,6 +14,7 @@ from api.ui import router as ui_router
 from api.billing import router as billing_router
 from api.admin import router as admin_router
 from api.db_health import router as db_health_router
+from api.scanner_health import router as scanner_health_router
 from api.dashboard import router as dashboard_router
 from api.flows import router as flows_router
 from api.analytics import router as analytics_router
@@ -101,6 +102,7 @@ app.include_router(user_router)
 app.include_router(debug_router)
 app.include_router(health_router)
 app.include_router(db_health_router)
+app.include_router(scanner_health_router)
 app.include_router(dashboard_router)
 app.include_router(flows_router)
 app.include_router(analytics_router)

@@ -15,6 +15,8 @@ import httpx
 
 from app.config import WHALE_ALERT_API_KEY
 from bus.signal_bus import publish_signal
+from predictors.signal_scorer import enrich_signal_with_score
+from workers.scanner_monitor import mark_scanner_connected, record_scanner_signal, mark_scanner_error
 
 
 # Whale Alert API base URL
@@ -180,6 +182,7 @@ async def process_transaction(tx: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             "type": "whale",
             "sub_type": "transfer",
             "blockchain": blockchain,
+            "network": blockchain,
             "symbol": symbol,
             "amount": amount,
             "amount_usd": amount_usd,
@@ -195,8 +198,12 @@ async def process_transaction(tx: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             "tags": ["whale", blockchain, symbol.lower()],
         }
         
+        # Apply ML-driven scoring enhancement
+        signal = enrich_signal_with_score(signal)
+        
         await publish_signal(signal)
-        print(f"[WhaleAlert] {summary} | conf={confidence}% | {direction}")
+        await record_scanner_signal("whale_alert")
+        print(f"[WhaleAlert] {summary} | conf={signal.get('confidence', confidence)}% | {signal.get('direction', direction)}")
         return signal
         
     except Exception as e:
@@ -211,11 +218,14 @@ async def run_whale_alert_scanner():
         return
     
     print("[WhaleAlert] Scanner started")
+    await mark_scanner_connected("whale_alert")
     seen_hashes: set = set()
+    consecutive_errors = 0
     
     while True:
         try:
             transactions = await fetch_recent_transactions()
+            consecutive_errors = 0  # Reset on success
             
             new_count = 0
             for tx in transactions:
@@ -234,7 +244,15 @@ async def run_whale_alert_scanner():
                 seen_hashes = set(list(seen_hashes)[-500:])
             
         except Exception as e:
-            print(f"[WhaleAlert] Scanner error: {e}")
+            consecutive_errors += 1
+            await mark_scanner_error("whale_alert", str(e))
+            print(f"[WhaleAlert] Scanner error ({consecutive_errors}): {e}")
+            
+            # Back off on repeated errors
+            if consecutive_errors >= 5:
+                print("[WhaleAlert] Too many errors, backing off for 5 minutes")
+                await asyncio.sleep(300)
+                consecutive_errors = 0
         
         # Poll every 60 seconds (API rate limit friendly)
         await asyncio.sleep(60)
