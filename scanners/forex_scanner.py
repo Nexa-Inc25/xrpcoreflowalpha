@@ -44,7 +44,7 @@ async def start_forex_scanner():
         return
     
     print(f"[FOREX] Starting scanner for {len(FOREX_PAIRS)} pairs")
-    mark_scanner_connected("forex")
+    await mark_scanner_connected("forex")
     
     last_rates: Dict[str, float] = {}
     last_check = 0

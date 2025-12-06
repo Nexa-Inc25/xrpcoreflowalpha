@@ -37,7 +37,7 @@ async def start_zk_scanner():
     chain_id = w3.eth.chain_id
     chain = "eth" if (chain_id == 1) else str(chain_id)
     print(f"[ZK] Connected. chain_id={chain_id}")
-    mark_scanner_connected("zk_ethereum")
+    await mark_scanner_connected("zk_ethereum")
 
     def _selector(inp: str) -> str:
         try:
@@ -150,7 +150,7 @@ async def start_zk_scanner():
                         except Exception:
                             pass
                     await publish_signal(signal)
-                    record_scanner_signal("zk_ethereum")
+                    await record_scanner_signal("zk_ethereum")
                     processed += 1
                     if processed % 100 == 0:
                         print(f"[ZK] Heartbeat. processed={processed} chain_id={chain_id}")

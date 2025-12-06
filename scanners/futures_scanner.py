@@ -34,7 +34,7 @@ VOLUME_SPIKE_MULT = 2.0   # 2x average volume
 async def start_futures_scanner():
     """Start futures data scanner. Uses Yahoo Finance as free fallback."""
     print("[FUTURES] Starting scanner with Yahoo Finance proxy data")
-    mark_scanner_connected("futures")
+    await mark_scanner_connected("futures")
     
     # Track last prices for change detection
     last_prices: Dict[str, float] = {}
