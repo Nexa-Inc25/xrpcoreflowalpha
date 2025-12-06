@@ -150,6 +150,13 @@ async def _startup():
         asyncio.create_task(start_xrpl_scanner())
         asyncio.create_task(start_trustline_watcher())
         asyncio.create_task(start_xrpl_orderbook_monitor())
+        # Start ledger drift monitor
+        try:
+            from workers.ledger_monitor import start_ledger_monitor
+            await start_ledger_monitor()
+            print("[STARTUP] Ledger drift monitor started")
+        except Exception as e:
+            print(f"[STARTUP] Ledger monitor skipped: {e}")
     asyncio.create_task(start_binance_futures_tracker())
     
     # Multi-asset scanners for cross-market correlation

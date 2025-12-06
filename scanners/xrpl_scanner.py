@@ -14,6 +14,7 @@ from utils.retry import async_retry
 from utils.tx_validate import validate_tx
 from predictors.signal_scorer import enrich_signal_with_score, identify_institution
 from workers.scanner_monitor import mark_scanner_connected, mark_scanner_reconnecting, record_scanner_signal, mark_scanner_error
+from workers.ledger_monitor import update_local_ledger
 import time
 
 
@@ -99,6 +100,8 @@ async def start_xrpl_scanner():
                         try:
                             info = await client.request(ServerInfo())
                             vi = (info.result.get("info", {}).get("validated_ledger", {}) or {}).get("seq") or (info.result.get("info", {}).get("validated_ledger", {}) or {}).get("ledger_index")
+                            if vi:
+                                update_local_ledger(vi)  # Report to ledger monitor
                             print(f"[XRPL] Heartbeat. validated_ledger={vi} processed={processed}")
                         except Exception:
                             print(f"[XRPL] Heartbeat. processed={processed}")

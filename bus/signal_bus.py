@@ -97,6 +97,14 @@ async def publish_signal(signal: Dict[str, Any]) -> None:
             signal = enrich_iso_signal(signal)
     except Exception:
         pass
+    
+    # Add explorer links for transaction verification
+    try:
+        from workers.ledger_monitor import enrich_signal_with_explorer_links
+        signal = enrich_signal_with_explorer_links(signal)
+    except Exception:
+        pass
+    
     data = json.dumps(signal, separators=(",", ":"))
     try:
         await r.xadd("signals", {"json": data}, maxlen=5000, approximate=True)
