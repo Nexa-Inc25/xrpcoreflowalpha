@@ -24,21 +24,25 @@ _COINGECKO_IDS = {
 }
 
 
-@async_retry(max_attempts=5, delay=1, backoff=2)
+@async_retry(max_attempts=3, delay=0.5, backoff=2)
 async def get_price_usd(symbol: str, ttl_seconds: int = 15) -> float:
-    """Fetch USD price for a symbol (xrp|eth), with Redis caching."""
+    """Fetch USD price for a symbol (xrp|eth), with optional Redis caching."""
     symbol = symbol.lower()
     coin_id = _COINGECKO_IDS.get(symbol)
     if not coin_id:
         return 0.0
-    r = await _get_redis()
+    
+    # Try Redis cache first (but don't fail if unavailable)
     cache_key = f"price:{symbol}:usd"
-    cached = await r.get(cache_key)
-    if cached:
-        try:
+    try:
+        r = await _get_redis()
+        cached = await r.get(cache_key)
+        if cached:
             return float(cached)
-        except Exception:
-            pass
+    except Exception:
+        pass  # Redis unavailable, continue without cache
+    
+    # Fetch from CoinGecko
     params = {"ids": coin_id, "vs_currencies": "usd"}
     headers = {"accept": "application/json"}
     if COINGECKO_API_KEY:
@@ -51,12 +55,18 @@ async def get_price_usd(symbol: str, ttl_seconds: int = 15) -> float:
             usd = float(data.get(coin_id, {}).get("usd", 0.0))
     except Exception:
         usd = 0.0
+    
+    # Try to cache (but don't fail if Redis unavailable)
     if usd > 0:
-        await r.set(cache_key, str(usd), ex=ttl_seconds)
+        try:
+            r = await _get_redis()
+            await r.set(cache_key, str(usd), ex=ttl_seconds)
+        except Exception:
+            pass
     return usd
 
 
-@async_retry(max_attempts=5, delay=1, backoff=2)
+@async_retry(max_attempts=3, delay=0.5, backoff=2)
 async def get_price_usd_at(symbol: str, ts_sec: int, ttl_seconds: int = 300) -> float:
     """Fetch historical USD price for a symbol at a specific Unix timestamp (seconds).
     Uses Coingecko market_chart/range and caches results in Redis.
@@ -65,15 +75,19 @@ async def get_price_usd_at(symbol: str, ts_sec: int, ttl_seconds: int = 300) -> 
     coin_id = _COINGECKO_IDS.get(symbol)
     if not coin_id:
         return 0.0
-    r = await _get_redis()
-    bucket = int(ts_sec // 60)  # minute bucket to reduce API calls
+    
+    bucket = int(ts_sec // 60)
     cache_key = f"price_at:{symbol}:{bucket}"
-    cached = await r.get(cache_key)
-    if cached:
-        try:
+    
+    # Try cache first
+    try:
+        r = await _get_redis()
+        cached = await r.get(cache_key)
+        if cached:
             return float(cached)
-        except Exception:
-            pass
+    except Exception:
+        pass
+    
     start = max(0, ts_sec - 600)
     end = ts_sec + 600
     params = {"vs_currency": "usd", "from": start, "to": end}
@@ -97,6 +111,12 @@ async def get_price_usd_at(symbol: str, ts_sec: int, ttl_seconds: int = 300) -> 
         val = float(best[1])
     except Exception:
         val = 0.0
+    
+    # Try to cache
     if val > 0:
-        await r.set(cache_key, str(val), ex=ttl_seconds)
+        try:
+            r = await _get_redis()
+            await r.set(cache_key, str(val), ex=ttl_seconds)
+        except Exception:
+            pass
     return val
