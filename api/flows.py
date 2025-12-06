@@ -17,6 +17,8 @@ async def list_flows(
     min_confidence: Optional[int] = Query(None, ge=0, le=100),
     network: Optional[str] = None,
     tx_hash: Optional[str] = None,
+    raw: bool = Query(False, description="Return raw unprocessed data for alpha extraction"),
+    correlation_asset: Optional[str] = Query(None, description="Filter by correlated asset (e.g., SPY)"),
 ) -> Dict[str, Any]:
     type_list: Optional[List[str]] = None
     if types:
@@ -50,10 +52,24 @@ async def list_flows(
     start = (page - 1) * page_size
     end = start + page_size
     page_items = filtered[start:end]
-    items = [_format_event(s) for s in page_items]
-    return {
+    
+    # Raw mode: return unprocessed data for alpha extraction
+    if raw:
+        items = page_items  # No formatting/scoring
+    else:
+        items = [_format_event(s) for s in page_items]
+    
+    response = {
         "page": page,
         "page_size": page_size,
         "total": total,
         "items": items,
+        "raw_mode": raw,
     }
+    
+    if raw:
+        response["alpha_note"] = "Raw data bypasses ML scoring. Use for custom alpha strategies."
+    if correlation_asset:
+        response["correlation_filter"] = correlation_asset.upper()
+    
+    return response
