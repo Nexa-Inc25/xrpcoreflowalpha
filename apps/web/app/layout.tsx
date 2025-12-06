@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { ClerkProvider } from '@clerk/nextjs';
 import ReactQueryProvider from '../components/ReactQueryProvider';
+import { SidebarProvider } from '../contexts/SidebarContext';
 import AppLayout from '../components/AppLayout';
 import './globals.css';
 
@@ -60,7 +61,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="bg-surface-0 text-slate-100 min-h-screen">
         <ReactQueryProvider>
-          <AppLayout>{children}</AppLayout>
+          <SidebarProvider>
+            <AppLayout>{children}</AppLayout>
+          </SidebarProvider>
         </ReactQueryProvider>
       </body>
     </html>

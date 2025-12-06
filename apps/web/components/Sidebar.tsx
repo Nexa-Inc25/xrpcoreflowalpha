@@ -18,7 +18,7 @@ import {
   Crown,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { useState } from 'react';
+import { useSidebar } from '../contexts/SidebarContext';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: Activity, badge: 'Live' },
@@ -32,7 +32,7 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
+  const { collapsed, toggle } = useSidebar();
   
   const handleSignOut = () => {
     window.location.href = '/sign-in';
@@ -151,7 +151,7 @@ export default function Sidebar() {
 
       {/* Collapse Toggle */}
       <button
-        onClick={() => setCollapsed(!collapsed)}
+        onClick={toggle}
         className="absolute -right-3 top-20 w-6 h-6 rounded-full bg-surface-1 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
       >
         {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
