@@ -119,6 +119,15 @@ async def publish_signal(signal: Dict[str, Any]) -> None:
         pass  # DB module not available
     except Exception as e:
         print(f"[DB] Signal storage failed: {e}")
+    
+    # Send Slack alert for high-confidence signals
+    try:
+        from workers.slack_alerts import process_signal_for_alerts
+        await process_signal_for_alerts(signal)
+    except ImportError:
+        pass
+    except Exception as e:
+        print(f"[SlackAlert] Failed: {e}")
 
 
 async def fetch_recent_signals(window_seconds: int = 900, types: Optional[List[str]] = None) -> List[Dict[str, Any]]:
