@@ -52,6 +52,22 @@ services:
         type: SECRET
       - key: ALERTS_SLACK_WEBHOOK
         type: SECRET
+      - key: WHALE_ALERT_API_KEY
+        type: SECRET
+      - key: REDIS_URL
+        type: SECRET
+      - key: POSTGRES_HOST
+        type: SECRET
+      - key: POSTGRES_PORT
+        value: "25060"
+      - key: POSTGRES_DB
+        type: SECRET
+      - key: POSTGRES_USER
+        type: SECRET
+      - key: POSTGRES_PASSWORD
+        type: SECRET
+      - key: POSTGRES_SSLMODE
+        value: "require"
       - key: APP_ENV
         value: "prod"
 
