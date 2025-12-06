@@ -26,7 +26,7 @@ YAHOO_FUTURES_PROXIES = {
 }
 
 # Thresholds for significant moves
-MOVE_THRESHOLD_PCT = 0.5  # 0.5% move triggers signal
+MOVE_THRESHOLD_PCT = 0.25  # 0.25% move triggers signal (more sensitive)
 VOLUME_SPIKE_MULT = 2.0   # 2x average volume
 
 
@@ -37,7 +37,7 @@ async def start_futures_scanner():
     # Track last prices for change detection
     last_prices: Dict[str, float] = {}
     last_check = 0
-    poll_interval = 30  # seconds
+    poll_interval = 10  # seconds - fast polling for real-time signals
     
     async with httpx.AsyncClient(timeout=15) as client:
         while True:

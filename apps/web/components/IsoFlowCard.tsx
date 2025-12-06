@@ -64,6 +64,15 @@ export default function IsoFlowCard({ event }: IsoFlowCardProps) {
 
   const features = (event.features as any) || {};
   const type = String(event.type || '').toLowerCase();
+  
+  // Use backend-provided ISO analysis if available
+  const isoConfidence = event.iso_confidence || features.iso_confidence;
+  const isoDirection = event.iso_direction || features.iso_direction;
+  const isoExpectedMove = event.iso_expected_move_pct || features.iso_expected_move_pct;
+  const isoTimeframe = event.iso_timeframe || features.iso_timeframe;
+  const isoExplanation = event.iso_explanation || features.iso_explanation;
+  const isoFactors = event.iso_factors || features.iso_factors || [];
+  const isoState = event.iso_state || features.iso_state;
 
   const amountUsd: number | undefined =
     typeof features.iso_amount_usd === 'number'
@@ -219,31 +228,61 @@ export default function IsoFlowCard({ event }: IsoFlowCardProps) {
         </div>
       </div>
 
-      {/* Insight text */}
+      {/* Insight text - use backend explanation if available */}
       <div className="flex items-start gap-3 p-3 rounded-lg bg-surface-1/50 border border-white/5">
         <ArrowRight className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" />
         <p className="text-sm text-slate-300 leading-relaxed">
-          {insight.text}
+          {isoExplanation || insight.text}
         </p>
       </div>
+      
+      {/* Factor breakdown if available */}
+      {isoFactors && isoFactors.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-xs text-slate-500 uppercase tracking-wider">Confidence Factors</p>
+          <div className="grid gap-1">
+            {isoFactors.slice(0, 3).map((factor: any, i: number) => (
+              <div key={i} className="flex items-center justify-between text-xs p-2 rounded bg-surface-1/30">
+                <span className="text-slate-400">{factor.name}</span>
+                <span className={cn(
+                  "font-mono font-medium",
+                  factor.impact?.startsWith('+') ? "text-emerald-400" : "text-red-400"
+                )}>
+                  {factor.impact}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-      {/* Stats row */}
+      {/* Stats row - use backend values if available */}
       <div className="flex items-center justify-between text-sm">
         <div className="flex items-center gap-2 text-slate-400">
           <Clock className="w-4 h-4" />
-          <span>{insight.timeframe}</span>
+          <span>{isoTimeframe || insight.timeframe}</span>
         </div>
         <div className="flex items-center gap-2">
           <Target className="w-4 h-4 text-slate-500" />
           <span className={cn(
             "font-medium tabular-nums",
-            insight.confidence >= 90 ? "text-emerald-400" :
-            insight.confidence >= 75 ? "text-amber-400" : "text-slate-400"
+            (isoConfidence || insight.confidence) >= 70 ? "text-emerald-400" :
+            (isoConfidence || insight.confidence) >= 50 ? "text-amber-400" : "text-slate-400"
           )}>
-            {insight.confidence}% confidence
+            {isoConfidence || insight.confidence}% confidence
           </span>
         </div>
       </div>
+      
+      {/* Expected move */}
+      {isoExpectedMove && (
+        <div className={cn(
+          "text-center py-2 rounded-lg text-sm font-semibold",
+          isoExpectedMove > 0 ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"
+        )}>
+          {isoExpectedMove > 0 ? '↑' : '↓'} {Math.abs(isoExpectedMove).toFixed(1)}% expected move
+        </div>
+      )}
     </div>
   );
 }
