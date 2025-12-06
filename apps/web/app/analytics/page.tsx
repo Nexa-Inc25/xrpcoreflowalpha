@@ -418,8 +418,8 @@ export default function AnalyticsPage() {
             <div className="relative">
               {/* Y-axis labels */}
               <div className="absolute left-0 top-0 bottom-6 w-8 flex flex-col justify-between text-[10px] text-slate-500">
-                <span>{Math.max(...data.dailyPerformance.map(d => d.signals), 10)}</span>
-                <span>{Math.round(Math.max(...data.dailyPerformance.map(d => d.signals), 10) / 2)}</span>
+                <span>{Math.max(...data.dailyPerformance.map((d: { signals: number }) => d.signals), 10)}</span>
+                <span>{Math.round(Math.max(...data.dailyPerformance.map((d: { signals: number }) => d.signals), 10) / 2)}</span>
                 <span>0</span>
               </div>
               
@@ -432,8 +432,8 @@ export default function AnalyticsPage() {
                   <div className="border-t border-white/10" />
                 </div>
                 
-                {data.dailyPerformance.slice(-14).map((day, i) => {
-                  const maxSignals = Math.max(...data.dailyPerformance.map(d => d.signals), 10);
+                {data.dailyPerformance.slice(-14).map((day: { signals: number; hits: number; date: string; hitRate?: number }, i: number) => {
+                  const maxSignals = Math.max(...data.dailyPerformance.map((d: { signals: number }) => d.signals), 10);
                   const signalHeight = (day.signals / maxSignals) * 100;
                   const hitHeight = (day.hits / maxSignals) * 100;
                   
@@ -494,8 +494,10 @@ export default function AnalyticsPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.topSignals.map((signal) => {
-                  const accuracy = ((signal.actualImpact / signal.predictedImpact) * 100).toFixed(0);
+                {data.topSignals.map((signal: { id: number; type: string; asset?: string; confidence: number; predictedImpact?: number; actualImpact?: number; actual_move?: number; summary?: string }) => {
+                  const predicted = signal.predictedImpact || 1;
+                  const actual = signal.actualImpact || signal.actual_move || 0;
+                  const accuracy = ((actual / predicted) * 100).toFixed(0);
                   return (
                     <tr key={signal.id} className="border-b border-white/5 last:border-0">
                       <td className="py-3">

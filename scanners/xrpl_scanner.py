@@ -130,7 +130,7 @@ async def process_xrpl_transaction(msg: Dict[str, Any]):
             value = limit_amount.get("value", "0")
             try:
                 limit_value = float(value)
-            except:
+            except (ValueError, TypeError):
                 limit_value = 0
             # Only report significant trustlines (>1M value)
             if limit_value >= 1_000_000:
