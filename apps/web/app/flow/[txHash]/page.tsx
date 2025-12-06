@@ -255,6 +255,38 @@ export default function FlowDetailPage({ params }: PageProps) {
               </section>
             )}
 
+            {/* Full Event Data - Always visible */}
+            <section className="rounded-xl border border-slate-800 bg-slate-950/80 p-4 text-xs">
+              <h3 className="text-[13px] font-semibold tracking-tight text-slate-100 mb-3">
+                Full Event Data
+              </h3>
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {Object.entries(primary || {}).map(([key, value]) => (
+                  <div key={key} className="flex gap-2 border-b border-slate-800/50 pb-1">
+                    <span className="font-semibold text-slate-400 min-w-[100px] shrink-0">{key}:</span>
+                    <span className="text-slate-200 break-all font-mono text-[11px]">
+                      {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value ?? 'null')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {features && Object.keys(features).length > 0 && (
+                <div className="mt-4 pt-3 border-t border-slate-700">
+                  <h4 className="text-[12px] font-semibold text-slate-300 mb-2">Features (nested)</h4>
+                  <div className="space-y-1">
+                    {Object.entries(features).map(([key, value]) => (
+                      <div key={key} className="flex gap-2">
+                        <span className="font-medium text-sky-400/70 min-w-[120px] shrink-0">{key}:</span>
+                        <span className="text-slate-300 break-all font-mono text-[11px]">
+                          {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value ?? 'null')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+
             {enableEthForecast && (
               <section className="rounded-xl border border-slate-800 bg-slate-950/80 p-4 text-xs">
                 <h3 className="text-[13px] font-semibold tracking-tight text-slate-100">
