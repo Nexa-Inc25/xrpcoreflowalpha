@@ -13,6 +13,7 @@ const EventList = dynamic(() => import('../components/EventList'), { ssr: false 
 const ImpactForecastCard = dynamic(() => import('../components/ImpactForecastCard'), { ssr: false });
 const MacroPanel = dynamic(() => import('../components/MacroPanel'), { ssr: false });
 const MarketStrip = dynamic(() => import('../components/MarketStrip'), { ssr: false });
+const CorrelationHeatmap = dynamic(() => import('../components/CorrelationHeatmap'), { ssr: false });
 
 interface UIChild {
   type: string;
@@ -280,6 +281,9 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
+
+            {/* Multi-Asset Correlation Heatmap */}
+            <CorrelationHeatmap />
           </aside>
         </motion.main>
 
