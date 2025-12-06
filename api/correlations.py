@@ -106,11 +106,12 @@ async def get_raw_alpha(
     Extract raw alpha signals - unfiltered flow data before ML scoring.
     Pro-tier feature for deriving custom trading edges.
     """
-    from bus.signal_bus import get_recent_signals
-    
+    signals = []
     try:
+        from bus.signal_bus import get_recent_signals
         signals = await get_recent_signals(limit=limit * 2)
-    except:
+    except Exception as e:
+        print(f"[RawAlpha] Error fetching signals: {e}")
         signals = []
     
     # Filter for target asset and return raw
