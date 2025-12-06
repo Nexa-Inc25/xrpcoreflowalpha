@@ -18,6 +18,7 @@ export default function FlowDetailPage({ params }: PageProps) {
   const txHash = decodeURIComponent(params.txHash);
   const isPremium = false;
 
+  // Fetch flow data
   const {
     data: flows,
     isLoading,
@@ -27,19 +28,14 @@ export default function FlowDetailPage({ params }: PageProps) {
     queryFn: () => fetchFlowsByTx(txHash),
   });
 
-  if (isLoading) return <div className="min-h-screen bg-slate-950 text-slate-100 p-8 flex items-center justify-center">Loading…</div>;
-  if (error) return <div className="min-h-screen bg-slate-950 text-slate-100 p-8 flex items-center justify-center">Error loading flow</div>;
-
+  // Extract data safely (may be undefined during loading)
   const items = (flows?.items || []) as any[];
   const primary = items[0] || {};
-
-  // Handle case where flow not found in DB (show txHash info anyway)
-  const hasData = items.length > 0;
-
-  const baseType = String(primary?.type || '').toLowerCase();
-  const network = String(primary?.network || primary?.features?.network || '').toLowerCase();
   const features = (primary?.features || {}) as any;
+  const baseType = String(primary?.type || '').toLowerCase();
+  const network = String(primary?.network || features?.network || '').toLowerCase();
 
+  // Determine asset type
   let asset: 'xrp' | 'eth' | null = null;
   if (baseType === 'xrp' || network === 'xrpl') {
     asset = 'xrp';
@@ -47,46 +43,20 @@ export default function FlowDetailPage({ params }: PageProps) {
     asset = 'eth';
   }
 
-  const eventTimeMs = primary?.timestamp
-    ? new Date(primary.timestamp as string).getTime()
-    : null;
+  const enableEthForecast = asset === 'eth';
 
+  // ALL hooks must be called unconditionally (before any early returns)
   const { data: priceHistory } = useQuery({
     queryKey: ['price_history', asset, txHash],
     queryFn: () => fetchAssetPriceHistory(asset!, 1),
-    enabled: !!asset,
+    enabled: !!asset && !isLoading,
     staleTime: 60_000,
   });
-
-  const isoDirection = (features?.iso_direction as string | undefined) || undefined;
-  const isoConf = (features?.iso_confidence as number | undefined) || undefined;
-  const isoMove = (features?.iso_expected_move_pct as number | undefined) || undefined;
-  const isoTf = (features?.iso_timeframe as string | undefined) || undefined;
-  const amountXrp = (features?.amount_xrp as number | undefined) || undefined;
-  const usdValue =
-    (features?.iso_amount_usd as number | undefined) ??
-    (features?.usd_value as number | undefined);
-  const src = (features?.source as string | undefined) || undefined;
-  const dst = (features?.destination as string | undefined) || undefined;
-  const dstTag = features?.destination_tag as number | string | undefined;
-  const backendTxHash =
-    (features?.tx_hash as string | undefined) ||
-    (features?.txHash as string | undefined) ||
-    txHash;
-
-  const explorerUrl =
-    asset === 'xrp'
-      ? `https://livenet.xrpl.org/transactions/${encodeURIComponent(backendTxHash)}`
-      : asset === 'eth'
-      ? `https://etherscan.io/tx/${encodeURIComponent(backendTxHash)}`
-      : undefined;
-
-  const enableEthForecast = asset === 'eth';
 
   const { data: ohlcv } = useQuery({
     queryKey: ['eth_ohlcv_latest'],
     queryFn: fetchEthOhlcvLatest,
-    enabled: enableEthForecast,
+    enabled: enableEthForecast && !isLoading,
   });
 
   const {
@@ -99,8 +69,39 @@ export default function FlowDetailPage({ params }: PageProps) {
       fetchEthCloseForecast(
         ohlcv ?? { open: 0, high: 0, low: 0, volume: 0 },
       ),
-    enabled: enableEthForecast && !!ohlcv,
+    enabled: enableEthForecast && !!ohlcv && !isLoading,
   });
+
+  // Now we can do early returns after all hooks are called
+  if (isLoading) {
+    return <div className="min-h-screen bg-slate-950 text-slate-100 p-8 flex items-center justify-center">Loading…</div>;
+  }
+  if (error) {
+    return <div className="min-h-screen bg-slate-950 text-slate-100 p-8 flex items-center justify-center">Error loading flow</div>;
+  }
+
+  // Derived values (safe to compute after loading check)
+  const eventTimeMs = primary?.timestamp
+    ? new Date(primary.timestamp as string).getTime()
+    : null;
+
+  const isoDirection = features?.iso_direction as string | undefined;
+  const isoConf = features?.iso_confidence as number | undefined;
+  const isoMove = features?.iso_expected_move_pct as number | undefined;
+  const isoTf = features?.iso_timeframe as string | undefined;
+  const amountXrp = features?.amount_xrp as number | undefined;
+  const usdValue = (features?.iso_amount_usd as number | undefined) ?? (features?.usd_value as number | undefined);
+  const src = features?.source as string | undefined;
+  const dst = features?.destination as string | undefined;
+  const dstTag = features?.destination_tag as number | string | undefined;
+  const backendTxHash = features?.tx_hash || features?.txHash || txHash;
+
+  const explorerUrl =
+    asset === 'xrp'
+      ? `https://livenet.xrpl.org/transactions/${encodeURIComponent(backendTxHash)}`
+      : asset === 'eth'
+      ? `https://etherscan.io/tx/${encodeURIComponent(backendTxHash)}`
+      : undefined;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-4">
