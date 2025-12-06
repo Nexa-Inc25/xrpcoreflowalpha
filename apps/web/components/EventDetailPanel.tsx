@@ -214,7 +214,7 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-        className="relative w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-2xl"
+        className="relative w-full max-w-5xl max-h-[95vh] overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -325,7 +325,7 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
         </div>
         
         {/* Content */}
-        <div className="p-5 overflow-y-auto max-h-[400px] bg-slate-900">
+        <div className="p-5 overflow-y-auto max-h-[50vh] bg-slate-900 scrollbar-thin scrollbar-thumb-slate-700">
           <AnimatePresence mode="wait">
             {activeTab === 'chart' && (
               <motion.div
