@@ -20,7 +20,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { cn, formatNumber, formatUSD, timeAgo } from '../../lib/utils';
-import { fetchRecentSignals, fetchFlowHistory, fetchUI } from '../../lib/api';
+import { fetchRecentSignals, fetchFlowHistory, fetchUI, fetchAnalyticsPerformance } from '../../lib/api';
 
 // Process REAL API data into analytics format
 function processRealData(signals: any, flows: any) {
@@ -156,13 +156,24 @@ export default function AnalyticsPage() {
   });
   
   const windowSeconds = timeRange === '7d' ? 604800 : timeRange === '30d' ? 2592000 : 7776000;
+  const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 90;
+  
   const { data: flows, isLoading: flowsLoading } = useQuery({
     queryKey: ['flow-history', windowSeconds],
     queryFn: () => fetchFlowHistory({ page_size: 500, window_seconds: windowSeconds }),
     refetchInterval: 60000,
   });
   
+  // Try to fetch real analytics from database (will return null if DB unavailable)
+  const { data: realAnalytics } = useQuery({
+    queryKey: ['analytics-performance', days],
+    queryFn: () => fetchAnalyticsPerformance(days),
+    refetchInterval: 120000, // Refresh every 2 minutes
+    retry: 1, // Only retry once
+  });
+  
   const isLoading = signalsLoading || flowsLoading || uiLoading;
+  const hasRealAnalytics = realAnalytics && realAnalytics.total_signals > 0;
   
   // Extract events from UI data (nested in EventList component)
   const uiEvents = useMemo(() => {
@@ -171,16 +182,31 @@ export default function AnalyticsPage() {
     return eventList?.events || [];
   }, [uiData]);
   
-  // Process REAL data into analytics format - combine all sources
+  // Process data - use real DB analytics if available, otherwise fallback to signal processing
   const data = useMemo(() => {
+    if (hasRealAnalytics) {
+      // Use real database analytics
+      return {
+        winRates: realAnalytics.win_rates,
+        dailyPerformance: realAnalytics.daily_performance || [],
+        correlationMatrix: [], // Not yet in real data
+        topSignals: realAnalytics.top_signals || [],
+      };
+    }
+    // Fallback to processing signals (for when DB is not available)
     const combinedFlows = { events: [...(flows?.events || []), ...uiEvents] };
     return processRealData(signals, combinedFlows);
-  }, [signals, flows, uiEvents]);
+  }, [signals, flows, uiEvents, hasRealAnalytics, realAnalytics]);
   
-  const totalSignals = data.dailyPerformance.reduce((acc, d) => acc + d.signals, 0);
-  const totalHits = data.dailyPerformance.reduce((acc, d) => acc + d.hits, 0);
+  // Calculate summary stats
+  const totalSignals = hasRealAnalytics 
+    ? realAnalytics.total_signals 
+    : data.dailyPerformance.reduce((acc: number, d: any) => acc + d.signals, 0);
+  const totalHits = data.dailyPerformance.reduce((acc: number, d: any) => acc + d.hits, 0);
   const overallWinRate = totalSignals ? ((totalHits / totalSignals) * 100).toFixed(1) : '0';
-  const avgDailyVolume = data.dailyPerformance.length ? data.dailyPerformance.reduce((acc, d) => acc + d.totalVolume, 0) / data.dailyPerformance.length : 0;
+  const avgDailyVolume = data.dailyPerformance.length 
+    ? data.dailyPerformance.reduce((acc: number, d: any) => acc + (d.totalVolume || 0), 0) / data.dailyPerformance.length 
+    : 0;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -229,10 +255,10 @@ export default function AnalyticsPage() {
         {/* Key Metrics */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {[
-            { label: 'Total Signals', value: totalSignals, icon: Activity, change: '+12%', positive: true },
-            { label: 'Overall Win Rate', value: `${overallWinRate}%`, icon: Target, change: '+3.2%', positive: true },
-            { label: 'Avg Daily Volume', value: formatUSD(avgDailyVolume), icon: TrendingUp, change: '+8%', positive: true },
-            { label: 'High Conf Win Rate', value: `${data.winRates.high.rate}%`, icon: Zap, change: '+1.4%', positive: true },
+            { label: 'Total Signals', value: totalSignals, icon: Activity, subtitle: 'Last 30 days' },
+            { label: 'Signal Win Rate', value: `${overallWinRate}%`, icon: Target, subtitle: 'Based on confidence' },
+            { label: 'Total Volume', value: formatUSD(avgDailyVolume * data.dailyPerformance.length), icon: TrendingUp, subtitle: 'USD detected' },
+            { label: 'High Conf Signals', value: data.winRates.high.total, icon: Zap, subtitle: '70%+ confidence' },
           ].map((metric, i) => (
             <motion.div
               key={metric.label}
@@ -246,13 +272,7 @@ export default function AnalyticsPage() {
                 <metric.icon className="w-4 h-4 text-slate-500" />
               </div>
               <p className="text-2xl font-bold">{metric.value}</p>
-              <div className={cn(
-                "flex items-center gap-1 text-xs mt-1",
-                metric.positive ? "text-emerald-400" : "text-red-400"
-              )}>
-                {metric.positive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                {metric.change} vs prev period
-              </div>
+              <p className="text-xs text-slate-500 mt-1">{metric.subtitle}</p>
             </motion.div>
           ))}
         </div>

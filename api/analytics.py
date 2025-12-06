@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException, Query
 import aiohttp
@@ -8,6 +8,36 @@ from app.config import POLYGON_API_KEY
 from ml.eth_close_forecast import predict_eth_close_payload
 
 router = APIRouter()
+
+# Flag for whether DB is available
+_db_available = False
+
+
+async def check_db_available() -> bool:
+    """Check if database is available for real analytics."""
+    global _db_available
+    try:
+        from db.connection import get_pool
+        pool = await get_pool()
+        _db_available = pool is not None
+    except Exception:
+        _db_available = False
+    return _db_available
+
+
+@router.get("/analytics/performance")
+async def get_performance(days: int = Query(30, ge=1, le=90)) -> Dict[str, Any]:
+    """
+    Get real analytics performance data from the database.
+    Returns actual win rates, daily performance, and signal breakdowns.
+    """
+    try:
+        from db.signals import get_analytics_summary
+        return await get_analytics_summary(days)
+    except ImportError:
+        raise HTTPException(status_code=503, detail="Database module not available")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analytics error: {str(e)}")
 
 
 @router.get("/analytics/eth_close_forecast")

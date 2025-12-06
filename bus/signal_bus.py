@@ -102,6 +102,15 @@ async def publish_signal(signal: Dict[str, Any]) -> None:
         await r.xadd("signals", {"json": data}, maxlen=5000, approximate=True)
     except Exception as e:
         print("[REDIS] xadd failed:", repr(e))
+    
+    # Store signal to database for analytics tracking
+    try:
+        from db.signals import store_signal
+        await store_signal(signal)
+    except ImportError:
+        pass  # DB module not available
+    except Exception as e:
+        print(f"[DB] Signal storage failed: {e}")
 
 
 async def fetch_recent_signals(window_seconds: int = 900, types: Optional[List[str]] = None) -> List[Dict[str, Any]]:

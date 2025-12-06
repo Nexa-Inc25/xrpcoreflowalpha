@@ -117,6 +117,22 @@ async def root_redirect_head():
 
 @app.on_event("startup")
 async def _startup():
+    # Initialize database schema for signal tracking
+    try:
+        from db.schema import init_schema
+        await init_schema()
+        print("[STARTUP] Database schema initialized")
+    except Exception as e:
+        print(f"[STARTUP] Database initialization skipped: {e}")
+    
+    # Start outcome checker worker for analytics
+    try:
+        from workers.outcome_checker import start_outcome_checker
+        await start_outcome_checker()
+        print("[STARTUP] Outcome checker worker started")
+    except Exception as e:
+        print(f"[STARTUP] Outcome checker skipped: {e}")
+    
     # Launch Binance depth worker (non-blocking)
     asyncio.create_task(start_binance_depth_worker())
     if SOLANA_RPC_URL:

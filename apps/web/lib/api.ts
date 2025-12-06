@@ -307,6 +307,18 @@ export async function fetchFlowHistory(params?: {
   return { events: data.items || [] };
 }
 
+// Fetch real analytics performance from database - REAL DATA
+export async function fetchAnalyticsPerformance(days: number = 30): Promise<any> {
+  const res = await fetch(apiBaseTrimmed() + `/analytics/performance?days=${days}`, {
+    headers: { Accept: 'application/json' },
+  });
+  if (!res.ok) {
+    console.warn('Failed to fetch analytics performance, DB may not be available');
+    return null; // Return null to indicate fallback needed
+  }
+  return res.json();
+}
+
 // Fetch historical replay for backtesting - REAL DATA
 export async function fetchHistoryReplay(params: {
   start_ts?: number;
