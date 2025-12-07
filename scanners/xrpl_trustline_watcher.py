@@ -21,16 +21,24 @@ from utils.tx_validate import validate_tx
 
 
 async def _get_dyn_partners() -> set[str]:
-    r = redis.from_url(REDIS_URL, decode_responses=True)
-    xs = await r.smembers("godark:partners:xrpl")
-    return {x for x in (xs or [])}
+    """Get dynamic partners from Redis. Returns empty set if Redis unavailable."""
+    try:
+        r = redis.from_url(REDIS_URL, decode_responses=True)
+        xs = await r.smembers("godark:partners:xrpl")
+        return {x for x in (xs or [])}
+    except Exception:
+        # Redis not available in local dev - use empty set
+        return set()
 
 
 async def start_trustline_watcher():
     if not XRPL_WSS:
         return
     assert ("xrplcluster.com" in XRPL_WSS) or ("ripple.com" in XRPL_WSS), "NON-MAINNET WSS – FATAL ABORT"
-    dyn_partners = await _get_dyn_partners()
+    try:
+        dyn_partners = await _get_dyn_partners()
+    except Exception:
+        dyn_partners = set()
     partners = {a.lower() for a in GODARK_XRPL_PARTNERS} | {a.lower() for a in dyn_partners}
     async with AsyncWebsocketClient(XRPL_WSS) as client:
         @async_retry(max_attempts=5, delay=1, backoff=2)
