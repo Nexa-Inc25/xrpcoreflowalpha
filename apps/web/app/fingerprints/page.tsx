@@ -2,7 +2,8 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Fingerprint, Activity, TrendingUp, Zap, Building2, Clock, Signal } from 'lucide-react';
+import Link from 'next/link';
+import { Fingerprint, Activity, TrendingUp, Zap, Building2, Clock, Signal, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface KnownFingerprint {
@@ -126,9 +127,12 @@ export default function FingerprintsPage() {
             <p className="text-slate-500">Unable to fetch detection data</p>
           ) : detection ? (
             <div className="space-y-4">
-              <div className="flex items-center gap-4">
+              <Link 
+                href={`/fingerprints/${encodeURIComponent(detection.matched_algo)}`}
+                className="flex items-center gap-4 group"
+              >
                 <div className={cn(
-                  "text-3xl font-bold",
+                  "text-3xl font-bold transition-colors group-hover:text-brand-cyan",
                   confidence >= 70 ? "text-emerald-400" : confidence >= 40 ? "text-amber-400" : "text-slate-400"
                 )}>
                   {formatAlgoName(detection.matched_algo)}
@@ -140,7 +144,8 @@ export default function FingerprintsPage() {
                 )}>
                   {getCategory(detection.matched_algo).label}
                 </span>
-              </div>
+                <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-brand-cyan transition-colors" />
+              </Link>
               
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-surface-1/50 rounded-xl p-4">
@@ -198,45 +203,51 @@ export default function FingerprintsPage() {
               const isMatched = detection?.matched_algo === fp.name;
               
               return (
-                <motion.div
-                  key={fp.name}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.05 * i }}
-                  className={cn(
-                    "bg-surface-1/50 rounded-xl p-4 border transition-all",
-                    isMatched 
-                      ? "border-emerald-500/50 bg-emerald-500/10" 
-                      : "border-transparent hover:border-white/10"
-                  )}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Icon className={cn("w-4 h-4", category.color)} />
-                      <span className={cn("text-[10px] uppercase tracking-wider", category.color)}>
-                        {category.label}
-                      </span>
-                    </div>
-                    {isMatched && (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/20 text-emerald-400">
-                        ACTIVE
-                      </span>
+                <Link key={fp.name} href={`/fingerprints/${encodeURIComponent(fp.name)}`}>
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.05 * i }}
+                    className={cn(
+                      "bg-surface-1/50 rounded-xl p-4 border transition-all cursor-pointer group",
+                      isMatched 
+                        ? "border-emerald-500/50 bg-emerald-500/10" 
+                        : "border-transparent hover:border-brand-cyan/30 hover:bg-surface-1"
                     )}
-                  </div>
-                  
-                  <h3 className="font-semibold text-white mb-2">{formatAlgoName(fp.name)}</h3>
-                  
-                  <div className="flex items-center gap-4 text-xs text-slate-400">
-                    <div className="flex items-center gap-1">
-                      <Signal className="w-3 h-3" />
-                      <span className="tabular-nums">{(fp.freq_hz * 1000).toFixed(1)} mHz</span>
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Icon className={cn("w-4 h-4", category.color)} />
+                        <span className={cn("text-[10px] uppercase tracking-wider", category.color)}>
+                          {category.label}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {isMatched && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/20 text-emerald-400">
+                            ACTIVE
+                          </span>
+                        )}
+                        <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-brand-cyan transition-colors" />
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      <span className="tabular-nums">{fp.period_sec.toFixed(1)}s</span>
+                    
+                    <h3 className="font-semibold text-white mb-2 group-hover:text-brand-cyan transition-colors">
+                      {formatAlgoName(fp.name)}
+                    </h3>
+                    
+                    <div className="flex items-center gap-4 text-xs text-slate-400">
+                      <div className="flex items-center gap-1">
+                        <Signal className="w-3 h-3" />
+                        <span className="tabular-nums">{(fp.freq_hz * 1000).toFixed(1)} mHz</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        <span className="tabular-nums">{fp.period_sec.toFixed(1)}s</span>
+                      </div>
                     </div>
-                  </div>
-                </motion.div>
+                  </motion.div>
+                </Link>
               );
             })}
           </div>
