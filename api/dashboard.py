@@ -261,7 +261,7 @@ ALGO_PROFILES: Dict[str, Dict[str, Any]] = {
         ],
         "risk_level": "medium",
         "typical_volume": "$100M - $1B daily",
-        "known_wallets": ["bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"],
+        "known_wallets": [],  # No verified wallets - DO NOT use fake addresses
         "trading_patterns": [
             {"pattern": "Basis Trading", "frequency": "High", "description": "Exploits spot-futures price differences"},
             {"pattern": "Funding Arbitrage", "frequency": "High", "description": "Captures perpetual funding rates"}
@@ -328,10 +328,7 @@ ALGO_PROFILES: Dict[str, Dict[str, Any]] = {
         ],
         "risk_level": "medium",
         "typical_volume": "$100M - $800M daily",
-        "known_wallets": [
-            "0x9B6E3b15a56F8F5aFb5c6f5A0F5c1f0F5c1f0F5c",
-            "0x6260a7BEEF42dFe5f08cF9ff26cf6eCC6E18F9C9"
-        ],
+        "known_wallets": [],  # No verified wallets - remove fake addresses
         "trading_patterns": [
             {"pattern": "MEV Extraction", "frequency": "High", "description": "Front-running and sandwich attacks"},
             {"pattern": "Flashloan Arbitrage", "frequency": "Medium", "description": "Atomic cross-protocol arbitrage"}
@@ -756,20 +753,25 @@ async def get_algo_fingerprint_detail(algo_name: str) -> Dict[str, Any]:
                 "correlations": []
             }
         
-        # Get recent detections from frequency fingerprinter
+        # Get recent detections - only return real data from signal bus
         recent_detections = []
         try:
-            from predictors.frequency_fingerprinter import zk_fingerprinter
-            # Get last 10 detections where this algo was matched
-            for i in range(5):
-                recent_detections.append({
-                    "timestamp": _now_iso(),
-                    "confidence": 60 + (i * 5),  # Placeholder - would come from real detection history
-                    "power": 0.1 + (i * 0.05),
-                    "related_txs": 10 + i * 5
-                })
+            from bus.signal_bus import fetch_recent_signals
+            signals = await fetch_recent_signals(window_seconds=86400)
+            # Filter for signals that matched this algo pattern
+            for sig in signals:
+                if sig.get("algo_match") == algo_name or sig.get("features", {}).get("algo_fingerprint") == algo_name:
+                    recent_detections.append({
+                        "timestamp": sig.get("timestamp", _now_iso()),
+                        "confidence": sig.get("confidence", 0),
+                        "power": sig.get("features", {}).get("power", 0),
+                        "related_txs": 1,
+                        "tx_hash": sig.get("tx_hash") or sig.get("features", {}).get("tx_hash")
+                    })
+                    if len(recent_detections) >= 10:
+                        break
         except Exception:
-            pass
+            pass  # Return empty list if no real data available
         
         return {
             "name": algo_name,
