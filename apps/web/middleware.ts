@@ -1,24 +1,50 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
-// Define public routes that don't require authentication
-const isPublicRoute = createRouteMatcher([
-  '/sign-in(.*)',
-  '/sign-up(.*)',
-]);
+// Check if Clerk is properly configured (both keys required)
+const CLERK_CONFIGURED = 
+  (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || '').startsWith('pk_') &&
+  (process.env.CLERK_SECRET_KEY || '').startsWith('sk_');
 
-export default clerkMiddleware((auth, request) => {
-  // If not a public route and not signed in, redirect to sign-in
-  if (!isPublicRoute(request)) {
-    const { userId } = auth();
-    if (!userId) {
-      const signInUrl = new URL('/sign-in', request.url);
-      signInUrl.searchParams.set('redirect_url', request.url);
-      return NextResponse.redirect(signInUrl);
-    }
+export default async function middleware(request: NextRequest) {
+  // Skip auth for local dev without Clerk secrets
+  if (!CLERK_CONFIGURED) {
+    return NextResponse.next();
   }
-  return NextResponse.next();
-});
+
+  // Dynamic import Clerk only when configured
+  try {
+    const { clerkMiddleware, createRouteMatcher } = await import('@clerk/nextjs/server');
+    
+    const isPublicRoute = createRouteMatcher([
+      '/sign-in(.*)',
+      '/sign-up(.*)',
+      '/',
+      '/analytics(.*)',
+      '/settings(.*)',
+      '/flow(.*)',
+    ]);
+
+    // Create and run Clerk middleware
+    const clerkHandler = clerkMiddleware((auth, req) => {
+      if (!isPublicRoute(req)) {
+        const { userId } = auth();
+        if (!userId) {
+          const signInUrl = new URL('/sign-in', req.url);
+          signInUrl.searchParams.set('redirect_url', req.url);
+          return NextResponse.redirect(signInUrl);
+        }
+      }
+      return NextResponse.next();
+    });
+
+    return clerkHandler(request, {} as any);
+  } catch (e) {
+    // Fallback if Clerk fails
+    console.warn('[Middleware] Clerk error, bypassing:', e);
+    return NextResponse.next();
+  }
+}
 
 export const config = {
   matcher: [

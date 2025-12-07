@@ -559,16 +559,19 @@ export default function SettingsPage() {
                 </h3>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-8 rounded bg-slate-700 flex items-center justify-center text-xs font-bold">
-                      VISA
+                    <div className="w-12 h-8 rounded bg-slate-700/50 border border-dashed border-slate-600 flex items-center justify-center">
+                      <CreditCard className="w-5 h-5 text-slate-500" />
                     </div>
                     <div>
-                      <p className="font-medium">•••• •••• •••• 4242</p>
-                      <p className="text-sm text-slate-400">Expires 12/26</p>
+                      <p className="font-medium text-slate-400">No payment method</p>
+                      <p className="text-sm text-slate-500">Add a card to subscribe</p>
                     </div>
                   </div>
-                  <button className="px-3 py-1.5 rounded-lg bg-surface-2 text-sm font-medium hover:bg-surface-2/80 transition-colors">
-                    Update
+                  <button 
+                    onClick={() => window.open('/api/billing/create-checkout-session', '_blank')}
+                    className="px-3 py-1.5 rounded-lg bg-brand-sky/20 text-brand-sky text-sm font-medium hover:bg-brand-sky/30 transition-colors"
+                  >
+                    Add Card
                   </button>
                 </div>
               </div>

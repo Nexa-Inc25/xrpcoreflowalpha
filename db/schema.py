@@ -5,7 +5,7 @@ Works with both PostgreSQL and SQLite.
 from db.connection import execute, fetchval, is_sqlite
 
 # Schema version for migrations
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # PostgreSQL schema
 SCHEMA_SQL_PG = """
@@ -67,6 +67,59 @@ CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY,
     applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Latency metrics for algo tracking (v2)
+CREATE TABLE IF NOT EXISTS latency_events (
+    id BIGSERIAL PRIMARY KEY,
+    event_id VARCHAR(64) UNIQUE NOT NULL,
+    exchange VARCHAR(32) NOT NULL,
+    symbol VARCHAR(32) NOT NULL,
+    round_trip_ms REAL NOT NULL,
+    is_anomaly BOOLEAN DEFAULT FALSE,
+    anomaly_score REAL DEFAULT 0,
+    order_book_imbalance REAL,
+    bid_depth REAL,
+    ask_depth REAL,
+    spread_bps REAL,
+    cancellation_rate REAL,
+    matched_signature VARCHAR(64),
+    is_hft BOOLEAN DEFAULT FALSE,
+    correlation_xrpl REAL,
+    features JSONB,
+    detected_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS latency_predictions (
+    id BIGSERIAL PRIMARY KEY,
+    prediction_id VARCHAR(64) UNIQUE NOT NULL,
+    exchange VARCHAR(32) NOT NULL,
+    symbol VARCHAR(32) NOT NULL,
+    predicted_latency_ms REAL NOT NULL,
+    actual_latency_ms REAL,
+    confidence_score REAL,
+    is_anomaly_predicted BOOLEAN DEFAULT FALSE,
+    anomaly_probability REAL,
+    model_version VARCHAR(32),
+    contributing_features JSONB,
+    predicted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    verified_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS xgboost_training_logs (
+    id BIGSERIAL PRIMARY KEY,
+    model_version VARCHAR(32) NOT NULL,
+    n_samples INTEGER,
+    train_rmse REAL,
+    train_r2 REAL,
+    best_params JSONB,
+    is_tuned BOOLEAN DEFAULT FALSE,
+    trained_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_latency_detected_at ON latency_events(detected_at DESC);
+CREATE INDEX IF NOT EXISTS idx_latency_exchange ON latency_events(exchange);
+CREATE INDEX IF NOT EXISTS idx_latency_anomaly ON latency_events(is_anomaly);
+CREATE INDEX IF NOT EXISTS idx_predictions_predicted_at ON latency_predictions(predicted_at DESC);
 """
 
 # SQLite schema (simpler, no arrays/jsonb)
@@ -124,10 +177,61 @@ CREATE TABLE IF NOT EXISTS schema_version (
     applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS latency_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT UNIQUE NOT NULL,
+    exchange TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    round_trip_ms REAL NOT NULL,
+    is_anomaly INTEGER DEFAULT 0,
+    anomaly_score REAL DEFAULT 0,
+    order_book_imbalance REAL,
+    bid_depth REAL,
+    ask_depth REAL,
+    spread_bps REAL,
+    cancellation_rate REAL,
+    matched_signature TEXT,
+    is_hft INTEGER DEFAULT 0,
+    correlation_xrpl REAL,
+    features TEXT,
+    detected_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS latency_predictions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    prediction_id TEXT UNIQUE NOT NULL,
+    exchange TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    predicted_latency_ms REAL NOT NULL,
+    actual_latency_ms REAL,
+    confidence_score REAL,
+    is_anomaly_predicted INTEGER DEFAULT 0,
+    anomaly_probability REAL,
+    model_version TEXT,
+    contributing_features TEXT,
+    predicted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    verified_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS xgboost_training_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    model_version TEXT NOT NULL,
+    n_samples INTEGER,
+    train_rmse REAL,
+    train_r2 REAL,
+    best_params TEXT,
+    is_tuned INTEGER DEFAULT 0,
+    trained_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_signals_detected_at ON signals(detected_at);
 CREATE INDEX IF NOT EXISTS idx_signals_type ON signals(type);
 CREATE INDEX IF NOT EXISTS idx_signals_confidence ON signals(confidence);
 CREATE INDEX IF NOT EXISTS idx_outcomes_signal_id ON signal_outcomes(signal_id);
+CREATE INDEX IF NOT EXISTS idx_latency_detected_at ON latency_events(detected_at);
+CREATE INDEX IF NOT EXISTS idx_latency_exchange ON latency_events(exchange);
+CREATE INDEX IF NOT EXISTS idx_latency_anomaly ON latency_events(is_anomaly);
+CREATE INDEX IF NOT EXISTS idx_predictions_predicted_at ON latency_predictions(predicted_at);
 """
 
 

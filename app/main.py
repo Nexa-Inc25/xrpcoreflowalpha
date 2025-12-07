@@ -19,6 +19,7 @@ from api.dashboard import router as dashboard_router
 from api.flows import router as flows_router
 from api.analytics import router as analytics_router
 from api.correlations import router as correlations_router
+from api.latency import router as latency_router
 from fastapi.staticfiles import StaticFiles
 from observability.impact import start_binance_depth_worker
 from api.export import router as export_router
@@ -108,6 +109,7 @@ app.include_router(dashboard_router)
 app.include_router(flows_router)
 app.include_router(analytics_router)
 app.include_router(correlations_router)
+app.include_router(latency_router)
 app.mount("/static", StaticFiles(directory="clients"), name="static")
 app.middleware("http")(api_key_middleware)
 
@@ -167,6 +169,30 @@ async def _startup():
     asyncio.create_task(start_nansen_scanner())    # Nansen: Whale labels, smart money
     asyncio.create_task(start_dune_scanner())      # Dune: DEX volume, stablecoin flows
     asyncio.create_task(run_whale_alert_scanner()) # Whale Alert: Large transfers, confidence
+    
+    # Latency pinger for algo tracking
+    try:
+        from predictors.latency_pinger import start_latency_pinger_worker
+        asyncio.create_task(start_latency_pinger_worker())
+        print("[STARTUP] Latency pinger worker started")
+    except Exception as e:
+        print(f"[STARTUP] Latency pinger skipped: {e}")
+    
+    # XGBoost latency prediction model
+    try:
+        from ml.latency_xgboost import start_latency_prediction_worker
+        asyncio.create_task(start_latency_prediction_worker())
+        print("[STARTUP] XGBoost latency predictor started")
+    except Exception as e:
+        print(f"[STARTUP] XGBoost predictor skipped: {e}")
+    
+    # Slack latency bot for anomaly alerts
+    try:
+        from workers.slack_latency_bot import start_slack_latency_bot
+        asyncio.create_task(start_slack_latency_bot())
+        print("[STARTUP] Slack latency bot started")
+    except Exception as e:
+        print(f"[STARTUP] Slack latency bot skipped: {e}")
     
     if DATABENTO_API_KEY:
         asyncio.create_task(start_databento_macro_tracker())

@@ -70,6 +70,24 @@ services:
         value: "require"
       - key: APP_ENV
         value: "prod"
+      # Latency tracking and XGBoost
+      - key: BINANCE_WS_URL
+        value: "wss://stream.binance.com:9443/ws"
+      - key: LATENCY_PING_INTERVAL
+        value: "5"
+      - key: XGBOOST_RETRAIN_INTERVAL
+        value: "86400"
+      # Educator/course webhook
+      - key: SLACK_EDUCATOR_WEBHOOK_URL
+        type: SECRET
+      # Slack bot token for interactive features
+      - key: SLACK_BOT_TOKEN
+        type: SECRET
+      # Latency alert thresholds
+      - key: MIN_LATENCY_ANOMALY_SCORE
+        value: "75"
+      - key: HFT_LATENCY_THRESHOLD
+        value: "50"
 
 workers:
   - name: worker

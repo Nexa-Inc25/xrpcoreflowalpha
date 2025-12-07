@@ -381,3 +381,174 @@ export async function registerNotifications(token: string): Promise<any> {
   }
   return res.json();
 }
+
+// ============ LATENCY TRACKING API ============
+
+export interface LatencyState {
+  updated_at: string;
+  statistics: {
+    count: number;
+    mean_ms: number;
+    median_ms: number;
+    p95_ms: number;
+    p99_ms: number;
+    min_ms: number;
+    max_ms: number;
+    anomaly_count: number;
+    anomaly_rate: number;
+    total_pings: number;
+  };
+  recent_anomalies: LatencyAnomaly[];
+  status: string;
+  prediction_model?: {
+    is_fitted: boolean;
+    model_version: string;
+    training_rmse: number;
+  };
+}
+
+export interface LatencyAnomaly {
+  timestamp: number;
+  exchange: string;
+  symbol: string;
+  latency_ms: number;
+  anomaly_score: number;
+  imbalance: number;
+  features: {
+    matched_signature?: string;
+    is_spoofing?: boolean;
+    spoof_confidence?: number;
+  };
+}
+
+export interface LatencyPrediction {
+  predicted_latency_ms: number;
+  confidence_score: number;
+  is_anomaly_predicted: boolean;
+  anomaly_probability: number;
+  contributing_features: Record<string, number>;
+  model_version: string;
+  exchange: string;
+  symbol: string;
+  timestamp: number;
+}
+
+export interface HftSignature {
+  name: string;
+  latency_range_ms: { low: number; high: number };
+  avg_ms: number;
+  category: 'hft' | 'mm' | 'retail';
+}
+
+// Fetch latency state with anomaly detection
+export async function fetchLatencyState(params?: {
+  exchange?: string;
+  include_predictions?: boolean;
+}): Promise<LatencyState> {
+  const searchParams = new URLSearchParams();
+  if (params?.exchange) searchParams.set('exchange', params.exchange);
+  if (params?.include_predictions) searchParams.set('include_predictions', 'true');
+  
+  const url = apiBaseTrimmed() + '/dashboard/latency_state?' + searchParams.toString();
+  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!res.ok) {
+    console.warn('Failed to fetch latency state');
+    return {
+      updated_at: new Date().toISOString(),
+      statistics: {
+        count: 0,
+        mean_ms: 0,
+        median_ms: 0,
+        p95_ms: 0,
+        p99_ms: 0,
+        min_ms: 0,
+        max_ms: 0,
+        anomaly_count: 0,
+        anomaly_rate: 0,
+        total_pings: 0,
+      },
+      recent_anomalies: [],
+      status: 'error',
+    };
+  }
+  return res.json();
+}
+
+// Fetch latency anomalies
+export async function fetchLatencyAnomalies(params?: {
+  exchange?: string;
+  limit?: number;
+  min_score?: number;
+}): Promise<{ anomalies: LatencyAnomaly[]; count: number }> {
+  const searchParams = new URLSearchParams();
+  if (params?.exchange) searchParams.set('exchange', params.exchange);
+  if (params?.limit) searchParams.set('limit', params.limit.toString());
+  if (params?.min_score) searchParams.set('min_score', params.min_score.toString());
+  
+  const url = apiBaseTrimmed() + '/latency/anomalies?' + searchParams.toString();
+  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!res.ok) {
+    return { anomalies: [], count: 0 };
+  }
+  return res.json();
+}
+
+// Get XGBoost latency prediction
+export async function fetchLatencyPrediction(params: {
+  exchange: string;
+  symbol: string;
+  bid_ask_imbalance?: number;
+  spread_bps?: number;
+  bid_depth?: number;
+  ask_depth?: number;
+}): Promise<{ prediction: LatencyPrediction }> {
+  const searchParams = new URLSearchParams({
+    exchange: params.exchange,
+    symbol: params.symbol,
+    bid_ask_imbalance: (params.bid_ask_imbalance ?? 0).toString(),
+    spread_bps: (params.spread_bps ?? 10).toString(),
+    bid_depth: (params.bid_depth ?? 1000000).toString(),
+    ask_depth: (params.ask_depth ?? 1000000).toString(),
+  });
+  
+  const url = apiBaseTrimmed() + '/latency/predict?' + searchParams.toString();
+  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!res.ok) {
+    throw new Error('Failed to fetch latency prediction');
+  }
+  return res.json();
+}
+
+// Get known HFT signatures
+export async function fetchHftSignatures(): Promise<{ signatures: HftSignature[] }> {
+  const res = await fetch(apiBaseTrimmed() + '/latency/hft_signatures', {
+    headers: { Accept: 'application/json' },
+  });
+  if (!res.ok) {
+    return { signatures: [] };
+  }
+  return res.json();
+}
+
+// Get XRPL correlation data
+export async function fetchXrplCorrelation(windowMinutes: number = 15): Promise<{
+  latency_events_count: number;
+  latency_anomaly_count: number;
+  xrpl_settlements_count: number;
+  correlation_strength: number;
+  interpretation: string;
+}> {
+  const res = await fetch(apiBaseTrimmed() + `/latency/xrpl_correlation?window_minutes=${windowMinutes}`, {
+    headers: { Accept: 'application/json' },
+  });
+  if (!res.ok) {
+    return {
+      latency_events_count: 0,
+      latency_anomaly_count: 0,
+      xrpl_settlements_count: 0,
+      correlation_strength: 0,
+      interpretation: 'none',
+    };
+  }
+  return res.json();
+}

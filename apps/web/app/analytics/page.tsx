@@ -20,7 +20,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { cn, formatNumber, formatUSD, timeAgo } from '../../lib/utils';
-import { fetchRecentSignals, fetchFlowHistory, fetchUI, fetchAnalyticsPerformance } from '../../lib/api';
+import { fetchRecentSignals, fetchFlowHistory, fetchUI, fetchAnalyticsPerformance, fetchLatencyState, fetchXrplCorrelation, LatencyState, LatencyAnomaly } from '../../lib/api';
 
 // Process REAL API data into analytics format
 function processRealData(signals: any, flows: any) {
@@ -149,6 +149,7 @@ function processRealData(signals: any, flows: any) {
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
   const [selectedMetric, setSelectedMetric] = useState<'signals' | 'winRate' | 'impact'>('winRate');
+  const [activeTab, setActiveTab] = useState<'signals' | 'latency'>('signals');
   
   // Fetch REAL data from API
   const { data: signals = [], isLoading: signalsLoading } = useQuery({
@@ -179,6 +180,21 @@ export default function AnalyticsPage() {
     queryFn: () => fetchAnalyticsPerformance(days),
     refetchInterval: 120000, // Refresh every 2 minutes
     retry: 1, // Only retry once
+  });
+  
+  // Latency tracking data
+  const { data: latencyState, isLoading: latencyLoading } = useQuery({
+    queryKey: ['latency-state'],
+    queryFn: () => fetchLatencyState({ include_predictions: true }),
+    refetchInterval: 10000, // Refresh every 10 seconds
+    enabled: activeTab === 'latency',
+  });
+  
+  const { data: xrplCorrelation } = useQuery({
+    queryKey: ['xrpl-correlation'],
+    queryFn: () => fetchXrplCorrelation(15),
+    refetchInterval: 30000,
+    enabled: activeTab === 'latency',
   });
   
   const isLoading = signalsLoading || flowsLoading || uiLoading;
@@ -237,6 +253,24 @@ export default function AnalyticsPage() {
           </div>
           
           <div className="flex items-center gap-3">
+            {/* Tab Selector */}
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-1 border border-white/5">
+              {(['signals', 'latency'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors capitalize",
+                    activeTab === tab 
+                      ? "bg-brand-purple/20 text-brand-purple" 
+                      : "text-slate-400 hover:text-white"
+                  )}
+                >
+                  {tab === 'latency' ? '⚡ Latency' : '📊 Signals'}
+                </button>
+              ))}
+            </div>
+            
             {/* Time Range Selector */}
             <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-1 border border-white/5">
               {(['7d', '30d', '90d'] as const).map((range) => (
@@ -261,6 +295,229 @@ export default function AnalyticsPage() {
           </div>
         </motion.div>
 
+        {/* Conditional Content Based on Tab */}
+        {activeTab === 'latency' ? (
+          /* ============ LATENCY TAB ============ */
+          <>
+            {/* Latency Key Metrics */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              {[
+                { 
+                  label: 'Total Pings', 
+                  value: latencyState?.statistics?.total_pings || 0, 
+                  icon: Activity, 
+                  subtitle: 'Lifetime measurements' 
+                },
+                { 
+                  label: 'Mean Latency', 
+                  value: `${(latencyState?.statistics?.mean_ms || 0).toFixed(1)}ms`, 
+                  icon: Clock, 
+                  subtitle: 'Average round-trip',
+                  highlight: (latencyState?.statistics?.mean_ms || 0) < 50
+                },
+                { 
+                  label: 'Anomaly Rate', 
+                  value: `${((latencyState?.statistics?.anomaly_rate || 0) * 100).toFixed(1)}%`, 
+                  icon: Zap, 
+                  subtitle: 'HFT detections',
+                  highlight: (latencyState?.statistics?.anomaly_rate || 0) > 0.1
+                },
+                { 
+                  label: 'XRPL Correlation', 
+                  value: xrplCorrelation?.interpretation || 'none', 
+                  icon: TrendingUp, 
+                  subtitle: `${xrplCorrelation?.correlation_strength ? (xrplCorrelation.correlation_strength * 100).toFixed(0) : 0}% strength` 
+                },
+              ].map((metric, i) => (
+                <motion.div
+                  key={metric.label}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.1 }}
+                  className={cn(
+                    "glass-card p-4 rounded-xl",
+                    (metric as any).highlight && "ring-1 ring-amber-500/30"
+                  )}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-slate-400 uppercase tracking-wider">{metric.label}</span>
+                    <metric.icon className={cn(
+                      "w-4 h-4",
+                      (metric as any).highlight ? "text-amber-400" : "text-slate-500"
+                    )} />
+                  </div>
+                  <p className={cn(
+                    "text-2xl font-bold",
+                    (metric as any).highlight && "text-amber-400"
+                  )}>{metric.value}</p>
+                  <p className="text-xs text-slate-500 mt-1">{metric.subtitle}</p>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Latency Distribution & Anomalies */}
+            <div className="grid lg:grid-cols-3 gap-6 mb-8">
+              {/* Latency Stats */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="glass-card p-5 rounded-xl"
+              >
+                <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-brand-sky" />
+                  Latency Distribution
+                </h3>
+                <div className="space-y-3">
+                  {[
+                    { label: 'Minimum', value: latencyState?.statistics?.min_ms || 0, color: 'emerald' },
+                    { label: 'Median', value: latencyState?.statistics?.median_ms || 0, color: 'sky' },
+                    { label: 'P95', value: latencyState?.statistics?.p95_ms || 0, color: 'amber' },
+                    { label: 'P99', value: latencyState?.statistics?.p99_ms || 0, color: 'red' },
+                    { label: 'Maximum', value: latencyState?.statistics?.max_ms || 0, color: 'purple' },
+                  ].map((stat) => (
+                    <div key={stat.label} className="flex items-center justify-between">
+                      <span className="text-sm text-slate-400">{stat.label}</span>
+                      <span className={cn(
+                        "text-sm font-mono",
+                        stat.color === 'emerald' && "text-emerald-400",
+                        stat.color === 'sky' && "text-brand-sky",
+                        stat.color === 'amber' && "text-amber-400",
+                        stat.color === 'red' && "text-red-400",
+                        stat.color === 'purple' && "text-purple-400",
+                      )}>
+                        {stat.value.toFixed(1)}ms
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {latencyState?.prediction_model && (
+                  <div className="mt-4 pt-4 border-t border-white/5">
+                    <p className="text-xs text-slate-500">
+                      XGBoost Model: {latencyState.prediction_model.model_version}
+                      {latencyState.prediction_model.is_fitted && (
+                        <span className="ml-2 text-emerald-400">● Active</span>
+                      )}
+                    </p>
+                    {latencyState.prediction_model.training_rmse > 0 && (
+                      <p className="text-xs text-slate-500 mt-1">
+                        Training RMSE: {latencyState.prediction_model.training_rmse.toFixed(2)}ms
+                      </p>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+
+              {/* Recent Anomalies */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="glass-card p-5 rounded-xl lg:col-span-2"
+              >
+                <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-amber-400" />
+                  Recent HFT Anomalies
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-white/5">
+                        <th className="text-left text-slate-400 font-medium pb-2">Exchange</th>
+                        <th className="text-left text-slate-400 font-medium pb-2">Symbol</th>
+                        <th className="text-center text-slate-400 font-medium pb-2">Latency</th>
+                        <th className="text-center text-slate-400 font-medium pb-2">Score</th>
+                        <th className="text-center text-slate-400 font-medium pb-2">Signature</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(latencyState?.recent_anomalies || []).slice(0, 5).map((anomaly, i) => (
+                        <tr key={i} className="border-b border-white/5 last:border-0">
+                          <td className="py-2 text-slate-300 uppercase text-xs">{anomaly.exchange}</td>
+                          <td className="py-2 font-medium">{anomaly.symbol}</td>
+                          <td className="py-2 text-center">
+                            <span className={cn(
+                              "font-mono",
+                              anomaly.latency_ms < 20 ? "text-red-400" :
+                              anomaly.latency_ms < 50 ? "text-amber-400" :
+                              "text-slate-400"
+                            )}>
+                              {anomaly.latency_ms.toFixed(1)}ms
+                            </span>
+                          </td>
+                          <td className="py-2 text-center">
+                            <span className={cn(
+                              "px-2 py-0.5 rounded-full text-xs",
+                              anomaly.anomaly_score >= 90 ? "bg-red-500/20 text-red-400" :
+                              anomaly.anomaly_score >= 75 ? "bg-amber-500/20 text-amber-400" :
+                              "bg-slate-500/20 text-slate-400"
+                            )}>
+                              {anomaly.anomaly_score.toFixed(0)}%
+                            </span>
+                          </td>
+                          <td className="py-2 text-center text-xs text-slate-400">
+                            {anomaly.features?.matched_signature?.replace('_', ' ') || 'unknown'}
+                          </td>
+                        </tr>
+                      ))}
+                      {(!latencyState?.recent_anomalies || latencyState.recent_anomalies.length === 0) && (
+                        <tr>
+                          <td colSpan={5} className="py-8 text-center text-slate-500">
+                            No anomalies detected yet. Latency pinger is monitoring...
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </motion.div>
+            </div>
+
+            {/* XRPL Correlation Panel */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="glass-card p-5 rounded-xl mb-8"
+            >
+              <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-emerald-400" />
+                Futures ↔ XRPL Correlation (15min window)
+              </h3>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="p-3 rounded-lg bg-surface-2">
+                  <p className="text-xs text-slate-500 mb-1">Latency Events</p>
+                  <p className="text-xl font-bold">{xrplCorrelation?.latency_events_count || 0}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-surface-2">
+                  <p className="text-xs text-slate-500 mb-1">HFT Anomalies</p>
+                  <p className="text-xl font-bold text-amber-400">{xrplCorrelation?.latency_anomaly_count || 0}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-surface-2">
+                  <p className="text-xs text-slate-500 mb-1">XRPL Settlements</p>
+                  <p className="text-xl font-bold text-brand-sky">{xrplCorrelation?.xrpl_settlements_count || 0}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-surface-2">
+                  <p className="text-xs text-slate-500 mb-1">Correlation</p>
+                  <p className={cn(
+                    "text-xl font-bold capitalize",
+                    xrplCorrelation?.interpretation === 'strong' && "text-emerald-400",
+                    xrplCorrelation?.interpretation === 'moderate' && "text-amber-400",
+                    xrplCorrelation?.interpretation === 'weak' && "text-slate-400",
+                  )}>
+                    {xrplCorrelation?.interpretation || 'none'}
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500 mt-4">
+                Correlation tracks how futures/equities HFT latency spikes correlate with XRP settlement flows. 
+                Strong correlation indicates institutional algo activity routing to XRPL.
+              </p>
+            </motion.div>
+          </>
+        ) : (
+          /* ============ SIGNALS TAB ============ */
+          <>
         {/* Key Metrics */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {[
@@ -543,6 +800,8 @@ export default function AnalyticsPage() {
             </table>
           </div>
         </motion.div>
+          </>
+        )}
       </div>
     </div>
   );
