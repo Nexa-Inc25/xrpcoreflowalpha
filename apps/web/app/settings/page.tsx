@@ -444,40 +444,87 @@ export default function SettingsPage() {
               exit={{ opacity: 0, y: -10 }}
               className="space-y-6"
             >
-              {/* Current Plan */}
-              <div className="glass-card p-6 rounded-xl border-2 border-amber-500/30">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 flex items-center justify-center">
-                      <Crown className="w-6 h-6 text-amber-400" />
+              {/* Upgrade Plans */}
+              <div className="grid gap-4 md:grid-cols-2">
+                {/* Pro Plan */}
+                <div className="glass-card p-6 rounded-xl border-2 border-brand-sky/30 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 px-3 py-1 bg-brand-sky text-white text-xs font-medium rounded-bl-lg">
+                    Popular
+                  </div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-brand-sky/20 flex items-center justify-center">
+                      <Zap className="w-5 h-5 text-brand-sky" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold">Pro Plan</h3>
-                      <p className="text-slate-400">$99/month • Billed monthly</p>
+                      <h3 className="font-semibold">Pro Plan</h3>
+                      <p className="text-slate-400 text-sm">$79/month</p>
                     </div>
                   </div>
-                  <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-sm font-medium">
-                    Active
-                  </span>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div className="p-3 rounded-lg bg-surface-2/50">
-                    <p className="text-xs text-slate-400 mb-1">Next billing date</p>
-                    <p className="font-medium">Jan 5, 2025</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-surface-2/50">
-                    <p className="text-xs text-slate-400 mb-1">API calls this month</p>
-                    <p className="font-medium">12,847 / Unlimited</p>
-                  </div>
+                  <ul className="space-y-2 mb-4 text-sm">
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Unlimited flow detection</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Real-time alerts</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> API access</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> 90-day history</li>
+                  </ul>
+                  <button
+                    onClick={async () => {
+                      const base = process.env.NEXT_PUBLIC_API_BASE || 'https://api.zkalphaflow.com';
+                      const res = await fetch(`${base}/billing/create-checkout-session`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          tier: 'pro',
+                          success_url: window.location.origin + '/settings?success=1',
+                          cancel_url: window.location.origin + '/settings?canceled=1',
+                        }),
+                      });
+                      const data = await res.json();
+                      if (data.checkout_url) window.location.href = data.checkout_url;
+                    }}
+                    className="w-full py-2.5 rounded-lg bg-brand-sky text-white font-medium hover:bg-brand-sky/90 transition-colors"
+                  >
+                    Upgrade to Pro
+                  </button>
                 </div>
 
-                <div className="flex gap-3">
-                  <button className="px-4 py-2 rounded-lg bg-surface-2 text-sm font-medium hover:bg-surface-2/80 transition-colors">
-                    Manage Subscription
-                  </button>
-                  <button className="px-4 py-2 rounded-lg bg-surface-2 text-sm font-medium hover:bg-surface-2/80 transition-colors">
-                    View Invoices
+                {/* Institutional Plan */}
+                <div className="glass-card p-6 rounded-xl border-2 border-amber-500/30 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 px-3 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-medium rounded-bl-lg">
+                    Enterprise
+                  </div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
+                      <Crown className="w-5 h-5 text-amber-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">Institutional</h3>
+                      <p className="text-slate-400 text-sm">$199/month</p>
+                    </div>
+                  </div>
+                  <ul className="space-y-2 mb-4 text-sm">
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Everything in Pro</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Raw alpha signals API</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Data export</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Priority support</li>
+                  </ul>
+                  <button
+                    onClick={async () => {
+                      const base = process.env.NEXT_PUBLIC_API_BASE || 'https://api.zkalphaflow.com';
+                      const res = await fetch(`${base}/billing/create-checkout-session`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          tier: 'institutional',
+                          success_url: window.location.origin + '/settings?success=1',
+                          cancel_url: window.location.origin + '/settings?canceled=1',
+                        }),
+                      });
+                      const data = await res.json();
+                      if (data.checkout_url) window.location.href = data.checkout_url;
+                    }}
+                    className="w-full py-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium hover:opacity-90 transition-opacity"
+                  >
+                    Upgrade to Institutional
                   </button>
                 </div>
               </div>

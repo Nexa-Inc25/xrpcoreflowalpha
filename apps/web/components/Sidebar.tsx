@@ -16,12 +16,14 @@ import {
   ChevronRight,
   LogOut,
   Crown,
+  Fingerprint,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useSidebar } from '../contexts/SidebarContext';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: Activity, badge: 'Live' },
+  { href: '/fingerprints', label: 'Algo Fingerprints', icon: Fingerprint },
   { href: '/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/backtest', label: 'Backtest', icon: TrendingUp },
   { href: '/watchlist', label: 'Watchlist', icon: Star },
