@@ -7,10 +7,25 @@ import asyncio
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request, HTTPException
 import httpx
 
 router = APIRouter()
+
+
+async def require_pro_tier(request: Request) -> bool:
+    """Check if user has Pro tier subscription. Returns True if allowed."""
+    # Check middleware-resolved tier
+    tier = getattr(request.state, "user_tier", None) or ""
+    if tier.lower() in ("pro", "institutional"):
+        return True
+    
+    # Check header override for dev
+    header_tier = request.headers.get("X-Plan", "").lower()
+    if header_tier in ("pro", "institutional"):
+        return True
+    
+    return False
 
 # CoinGecko ID mapping
 COINGECKO_IDS = {
@@ -173,6 +188,7 @@ async def get_correlation_heatmap(
 
 @router.get("/analytics/raw-alpha")
 async def get_raw_alpha(
+    request: Request,
     asset: str = Query("xrp", description="Target asset"),
     limit: int = Query(20, description="Number of signals")
 ) -> Dict[str, Any]:
@@ -180,6 +196,18 @@ async def get_raw_alpha(
     Extract raw alpha signals - unfiltered flow data before ML scoring.
     Pro-tier feature for deriving custom trading edges.
     """
+    # Check Pro tier access
+    is_pro = await require_pro_tier(request)
+    if not is_pro:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "Pro subscription required",
+                "message": "Raw alpha signals are available to Pro tier subscribers only.",
+                "upgrade_url": "https://zkalphaflow.com/settings"
+            }
+        )
+    
     signals = []
     try:
         from bus.signal_bus import get_recent_signals
