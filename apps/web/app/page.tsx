@@ -14,6 +14,7 @@ const ImpactForecastCard = dynamic(() => import('../components/ImpactForecastCar
 const MacroPanel = dynamic(() => import('../components/MacroPanel'), { ssr: false });
 const MarketStrip = dynamic(() => import('../components/MarketStrip'), { ssr: false });
 const CorrelationHeatmap = dynamic(() => import('../components/CorrelationHeatmap'), { ssr: false });
+const AlgoFingerprintCard = dynamic(() => import('../components/AlgoFingerprintCard'), { ssr: false });
 
 interface UIChild {
   type: string;
@@ -281,6 +282,9 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
+
+            {/* Algo Fingerprint Detection */}
+            <AlgoFingerprintCard />
 
             {/* Multi-Asset Correlation Heatmap */}
             <CorrelationHeatmap />
