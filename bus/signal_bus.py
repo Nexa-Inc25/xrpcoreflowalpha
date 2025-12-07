@@ -14,6 +14,7 @@ from observability.metrics import zk_flow_confidence_score
 from predictors.xrp_iso_predictor import enrich_iso_signal
 
 _redis: Optional[redis.Redis] = None
+_redis_warned: bool = False  # Only warn once about Redis connection issues
 
 
 async def _get_redis() -> redis.Redis:
@@ -21,6 +22,14 @@ async def _get_redis() -> redis.Redis:
     if _redis is None:
         _redis = redis.from_url(REDIS_URL, decode_responses=True)
     return _redis
+
+
+def _redis_error(op: str, e: Exception) -> None:
+    """Log Redis error only once to avoid spam."""
+    global _redis_warned
+    if not _redis_warned:
+        print(f"[REDIS] {op} failed (suppressing future warnings): {type(e).__name__}")
+        _redis_warned = True
 
 
 def _safe_get(obj: Any, key: str, default: Any = None) -> Any:
@@ -109,7 +118,7 @@ async def publish_signal(signal: Dict[str, Any]) -> None:
     try:
         await r.xadd("signals", {"json": data}, maxlen=5000, approximate=True)
     except Exception as e:
-        print("[REDIS] xadd failed:", repr(e))
+        _redis_error("xadd", e)
     
     # Store signal to database for analytics tracking
     try:
@@ -138,7 +147,7 @@ async def fetch_recent_signals(window_seconds: int = 900, types: Optional[List[s
     try:
         rows = await r.xrange("signals", min=start_id, max="+")
     except Exception as e:
-        print("[REDIS] xrange failed:", repr(e))
+        _redis_error("xrange", e)
         rows = []
     out: List[Dict[str, Any]] = []
     for _, fields in rows:
@@ -169,7 +178,7 @@ async def fetch_recent_cross_signals(limit: int = 10) -> List[Dict[str, Any]]:
     try:
         rows = await r.xrevrange("cross_signals", max="+", min="-", count=limit)
     except Exception as e:
-        print("[REDIS] xrevrange failed:", repr(e))
+        _redis_error("xrevrange", e)
         rows = []
     out: List[Dict[str, Any]] = []
     for _, fields in rows:
