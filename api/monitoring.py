@@ -587,10 +587,25 @@ async def trigger_outcome_check() -> Dict[str, Any]:
         "intervals_checked": [],
         "total_processed": 0,
         "errors": [],
+        "debug": {},
     }
     
     try:
+        from db.connection import is_sqlite
+        from db.signals import get_signals_pending_outcome
         from workers.outcome_checker import check_outcomes_for_interval
+        
+        results["debug"]["is_sqlite"] = is_sqlite()
+        
+        # Test if we can find pending signals
+        test_signals = await get_signals_pending_outcome(1, limit=3)
+        results["debug"]["test_signals_found"] = len(test_signals)
+        if test_signals:
+            results["debug"]["sample_signal"] = {
+                "id": test_signals[0].get("signal_id", "?")[:20],
+                "type": test_signals[0].get("type"),
+                "detected_at": str(test_signals[0].get("detected_at")),
+            }
         
         for interval in [1, 4, 12, 24]:
             try:
@@ -604,7 +619,9 @@ async def trigger_outcome_check() -> Dict[str, Any]:
                 results["errors"].append(f"{interval}h: {str(e)}")
         
     except Exception as e:
-        results["errors"].append(f"Import error: {str(e)}")
+        import traceback
+        results["errors"].append(f"Error: {str(e)}")
+        results["debug"]["traceback"] = traceback.format_exc()
     
     return results
 
