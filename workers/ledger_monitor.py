@@ -55,6 +55,8 @@ class LedgerMonitor:
         self.state = LedgerState()
         self._callbacks = []
         self._running = False
+        self._last_alert_level = None  # Track to avoid spam
+        self._alert_suppressed_until = 0  # Suppress repeated alerts
     
     def update_local_ledger(self, ledger_index: int):
         """Update local ledger index from scanner."""
@@ -83,12 +85,28 @@ class LedgerMonitor:
             self.state.drift = self.state.remote_ledger - self.state.local_ledger
             self.state.is_synced = abs(self.state.drift) <= self.DRIFT_WARNING
             
+            now = time.time()
+            
+            # Determine alert level
             if abs(self.state.drift) > self.DRIFT_CRITICAL:
-                print(f"[LedgerMonitor] CRITICAL: Ledger drift {self.state.drift} exceeds threshold!")
-                self._trigger_callbacks("critical", self.state.drift)
+                level = "critical"
             elif abs(self.state.drift) > self.DRIFT_WARNING:
-                print(f"[LedgerMonitor] WARNING: Ledger drift {self.state.drift}")
-                self._trigger_callbacks("warning", self.state.drift)
+                level = "warning"
+            else:
+                level = "ok"
+                self._last_alert_level = None  # Reset when synced
+                return
+            
+            # Only alert if level changed or suppression expired (5 min)
+            if level != self._last_alert_level or now > self._alert_suppressed_until:
+                if level == "critical":
+                    print(f"[LedgerMonitor] CRITICAL: Ledger drift {self.state.drift} (reconnect needed)")
+                else:
+                    print(f"[LedgerMonitor] WARNING: Ledger drift {self.state.drift}")
+                
+                self._trigger_callbacks(level, self.state.drift)
+                self._last_alert_level = level
+                self._alert_suppressed_until = now + 300  # Suppress for 5 min
     
     def _trigger_callbacks(self, level: str, drift: int):
         """Trigger registered drift callbacks."""

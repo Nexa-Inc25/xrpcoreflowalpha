@@ -63,9 +63,20 @@ async def start_xrpl_scanner():
                 print(f"[XRPL] Reconnecting (attempt {reconnect_count})...")
             
             async with AsyncWebsocketClient(XRPL_WSS) as client:
-                @async_retry(max_attempts=5, delay=1, backoff=2)
+                # Track connection state
+                _connection_dead = False
+                
+                @async_retry(max_attempts=3, delay=1, backoff=2)
                 async def _req(payload):
-                    return await client.request(payload)
+                    nonlocal _connection_dead
+                    if _connection_dead:
+                        raise ConnectionError("Connection marked dead")
+                    try:
+                        return await client.request(payload)
+                    except Exception as e:
+                        if "not open" in str(e).lower() or "closed" in str(e).lower():
+                            _connection_dead = True
+                        raise
                 
                 # Server info log on startup
                 try:
@@ -77,20 +88,33 @@ async def start_xrpl_scanner():
                 
                 # Mark as connected
                 await mark_scanner_connected("xrpl")
+                reconnect_count = 0  # Reset on successful connect
                 
                 await _req(Subscribe(streams=["transactions"]))
                 
                 async def _keepalive():
-                    while True:
+                    nonlocal _connection_dead
+                    consecutive_fails = 0
+                    while not _connection_dead:
                         try:
                             await _req(ServerInfo())
-                        except Exception:
-                            pass
+                            consecutive_fails = 0
+                        except Exception as e:
+                            consecutive_fails += 1
+                            if consecutive_fails >= 3 or "not open" in str(e).lower():
+                                _connection_dead = True
+                                print(f"[XRPL] Keepalive detected dead connection")
+                                break
                         await asyncio.sleep(20)
                 asyncio.create_task(_keepalive())
                 
                 processed = 0
                 async for msg in client:
+                    # Check if connection died
+                    if _connection_dead:
+                        print("[XRPL] Connection dead, breaking loop for reconnect")
+                        break
+                    
                     if isinstance(msg, dict) and msg.get("status") == "success":
                         continue
                     await process_xrpl_transaction(msg)
@@ -103,7 +127,10 @@ async def start_xrpl_scanner():
                             if vi:
                                 update_local_ledger(vi)  # Report to ledger monitor
                             print(f"[XRPL] Heartbeat. validated_ledger={vi} processed={processed}")
-                        except Exception:
+                        except Exception as e:
+                            if "not open" in str(e).lower():
+                                _connection_dead = True
+                                break
                             print(f"[XRPL] Heartbeat. processed={processed}")
         
         except Exception as e:
