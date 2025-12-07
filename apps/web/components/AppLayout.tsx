@@ -1,6 +1,8 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { Menu, X } from 'lucide-react';
 import Sidebar from './Sidebar';
 import { useSidebar } from '../contexts/SidebarContext';
 
@@ -9,8 +11,16 @@ const noSidebarPaths = ['/sign-in', '/sign-up'];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { collapsed } = useSidebar();
+  const { collapsed, mobileOpen, toggleMobile } = useSidebar();
   const showSidebar = !noSidebarPaths.some(path => pathname?.startsWith(path));
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const checkDesktop = () => setIsDesktop(window.innerWidth >= 1024);
+    checkDesktop();
+    window.addEventListener('resize', checkDesktop);
+    return () => window.removeEventListener('resize', checkDesktop);
+  }, []);
 
   if (!showSidebar) {
     return <>{children}</>;
@@ -18,11 +28,31 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen">
+      {/* Mobile header with menu button */}
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 h-14 bg-surface-0/95 backdrop-blur-lg border-b border-white/5 flex items-center px-4">
+        <button
+          onClick={toggleMobile}
+          className="p-2 -ml-2 rounded-lg hover:bg-white/5 text-slate-400"
+        >
+          {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
+        <span className="ml-3 font-semibold text-white">ZK Alpha Flow</span>
+      </header>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div 
+          className="lg:hidden fixed inset-0 z-30 bg-black/60 backdrop-blur-sm"
+          onClick={toggleMobile}
+        />
+      )}
+
       <Sidebar />
-      {/* Main content with responsive left margin - 240px expanded, 72px collapsed */}
+      
+      {/* Main content - no margin on mobile, responsive margin on desktop */}
       <main 
-        className="min-h-screen transition-all duration-200"
-        style={{ marginLeft: collapsed ? 72 : 240 }}
+        className="min-h-screen transition-all duration-200 pt-14 lg:pt-0"
+        style={{ marginLeft: isDesktop ? (collapsed ? 72 : 240) : 0 }}
       >
         {children}
       </main>

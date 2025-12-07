@@ -32,10 +32,15 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { collapsed, toggle } = useSidebar();
+  const { collapsed, toggle, mobileOpen, setMobileOpen } = useSidebar();
   
   const handleSignOut = () => {
     window.location.href = '/sign-in';
+  };
+
+  // Close mobile menu when navigating
+  const handleNavClick = () => {
+    setMobileOpen(false);
   };
 
   return (
@@ -43,7 +48,11 @@ export default function Sidebar() {
       initial={false}
       animate={{ width: collapsed ? 72 : 240 }}
       transition={{ duration: 0.2 }}
-      className="fixed left-0 top-0 h-screen z-40 flex flex-col border-r border-white/5 bg-surface-0/80 backdrop-blur-xl"
+      className={cn(
+        "fixed left-0 top-0 h-screen z-40 flex flex-col border-r border-white/5 bg-surface-0/95 backdrop-blur-xl transition-transform duration-200",
+        "lg:translate-x-0",
+        mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+      )}
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 h-16 border-b border-white/5">
@@ -71,6 +80,7 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={handleNavClick}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group relative",
                 isActive
