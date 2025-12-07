@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import {
   Zap,
   BarChart3,
@@ -21,13 +22,13 @@ import {
 import { cn } from '../lib/utils';
 import { useSidebar } from '../contexts/SidebarContext';
 
-const navItems = [
+const baseNavItems = [
   { href: '/', label: 'Dashboard', icon: Activity, badge: 'Live' },
   { href: '/fingerprints', label: 'Algo Fingerprints', icon: Fingerprint },
   { href: '/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/backtest', label: 'Backtest', icon: TrendingUp },
   { href: '/watchlist', label: 'Watchlist', icon: Star },
-  { href: '/alerts', label: 'Alerts', icon: Bell, badge: '3' },
+  { href: '/alerts', label: 'Alerts', icon: Bell }, // Badge fetched from API
   { href: '/wallets', label: 'Wallets', icon: Wallet },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
@@ -35,6 +36,26 @@ const navItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { collapsed, toggle, mobileOpen, setMobileOpen } = useSidebar();
+  
+  // Fetch real alert count from API
+  const { data: alertData } = useQuery({
+    queryKey: ['system_alerts'],
+    queryFn: async () => {
+      const base = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8010';
+      const res = await fetch(`${base}/admin/alerts`);
+      if (!res.ok) return { alert_count: 0 };
+      return res.json();
+    },
+    refetchInterval: 30_000,
+  });
+  
+  // Build nav items with real alert count
+  const navItems = baseNavItems.map(item => {
+    if (item.href === '/alerts' && alertData?.alert_count > 0) {
+      return { ...item, badge: String(alertData.alert_count) };
+    }
+    return item;
+  });
   
   const handleSignOut = () => {
     window.location.href = '/sign-in';
