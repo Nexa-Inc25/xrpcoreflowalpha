@@ -49,9 +49,9 @@ export default function Sidebar() {
       animate={{ width: collapsed ? 72 : 240 }}
       transition={{ duration: 0.2 }}
       className={cn(
-        "fixed left-0 top-0 h-screen z-40 flex flex-col border-r border-white/5 bg-surface-0/95 backdrop-blur-xl transition-transform duration-200",
-        "lg:translate-x-0",
-        mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        "fixed left-0 top-0 h-screen flex flex-col border-r border-white/5 bg-surface-0 backdrop-blur-xl transition-transform duration-300 ease-out",
+        mobileOpen ? "translate-x-0 z-50" : "-translate-x-full z-40",
+        "lg:translate-x-0 lg:z-40"
       )}
     >
       {/* Logo */}
