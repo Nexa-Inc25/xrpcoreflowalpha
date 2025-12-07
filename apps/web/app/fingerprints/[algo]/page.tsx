@@ -166,59 +166,15 @@ function formatAlgoName(name: string) {
 }
 
 async function fetchAlgoDetail(algo: string): Promise<AlgoDetail> {
-  const base = process.env.NEXT_PUBLIC_API_BASE || 'https://api.zkalphaflow.com';
+  const base = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8010';
   const res = await fetch(`${base}/dashboard/algo_fingerprint/${algo}`);
   if (!res.ok) {
-    // Return mock data if endpoint doesn't exist yet
-    return generateMockDetail(algo);
+    throw new Error(`API returned ${res.status}: ${res.statusText}`);
   }
   return res.json();
 }
 
-function generateMockDetail(algo: string): AlgoDetail {
-  const category = getCategory(algo);
-  const baseFreq = Math.random() * 0.1 + 0.01;
-  
-  return {
-    name: algo,
-    display_name: formatAlgoName(algo),
-    category: category.label,
-    freq_hz: baseFreq,
-    period_sec: 1 / baseFreq,
-    description: category.description,
-    characteristics: [
-      'High-frequency burst trading',
-      'Cross-venue arbitrage',
-      'Liquidity sensing algorithms',
-      'Momentum capture strategies',
-    ],
-    risk_level: algo.includes('ghost') || algo.includes('phantom') ? 'high' : 
-                algo.includes('citadel') || algo.includes('jump') ? 'medium' : 'low',
-    typical_volume: '$10M - $500M daily',
-    known_wallets: [
-      '0x' + Array(40).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join(''),
-      '0x' + Array(40).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join(''),
-      'r' + Array(32).fill(0).map(() => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 62)]).join(''),
-    ],
-    recent_detections: Array(5).fill(null).map((_, i) => ({
-      timestamp: new Date(Date.now() - i * 3600000 * Math.random() * 24).toISOString(),
-      confidence: 60 + Math.random() * 35,
-      power: Math.random() * 0.5,
-      related_txs: Math.floor(Math.random() * 50) + 5,
-    })),
-    trading_patterns: [
-      { pattern: 'Momentum Ignition', frequency: 'High', description: 'Initiates rapid price movements' },
-      { pattern: 'Layering', frequency: 'Medium', description: 'Places multiple orders at different levels' },
-      { pattern: 'Quote Stuffing', frequency: 'Low', description: 'Rapid order placement and cancellation' },
-    ],
-    correlations: [
-      { asset: 'BTC', correlation: 0.72, direction: 'positive' },
-      { asset: 'ETH', correlation: 0.68, direction: 'positive' },
-      { asset: 'XRP', correlation: 0.45, direction: 'positive' },
-      { asset: 'VIX', correlation: -0.32, direction: 'negative' },
-    ],
-  };
-}
+// NO MOCK DATA - API errors show as errors, not fake data
 
 export default function AlgoDetailPage() {
   const params = useParams();
