@@ -1,1 +1,16 @@
-{"name":"ZK Alpha Flow","short_name":"ZKAlpha","theme_color":"#020617","background_color":"#020617","display":"standalone"}
+{
+  "name": "ZK Alpha Flow",
+  "short_name": "ZKAlpha",
+  "description": "Real-time dark pool flow detection",
+  "theme_color": "#020617",
+  "background_color": "#020617",
+  "display": "standalone",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
