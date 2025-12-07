@@ -60,19 +60,61 @@ export default function DashboardPage() {
   useEffect(() => {
     let isMounted = true;
     let reconnectTimeout: NodeJS.Timeout;
+    let eventSource: EventSource | null = null;
+    let socket: WebSocket | null = null;
+    let useSSE = false;
+    let wsFailCount = 0;
     
-    const connect = () => {
+    const connectSSE = () => {
+      const base = process.env.NEXT_PUBLIC_API_BASE || 'https://api.zkalphaflow.com';
+      eventSource = new EventSource(`${base}/events/sse`);
+      
+      eventSource.onopen = () => {
+        if (isMounted) setIsConnected(true);
+      };
+      
+      eventSource.onerror = () => {
+        if (isMounted) {
+          setIsConnected(false);
+          eventSource?.close();
+          reconnectTimeout = setTimeout(connectSSE, 5000);
+        }
+      };
+      
+      eventSource.onmessage = (msg) => {
+        if (!isMounted) return;
+        try {
+          const evt = JSON.parse(msg.data);
+          handleNewEvent(evt);
+        } catch {
+          // ignore malformed events
+        }
+      };
+    };
+    
+    const connectWS = () => {
       const base = process.env.NEXT_PUBLIC_API_WS_BASE || 'wss://api.zkalphaflow.com';
-      const socket = new WebSocket(base.replace(/\/$/, '') + '/events');
+      socket = new WebSocket(base.replace(/\/$/, '') + '/events');
 
       socket.onopen = () => {
-        if (isMounted) setIsConnected(true);
+        if (isMounted) {
+          setIsConnected(true);
+          wsFailCount = 0; // Reset on successful connection
+        }
       };
 
       socket.onclose = () => {
         if (isMounted) {
           setIsConnected(false);
-          reconnectTimeout = setTimeout(connect, 3000);
+          wsFailCount++;
+          // After 3 WebSocket failures, switch to SSE
+          if (wsFailCount >= 3) {
+            useSSE = true;
+            console.log('[Events] Switching to SSE fallback');
+            connectSSE();
+          } else {
+            reconnectTimeout = setTimeout(connectWS, 3000);
+          }
         }
       };
 
@@ -89,16 +131,16 @@ export default function DashboardPage() {
           // ignore malformed events
         }
       };
-
-      return socket;
     };
 
-    const socket = connect();
+    // Start with WebSocket, fallback to SSE if it fails
+    connectWS();
 
     return () => {
       isMounted = false;
       clearTimeout(reconnectTimeout);
-      socket.close();
+      socket?.close();
+      eventSource?.close();
     };
   }, [handleNewEvent]);
 
