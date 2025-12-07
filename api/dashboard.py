@@ -233,10 +233,7 @@ ALGO_PROFILES: Dict[str, Dict[str, Any]] = {
         ],
         "risk_level": "medium",
         "typical_volume": "$50M - $500M daily",
-        "known_wallets": [
-            "0x5a52e96bacdabb82fd05763e25335261b270efcb",
-            "0xdfd5293d8e347dfe59e90efd55b2956a1343963d"
-        ],
+        "known_wallets": [],  # Citadel uses partners (EDX, Kraken) - no direct public addresses. Monitor Binance flows for proxy signals.
         "trading_patterns": [
             {"pattern": "Momentum Ignition", "frequency": "High", "description": "Initiates rapid price movements to trigger stop losses"},
             {"pattern": "Layering", "frequency": "Medium", "description": "Places multiple orders at different price levels"},
@@ -284,7 +281,7 @@ ALGO_PROFILES: Dict[str, Dict[str, Any]] = {
         ],
         "risk_level": "low",
         "typical_volume": "$200M - $2B daily",
-        "known_wallets": ["0x00000000219ab540356cbb839cbe05303d7705fa"],
+        "known_wallets": [],  # Jane Street uses OTC desks and prime brokers - no direct public addresses
         "trading_patterns": [
             {"pattern": "ETF Arbitrage", "frequency": "High", "description": "Exploits NAV vs market price differences"},
             {"pattern": "Options Delta Hedging", "frequency": "High", "description": "Continuous delta-neutral rebalancing"}
