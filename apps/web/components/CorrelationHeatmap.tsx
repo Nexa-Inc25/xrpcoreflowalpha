@@ -50,8 +50,8 @@ function getTextColor(value: number): string {
 }
 
 export default function CorrelationHeatmap({ 
-  assets = 'xrp,eth,btc,spy,es,gold', 
-  mock = false,
+  assets = 'xrp,eth,btc,spy,gold', 
+  mock = false,  // Always false in production - real CoinGecko/Polygon data
   compact = false 
 }: Props) {
   const { data, isLoading, error } = useQuery({
