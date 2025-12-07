@@ -16,6 +16,15 @@ router = APIRouter()
 
 POLYGON_API_KEY = os.getenv("POLYGON_API_KEY", "")
 COINGECKO_API_KEY = os.getenv("COINGECKO_API_KEY", "")
+ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY", "")
+
+# Alpha Vantage crypto symbols
+ALPHA_VANTAGE_CRYPTO = {
+    "btc": "BTC",
+    "eth": "ETH", 
+    "xrp": "XRP",
+    "sol": "SOL",
+}
 
 
 async def require_pro_tier(request: Request) -> bool:
@@ -54,9 +63,9 @@ POLYGON_TICKERS = {
 # All supported assets
 ALL_ASSETS = list(COINGECKO_IDS.keys()) + list(POLYGON_TICKERS.keys())
 
-# Cache for price data (15 min TTL to avoid rate limits)
+# Cache for price data (30 min TTL to avoid rate limits)
 _price_cache: Dict[str, Tuple[float, List[float]]] = {}
-_CACHE_TTL = 900  # 15 minutes - CoinGecko rate limits are strict
+_CACHE_TTL = 1800  # 30 minutes - extended due to CoinGecko rate limits
 
 
 def _pearson(x: List[float], y: List[float]) -> float:
@@ -85,6 +94,7 @@ async def _fetch_price_history(asset: str) -> List[float]:
     
     # Try CoinGecko for crypto
     cg_id = COINGECKO_IDS.get(asset_lower)
+    rate_limited = False
     if cg_id:
         try:
             # Use pro API if key available, otherwise free tier
@@ -101,9 +111,37 @@ async def _fetch_price_history(asset: str) -> List[float]:
                     data = resp.json()
                     prices = [p[1] for p in data.get("prices", [])]
                 elif resp.status_code == 429:
-                    print(f"[Correlations] CoinGecko rate limited for {asset}")
+                    rate_limited = True
         except Exception as e:
-            print(f"[Correlations] CoinGecko error for {asset}: {e}")
+            pass  # Will try Alpha Vantage fallback
+    
+    # Fallback to Alpha Vantage for crypto if CoinGecko failed/rate limited
+    if not prices and rate_limited and asset_lower in ALPHA_VANTAGE_CRYPTO and ALPHA_VANTAGE_API_KEY:
+        av_symbol = ALPHA_VANTAGE_CRYPTO[asset_lower]
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    "https://www.alphavantage.co/query",
+                    params={
+                        "function": "CRYPTO_INTRADAY",
+                        "symbol": av_symbol,
+                        "market": "USD",
+                        "interval": "60min",
+                        "outputsize": "compact",
+                        "apikey": ALPHA_VANTAGE_API_KEY
+                    }
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    ts_key = [k for k in data.keys() if "Time Series" in k]
+                    if ts_key:
+                        ts = data[ts_key[0]]
+                        prices = [float(v.get("4. close", 0)) for v in list(ts.values())[:24]]
+                        prices.reverse()  # Oldest first
+                        if prices:
+                            print(f"[Correlations] Using Alpha Vantage for {asset}")
+        except Exception as e:
+            print(f"[Correlations] Alpha Vantage error for {asset}: {e}")
     
     # Try Polygon for equities/futures
     if not prices and asset_lower in POLYGON_TICKERS and POLYGON_API_KEY:
