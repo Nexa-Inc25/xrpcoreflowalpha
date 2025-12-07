@@ -2,17 +2,34 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '../lib/utils';
+import { TrendingUp, TrendingDown, Activity, Zap } from 'lucide-react';
+
+interface Insight {
+  pair: string;
+  correlation: number;
+  strength: string;
+  signal: string;
+}
 
 interface HeatmapData {
   timestamp: string;
   assets: string[];
   matrix: Record<string, Record<string, number>>;
+  insights?: Insight[];
   raw_mode: boolean;
+  data_source: string;
+  supported_assets?: string[];
 }
 
-async function fetchHeatmap(): Promise<HeatmapData> {
+interface Props {
+  assets?: string;
+  mock?: boolean;
+  compact?: boolean;
+}
+
+async function fetchHeatmap(assets: string, mock: boolean): Promise<HeatmapData> {
   const base = process.env.NEXT_PUBLIC_API_BASE || 'https://api.zkalphaflow.com';
-  const res = await fetch(`${base}/analytics/heatmap?assets=xrp,eth,btc,spy,gold`);
+  const res = await fetch(`${base}/analytics/heatmap?assets=${assets}&mock=${mock}`);
   if (!res.ok) throw new Error('Failed to fetch heatmap');
   return res.json();
 }
@@ -32,10 +49,14 @@ function getTextColor(value: number): string {
   return 'text-slate-300';
 }
 
-export default function CorrelationHeatmap() {
+export default function CorrelationHeatmap({ 
+  assets = 'xrp,eth,btc,spy,es,gold', 
+  mock = false,
+  compact = false 
+}: Props) {
   const { data, isLoading, error } = useQuery({
-    queryKey: ['correlation_heatmap'],
-    queryFn: fetchHeatmap,
+    queryKey: ['correlation_heatmap', assets, mock],
+    queryFn: () => fetchHeatmap(assets, mock),
     staleTime: 60_000,
     refetchInterval: 60_000,
   });
@@ -45,7 +66,7 @@ export default function CorrelationHeatmap() {
       <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
         <div className="animate-pulse space-y-3">
           <div className="h-4 w-32 bg-slate-700 rounded" />
-          <div className="h-32 bg-slate-800 rounded" />
+          <div className="h-40 bg-slate-800 rounded" />
         </div>
       </div>
     );
@@ -59,7 +80,9 @@ export default function CorrelationHeatmap() {
     );
   }
 
-  const { assets, matrix } = data;
+  const assetList = data.assets;
+  const matrix = data.matrix;
+  const insights = data.insights || [];
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 shadow-xl shadow-black/30">
@@ -77,7 +100,7 @@ export default function CorrelationHeatmap() {
           <thead>
             <tr>
               <th className="p-1 text-left text-slate-500 font-medium"></th>
-              {assets.map((asset) => (
+              {assetList.map((asset: string) => (
                 <th key={asset} className="p-1 text-center text-slate-400 font-semibold uppercase">
                   {asset}
                 </th>
@@ -85,10 +108,10 @@ export default function CorrelationHeatmap() {
             </tr>
           </thead>
           <tbody>
-            {assets.map((rowAsset) => (
+            {assetList.map((rowAsset: string) => (
               <tr key={rowAsset}>
                 <td className="p-1 text-slate-400 font-semibold uppercase">{rowAsset}</td>
-                {assets.map((colAsset) => {
+                {assetList.map((colAsset: string) => {
                   const value = matrix[rowAsset]?.[colAsset] ?? 0;
                   const isDiagonal = rowAsset === colAsset;
                   return (
@@ -99,7 +122,7 @@ export default function CorrelationHeatmap() {
                           isDiagonal ? 'bg-slate-700 text-slate-400' : getCorrelationColor(value),
                           !isDiagonal && getTextColor(value)
                         )}
-                        title={`${rowAsset.toUpperCase()}/${colAsset.toUpperCase()}: ${value.toFixed(3)}`}
+                        title={`${rowAsset}/${colAsset}: ${value.toFixed(3)}`}
                       >
                         {isDiagonal ? '1.00' : value.toFixed(2)}
                       </div>
@@ -111,6 +134,36 @@ export default function CorrelationHeatmap() {
           </tbody>
         </table>
       </div>
+
+      {/* Insights Panel */}
+      {insights.length > 0 && !compact && (
+        <div className="mt-4 pt-3 border-t border-slate-700/50">
+          <h4 className="text-xs font-medium text-slate-300 mb-2 flex items-center gap-1.5">
+            <Zap className="w-3 h-3 text-amber-400" />
+            Key Correlations
+          </h4>
+          <div className="space-y-1.5">
+            {insights.slice(0, 3).map((insight: Insight) => (
+              <div key={insight.pair} className="flex items-center justify-between text-[10px]">
+                <span className="font-medium text-slate-300">{insight.pair}</span>
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    'font-mono',
+                    insight.correlation > 0 ? 'text-emerald-400' : 'text-rose-400'
+                  )}>
+                    {insight.correlation > 0 ? '+' : ''}{insight.correlation.toFixed(2)}
+                  </span>
+                  {insight.correlation > 0 ? (
+                    <TrendingUp className="w-3 h-3 text-emerald-400" />
+                  ) : (
+                    <TrendingDown className="w-3 h-3 text-rose-400" />
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mt-3 flex items-center justify-between text-[9px] text-slate-500">
         <div className="flex items-center gap-2">
@@ -124,7 +177,10 @@ export default function CorrelationHeatmap() {
             <span className="w-3 h-3 rounded bg-rose-500" /> Strong −
           </span>
         </div>
-        <span>Pearson correlation</span>
+        <span className="flex items-center gap-1">
+          <Activity className="w-3 h-3" />
+          {data.data_source}
+        </span>
       </div>
     </div>
   );

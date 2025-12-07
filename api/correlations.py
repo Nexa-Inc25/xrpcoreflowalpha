@@ -4,13 +4,17 @@ Computes actual Pearson correlations from live CoinGecko price history.
 """
 import math
 import asyncio
+import random
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from fastapi import APIRouter, Query, Request, HTTPException
 import httpx
+import os
 
 router = APIRouter()
+
+POLYGON_API_KEY = os.getenv("POLYGON_API_KEY", "")
 
 
 async def require_pro_tier(request: Request) -> bool:
@@ -27,14 +31,27 @@ async def require_pro_tier(request: Request) -> bool:
     
     return False
 
-# CoinGecko ID mapping
+# CoinGecko ID mapping for crypto
 COINGECKO_IDS = {
     "xrp": "ripple",
     "eth": "ethereum", 
     "btc": "bitcoin",
     "gold": "tether-gold",  # XAUT as gold proxy
-    "spy": "spdr-s-p-500-etf-trust",  # May not exist, fallback
+    "sol": "solana",
 }
+
+# Polygon tickers for equities/futures
+POLYGON_TICKERS = {
+    "spy": "SPY",     # S&P 500 ETF
+    "es": "ES=F",     # S&P 500 Futures (proxy)
+    "nq": "NQ=F",     # Nasdaq Futures (proxy)
+    "qqq": "QQQ",     # Nasdaq ETF
+    "gld": "GLD",     # Gold ETF
+    "vix": "VIX",     # Volatility Index
+}
+
+# All supported assets
+ALL_ASSETS = list(COINGECKO_IDS.keys()) + list(POLYGON_TICKERS.keys())
 
 # Cache for price data (5 min TTL)
 _price_cache: Dict[str, Tuple[float, List[float]]] = {}
@@ -53,34 +70,101 @@ def _pearson(x: List[float], y: List[float]) -> float:
 
 
 async def _fetch_price_history(asset: str) -> List[float]:
-    """Fetch 24h price history from CoinGecko. Returns list of prices."""
+    """Fetch 24h price history from CoinGecko or Polygon. Returns list of prices."""
+    asset_lower = asset.lower()
+    
     # Check cache
     now = time.time()
-    if asset in _price_cache:
-        cached_time, cached_data = _price_cache[asset]
+    if asset_lower in _price_cache:
+        cached_time, cached_data = _price_cache[asset_lower]
         if now - cached_time < _CACHE_TTL:
             return cached_data
     
-    cg_id = COINGECKO_IDS.get(asset.lower())
-    if not cg_id:
-        return []
+    prices = []
     
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(
-                f"https://api.coingecko.com/api/v3/coins/{cg_id}/market_chart",
-                params={"vs_currency": "usd", "days": "1"}
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                prices = [p[1] for p in data.get("prices", [])]
-                if prices:
-                    _price_cache[asset] = (now, prices)
-                return prices
-    except Exception as e:
-        print(f"[Correlations] Error fetching {asset}: {e}")
+    # Try CoinGecko for crypto
+    cg_id = COINGECKO_IDS.get(asset_lower)
+    if cg_id:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    f"https://api.coingecko.com/api/v3/coins/{cg_id}/market_chart",
+                    params={"vs_currency": "usd", "days": "1"}
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    prices = [p[1] for p in data.get("prices", [])]
+        except Exception as e:
+            print(f"[Correlations] CoinGecko error for {asset}: {e}")
     
-    return []
+    # Try Polygon for equities/futures
+    if not prices and asset_lower in POLYGON_TICKERS and POLYGON_API_KEY:
+        ticker = POLYGON_TICKERS[asset_lower]
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/hour/2024-01-01/2025-12-31",
+                    params={"apiKey": POLYGON_API_KEY, "limit": 24, "sort": "desc"}
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    results = data.get("results", [])
+                    prices = [r.get("c", 0) for r in reversed(results)]  # Close prices
+        except Exception as e:
+            print(f"[Correlations] Polygon error for {asset}: {e}")
+    
+    # Cache if we got data
+    if prices:
+        _price_cache[asset_lower] = (now, prices)
+    
+    return prices
+
+
+def _generate_mock_correlation() -> float:
+    """Generate realistic mock correlation value."""
+    # Biased towards moderate correlations
+    base = random.gauss(0.3, 0.4)
+    return max(-1.0, min(1.0, base))
+
+
+def _generate_mock_matrix(assets: List[str]) -> Dict[str, Dict[str, float]]:
+    """Generate mock correlation matrix with realistic values."""
+    # Predefined realistic correlations for known pairs
+    known_correlations = {
+        ("xrp", "btc"): 0.72,
+        ("xrp", "eth"): 0.68,
+        ("btc", "eth"): 0.85,
+        ("xrp", "spy"): 0.35,
+        ("xrp", "es"): 0.38,
+        ("xrp", "gold"): 0.15,
+        ("btc", "spy"): 0.42,
+        ("btc", "gold"): 0.22,
+        ("eth", "spy"): 0.48,
+        ("spy", "es"): 0.98,
+        ("spy", "qqq"): 0.92,
+        ("spy", "gold"): -0.15,
+        ("spy", "vix"): -0.82,
+        ("gold", "vix"): 0.25,
+    }
+    
+    matrix = {}
+    for a1 in assets:
+        matrix[a1] = {}
+        for a2 in assets:
+            if a1 == a2:
+                matrix[a1][a2] = 1.0
+            else:
+                # Check known correlations
+                key = tuple(sorted([a1.lower(), a2.lower()]))
+                if key in known_correlations:
+                    corr = known_correlations[key]
+                    # Add small noise
+                    corr += random.uniform(-0.05, 0.05)
+                else:
+                    corr = _generate_mock_correlation()
+                matrix[a1][a2] = round(corr, 3)
+    
+    return matrix
 
 
 async def _compute_correlation(asset1: str, asset2: str) -> float:
@@ -145,15 +229,48 @@ async def get_correlations(
 
 @router.get("/analytics/heatmap")
 async def get_correlation_heatmap(
-    assets: str = Query("xrp,eth,btc,gold", description="Comma-separated assets"),
-    raw: bool = Query(False, description="Raw data mode")
+    assets: str = Query("xrp,eth,btc,spy,gold", description="Comma-separated assets"),
+    raw: bool = Query(False, description="Raw data mode"),
+    mock: bool = Query(False, description="Return mock data for testing"),
 ) -> Dict[str, Any]:
     """
-    Generate correlation heatmap matrix using real price data.
+    Generate correlation heatmap matrix for multi-asset analysis.
+    
+    Supports crypto (XRP, BTC, ETH, SOL) and equities/futures (SPY, ES, QQQ, VIX, GLD).
+    Use ?mock=true for testing/demo data with realistic correlation values.
     """
     asset_list = [a.strip().lower() for a in assets.split(",")]
     
-    # Fetch all price histories in parallel
+    # Mock mode - return predefined realistic correlations
+    if mock:
+        matrix = _generate_mock_matrix(asset_list)
+        
+        # Generate insights
+        insights = []
+        for a1 in asset_list:
+            for a2 in asset_list:
+                if a1 < a2:  # Avoid duplicates
+                    corr = matrix[a1][a2]
+                    if abs(corr) > 0.7:
+                        insights.append({
+                            "pair": f"{a1.upper()}/{a2.upper()}",
+                            "correlation": corr,
+                            "strength": "strong",
+                            "signal": "Moves together" if corr > 0 else "Inverse relationship",
+                        })
+        
+        return {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "assets": [a.upper() for a in asset_list],
+            "matrix": {k.upper(): {k2.upper(): v2 for k2, v2 in v.items()} for k, v in matrix.items()},
+            "insights": insights[:5],
+            "raw_mode": raw,
+            "data_source": "mock",
+            "cached_ttl_seconds": 0,
+            "supported_assets": ALL_ASSETS,
+        }
+    
+    # Live mode - fetch real price data
     price_data = {}
     tasks = {asset: _fetch_price_history(asset) for asset in asset_list}
     results = await asyncio.gather(*tasks.values())
@@ -176,13 +293,29 @@ async def get_correlation_heatmap(
                 else:
                     matrix[a1][a2] = 0.0
     
+    # Generate insights from strong correlations
+    insights = []
+    for a1 in asset_list:
+        for a2 in asset_list:
+            if a1 < a2:
+                corr = matrix[a1][a2]
+                if abs(corr) > 0.6:
+                    insights.append({
+                        "pair": f"{a1.upper()}/{a2.upper()}",
+                        "correlation": corr,
+                        "strength": "strong" if abs(corr) > 0.7 else "moderate",
+                        "signal": "Positive correlation" if corr > 0 else "Negative correlation",
+                    })
+    
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "assets": asset_list,
-        "matrix": matrix,
+        "assets": [a.upper() for a in asset_list],
+        "matrix": {k.upper(): {k2.upper(): v2 for k2, v2 in v.items()} for k, v in matrix.items()},
+        "insights": sorted(insights, key=lambda x: abs(x["correlation"]), reverse=True)[:5],
         "raw_mode": raw,
-        "data_source": "coingecko_24h",
+        "data_source": "coingecko_polygon",
         "cached_ttl_seconds": _CACHE_TTL,
+        "supported_assets": ALL_ASSETS,
     }
 
 

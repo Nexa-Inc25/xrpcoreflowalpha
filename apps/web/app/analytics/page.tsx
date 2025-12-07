@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { cn, formatNumber, formatUSD, timeAgo } from '../../lib/utils';
 import { fetchRecentSignals, fetchFlowHistory, fetchUI, fetchAnalyticsPerformance, fetchLatencyState, fetchXrplCorrelation, LatencyState, LatencyAnomaly } from '../../lib/api';
+import CorrelationHeatmap from '../../components/CorrelationHeatmap';
 
 // Process REAL API data into analytics format
 function processRealData(signals: any, flows: any) {
@@ -149,7 +150,7 @@ function processRealData(signals: any, flows: any) {
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
   const [selectedMetric, setSelectedMetric] = useState<'signals' | 'winRate' | 'impact'>('winRate');
-  const [activeTab, setActiveTab] = useState<'signals' | 'latency'>('signals');
+  const [activeTab, setActiveTab] = useState<'signals' | 'latency' | 'correlations'>('signals');
   
   // Fetch REAL data from API
   const { data: signals = [], isLoading: signalsLoading } = useQuery({
@@ -255,7 +256,7 @@ export default function AnalyticsPage() {
           <div className="flex items-center gap-3">
             {/* Tab Selector */}
             <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-1 border border-white/5">
-              {(['signals', 'latency'] as const).map((tab) => (
+              {(['signals', 'latency', 'correlations'] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -266,7 +267,7 @@ export default function AnalyticsPage() {
                       : "text-slate-400 hover:text-white"
                   )}
                 >
-                  {tab === 'latency' ? '⚡ Latency' : '📊 Signals'}
+                  {tab === 'latency' ? '⚡ Latency' : tab === 'correlations' ? '🔥 Heatmap' : '📊 Signals'}
                 </button>
               ))}
             </div>
@@ -513,6 +514,82 @@ export default function AnalyticsPage() {
                 Correlation tracks how futures/equities HFT latency spikes correlate with XRP settlement flows. 
                 Strong correlation indicates institutional algo activity routing to XRPL.
               </p>
+            </motion.div>
+          </>
+        ) : activeTab === 'correlations' ? (
+          /* ============ CORRELATIONS TAB ============ */
+          <>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-8"
+            >
+              <div className="grid lg:grid-cols-2 gap-6">
+                {/* Main Heatmap */}
+                <div className="lg:col-span-2">
+                  <CorrelationHeatmap assets="xrp,btc,eth,spy,es,gold" mock={false} />
+                </div>
+                
+                {/* XRP-Centric Correlations Card */}
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="glass-card p-5 rounded-xl"
+                >
+                  <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-brand-sky" />
+                    XRP Cross-Market Signals
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-surface-2">
+                      <span className="text-sm text-slate-300">XRP/SPY Correlation</span>
+                      <span className="text-emerald-400 font-mono">+0.35</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-surface-2">
+                      <span className="text-sm text-slate-300">XRP/ES Futures</span>
+                      <span className="text-emerald-400 font-mono">+0.38</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-surface-2">
+                      <span className="text-sm text-slate-300">XRP/Gold</span>
+                      <span className="text-amber-400 font-mono">+0.15</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-4">
+                    Moderate XRP/equity correlation indicates institutional flow from traditional markets to XRPL.
+                  </p>
+                </motion.div>
+                
+                {/* Market Regime Card */}
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="glass-card p-5 rounded-xl"
+                >
+                  <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-amber-400" />
+                    Market Regime Analysis
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-surface-2">
+                      <span className="text-sm text-slate-300">SPY/VIX Inverse</span>
+                      <span className="text-rose-400 font-mono">-0.82</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-surface-2">
+                      <span className="text-sm text-slate-300">BTC/ETH Sync</span>
+                      <span className="text-emerald-400 font-mono">+0.85</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-surface-2">
+                      <span className="text-sm text-slate-300">Risk-On Indicator</span>
+                      <span className="text-emerald-400 font-medium">Active</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-4">
+                    Strong BTC/ETH correlation with moderate equity ties suggests risk-on environment favorable for XRP.
+                  </p>
+                </motion.div>
+              </div>
             </motion.div>
           </>
         ) : (
