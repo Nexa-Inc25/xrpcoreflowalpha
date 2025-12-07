@@ -13,10 +13,17 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 import os
 import re
+from dotenv import load_dotenv
+
+# Load .env file
+load_dotenv()
 
 # API Keys
-ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY", "")  # Free tier works without key
+ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY", "")
 DUNE_API_KEY = os.getenv("DUNE_API_KEY", "")
+
+print(f"[WalletTracker] Etherscan key loaded: {'YES' if ETHERSCAN_API_KEY else 'NO'}")
+print(f"[WalletTracker] Dune key loaded: {'YES' if DUNE_API_KEY else 'NO'}")
 
 # Known wrapped securities tokens (add more as discovered)
 WRAPPED_SECURITIES = {
@@ -53,7 +60,8 @@ class InstitutionalWalletTracker:
     """Track institutional wallet activity for suspicious patterns."""
     
     def __init__(self):
-        self.etherscan_base = "https://api.etherscan.io/api"
+        # Etherscan V2 API endpoint
+        self.etherscan_base = "https://api.etherscan.io/v2/api"
         self.cache: Dict[str, Any] = {}
         self._rate_limit_delay = 0.25  # 4 calls/sec to stay safe
     
@@ -66,6 +74,7 @@ class InstitutionalWalletTracker:
     ) -> List[Dict[str, Any]]:
         """Fetch transaction history for a wallet."""
         params = {
+            "chainid": "1",  # Ethereum mainnet
             "module": "account",
             "action": "txlist",
             "address": address,
@@ -96,6 +105,7 @@ class InstitutionalWalletTracker:
     ) -> List[Dict[str, Any]]:
         """Fetch ERC-20 token transfers for a wallet."""
         params = {
+            "chainid": "1",  # Ethereum mainnet
             "module": "account",
             "action": "tokentx",
             "address": address,
@@ -122,6 +132,7 @@ class InstitutionalWalletTracker:
     ) -> List[Dict[str, Any]]:
         """Fetch internal transactions (contract calls)."""
         params = {
+            "chainid": "1",  # Ethereum mainnet
             "module": "account",
             "action": "txlistinternal",
             "address": address,
