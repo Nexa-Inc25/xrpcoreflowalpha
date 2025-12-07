@@ -138,6 +138,7 @@ def _generate_mock_correlation() -> float:
 def _generate_mock_matrix(assets: List[str]) -> Dict[str, Dict[str, float]]:
     """Generate mock correlation matrix with realistic values."""
     # Predefined realistic correlations for known pairs
+    # VIX is key - inverse to SPY, positive during risk-off
     known_correlations = {
         ("xrp", "btc"): 0.72,
         ("xrp", "eth"): 0.68,
@@ -145,14 +146,20 @@ def _generate_mock_matrix(assets: List[str]) -> Dict[str, Dict[str, float]]:
         ("xrp", "spy"): 0.35,
         ("xrp", "es"): 0.38,
         ("xrp", "gold"): 0.15,
+        ("xrp", "vix"): -0.28,  # XRP inversely correlated with fear
         ("btc", "spy"): 0.42,
         ("btc", "gold"): 0.22,
+        ("btc", "vix"): -0.35,  # BTC drops when VIX spikes
         ("eth", "spy"): 0.48,
+        ("eth", "vix"): -0.40,  # ETH more sensitive to VIX
         ("spy", "es"): 0.98,
         ("spy", "qqq"): 0.92,
         ("spy", "gold"): -0.15,
-        ("spy", "vix"): -0.82,
-        ("gold", "vix"): 0.25,
+        ("spy", "vix"): -0.82,  # Strong inverse - key risk indicator
+        ("es", "vix"): -0.80,   # Futures also inverse
+        ("qqq", "vix"): -0.78,  # Tech more volatile
+        ("gold", "vix"): 0.25,  # Gold rises with fear
+        ("gld", "vix"): 0.25,
     }
     
     matrix = {}
@@ -344,6 +351,134 @@ async def get_correlation_heatmap(
         "cached_ttl_seconds": _CACHE_TTL,
         "supported_assets": ALL_ASSETS,
     }
+
+
+@router.get("/analytics/risk-indicator")
+async def get_risk_indicator() -> Dict[str, Any]:
+    """
+    Get VIX-based market risk indicator.
+    
+    Analyzes SPY/VIX inverse relationship to determine risk-on/risk-off regime.
+    Key signals:
+    - SPY/VIX correlation < -0.7: Normal (risk-on)
+    - SPY/VIX correlation > -0.5: Breakdown (risk-off warning)
+    - VIX > 25: High fear
+    - VIX > 35: Extreme fear
+    """
+    # Get correlations
+    try:
+        # Fetch heatmap with VIX included
+        asset_list = ["spy", "vix", "xrp", "btc", "gold"]
+        
+        # Try live data first
+        price_data = {}
+        for asset in asset_list:
+            prices = await _fetch_price_history(asset)
+            if prices:
+                price_data[asset] = prices
+        
+        # Check if we have enough data
+        if len(price_data) < 2:
+            # Use baseline correlations
+            spy_vix_corr = -0.82
+            xrp_vix_corr = -0.28
+            btc_vix_corr = -0.35
+            gold_vix_corr = 0.25
+            data_source = "baseline"
+        else:
+            # Calculate real correlations
+            spy_prices = price_data.get("spy", [])
+            vix_prices = price_data.get("vix", [])
+            xrp_prices = price_data.get("xrp", [])
+            btc_prices = price_data.get("btc", [])
+            gold_prices = price_data.get("gold", [])
+            
+            def calc_corr(p1: List[float], p2: List[float]) -> float:
+                if not p1 or not p2:
+                    return 0.0
+                min_len = min(len(p1), len(p2))
+                if min_len < 10:
+                    return 0.0
+                return _pearson(p1[-min_len:], p2[-min_len:])
+            
+            spy_vix_corr = calc_corr(spy_prices, vix_prices) if spy_prices and vix_prices else -0.82
+            xrp_vix_corr = calc_corr(xrp_prices, vix_prices) if xrp_prices and vix_prices else -0.28
+            btc_vix_corr = calc_corr(btc_prices, vix_prices) if btc_prices and vix_prices else -0.35
+            gold_vix_corr = calc_corr(gold_prices, vix_prices) if gold_prices and vix_prices else 0.25
+            data_source = "live"
+        
+        # Determine risk regime based on SPY/VIX correlation
+        if spy_vix_corr < -0.7:
+            regime = "risk_on"
+            regime_label = "Risk-On"
+            regime_color = "green"
+            implication = "Normal inverse relationship. Equities stable, consider long crypto positions."
+        elif spy_vix_corr < -0.5:
+            regime = "caution"
+            regime_label = "Caution"
+            regime_color = "yellow"
+            implication = "Weakening inverse. Watch for volatility spikes. Reduce position sizes."
+        elif spy_vix_corr < -0.3:
+            regime = "risk_off"
+            regime_label = "Risk-Off"
+            regime_color = "orange"
+            implication = "Correlation breakdown. Flight to safety likely. Consider hedges."
+        else:
+            regime = "extreme_fear"
+            regime_label = "Extreme Fear"
+            regime_color = "red"
+            implication = "SPY/VIX decoupled. Market stress. Cash or gold recommended."
+        
+        # Generate alerts if needed
+        alerts = []
+        if spy_vix_corr > -0.6:
+            alerts.append({
+                "type": "correlation_breakdown",
+                "message": f"SPY/VIX inverse weakening ({spy_vix_corr:.2f})",
+                "severity": "warning" if spy_vix_corr > -0.5 else "info"
+            })
+        if gold_vix_corr > 0.4:
+            alerts.append({
+                "type": "flight_to_safety",
+                "message": f"Gold/VIX correlation rising ({gold_vix_corr:.2f})",
+                "severity": "info"
+            })
+        if xrp_vix_corr > -0.1:
+            alerts.append({
+                "type": "xrp_decoupling",
+                "message": f"XRP decoupling from fear index ({xrp_vix_corr:.2f})",
+                "severity": "info"
+            })
+        
+        return {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "regime": regime,
+            "regime_label": regime_label,
+            "regime_color": regime_color,
+            "implication": implication,
+            "correlations": {
+                "SPY/VIX": round(spy_vix_corr, 3),
+                "XRP/VIX": round(xrp_vix_corr, 3),
+                "BTC/VIX": round(btc_vix_corr, 3),
+                "GOLD/VIX": round(gold_vix_corr, 3),
+            },
+            "thresholds": {
+                "risk_on": "SPY/VIX < -0.70",
+                "caution": "SPY/VIX -0.50 to -0.70",
+                "risk_off": "SPY/VIX -0.30 to -0.50",
+                "extreme_fear": "SPY/VIX > -0.30",
+            },
+            "alerts": alerts,
+            "data_source": data_source,
+        }
+        
+    except Exception as e:
+        return {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "regime": "unknown",
+            "regime_label": "Unknown",
+            "error": str(e),
+        }
 
 
 @router.get("/analytics/raw-alpha")

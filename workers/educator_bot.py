@@ -265,7 +265,7 @@ async def fetch_correlations() -> Optional[Dict[str, Any]]:
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                "http://localhost:8010/analytics/heatmap?assets=xrp,btc,eth,spy,gold",
+                "http://localhost:8010/analytics/heatmap?assets=xrp,btc,eth,spy,gold,vix",
                 timeout=10
             ) as resp:
                 if resp.status == 200:
@@ -273,6 +273,86 @@ async def fetch_correlations() -> Optional[Dict[str, Any]]:
     except Exception as e:
         print(f"[EducatorBot] Failed to fetch correlations: {e}")
     return None
+
+
+async def fetch_risk_indicator() -> Optional[Dict[str, Any]]:
+    """Fetch VIX-based risk indicator from API."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "http://localhost:8010/analytics/risk-indicator",
+                timeout=10
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+    except Exception as e:
+        print(f"[EducatorBot] Failed to fetch risk indicator: {e}")
+    return None
+
+
+def format_risk_alert(risk_data: Dict[str, Any]) -> dict:
+    """Format a risk regime alert as a Slack message."""
+    regime = risk_data.get("regime", "unknown")
+    label = risk_data.get("regime_label", "Unknown")
+    color = risk_data.get("regime_color", "gray")
+    implication = risk_data.get("implication", "")
+    correlations = risk_data.get("correlations", {})
+    alerts = risk_data.get("alerts", [])
+    
+    emoji = {
+        "green": "🟢",
+        "yellow": "🟡",
+        "orange": "🟠",
+        "red": "🔴",
+    }.get(color, "⚪")
+    
+    corr_text = "\n".join([
+        f"• *{pair}*: {value:+.2f}"
+        for pair, value in correlations.items()
+    ])
+    
+    alert_text = ""
+    if alerts:
+        alert_text = "\n\n*⚠️ Alerts:*\n" + "\n".join([
+            f"• {a['message']}"
+            for a in alerts
+        ])
+    
+    return {
+        "blocks": [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": f"{emoji} Risk Regime: {label}",
+                    "emoji": True
+                }
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*VIX Correlations:*\n{corr_text}"
+                }
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"📊 *Implication:* {implication}{alert_text}"
+                }
+            },
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"Updated {datetime.now(timezone.utc).strftime('%H:%M UTC')} | <https://zkalphaflow.com/analytics?tab=correlations|View Dashboard>"
+                    }
+                ]
+            }
+        ]
+    }
 
 
 def analyze_correlations(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -320,6 +400,7 @@ def analyze_correlations(data: Dict[str, Any]) -> Dict[str, Any]:
 
 # Track last regime for change detection
 _last_regime = None
+_last_risk_regime = None
 _lesson_index = 0
 
 
@@ -358,7 +439,7 @@ async def lesson_poster():
 
 async def correlation_monitor():
     """Monitor correlations and post alerts on significant changes."""
-    global _last_regime
+    global _last_regime, _last_risk_regime
     
     print("[EducatorBot] Starting correlation monitor...")
     
@@ -384,6 +465,25 @@ async def correlation_monitor():
                 await post_to_slack(SLACK_EDUCATOR_WEBHOOK_URL or SLACK_ALERTS_WEBHOOK_URL, message)
             
             _last_regime = regime
+            
+            # Check VIX-based risk indicator
+            risk_data = await fetch_risk_indicator()
+            if risk_data:
+                risk_regime = risk_data.get("regime")
+                
+                # Alert on risk regime change
+                if _last_risk_regime and risk_regime != _last_risk_regime:
+                    print(f"[EducatorBot] Risk regime change: {_last_risk_regime} -> {risk_regime}")
+                    message = format_risk_alert(risk_data)
+                    await post_to_slack(SLACK_EDUCATOR_WEBHOOK_URL or SLACK_ALERTS_WEBHOOK_URL, message)
+                
+                # Alert on any risk alerts
+                alerts = risk_data.get("alerts", [])
+                if alerts and random.random() < 0.2:  # 20% chance to avoid spam
+                    message = format_risk_alert(risk_data)
+                    await post_to_slack(SLACK_EDUCATOR_WEBHOOK_URL, message)
+                
+                _last_risk_regime = risk_regime
             
             # Check for strong correlations worth alerting
             key_corrs = analysis["key_correlations"]
