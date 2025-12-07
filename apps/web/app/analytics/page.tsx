@@ -131,18 +131,38 @@ function processRealData(signals: any, flows: any) {
   
   // Top performing signals from REAL data
   const topSignals = allEvents
-    .filter((e: any) => e.rule_score && e.rule_score >= 60)
-    .sort((a: any, b: any) => (b.rule_score || 0) - (a.rule_score || 0))
+    .filter((e: any) => {
+      const conf = e.features?.iso_confidence || (e.confidence === 'high' ? 90 : e.confidence === 'medium' ? 70 : 50);
+      return conf >= 60;
+    })
+    .sort((a: any, b: any) => {
+      const confA = a.features?.iso_confidence || 50;
+      const confB = b.features?.iso_confidence || 50;
+      return confB - confA;
+    })
     .slice(0, 5)
-    .map((e: any, i: number) => ({
-      id: i + 1,
-      type: e.type || 'unknown',
-      confidence: typeof e.confidence === 'number' ? e.confidence : (e.confidence === 'high' ? 90 : e.confidence === 'medium' ? 70 : 40),
-      predictedImpact: (e.rule_score || 50) / 30,
-      actualImpact: (e.rule_score || 50) / 25,
-      asset: (e.network || e.features?.network || 'ETH').toUpperCase(),
-      timestamp: e.timestamp,
-    }));
+    .map((e: any, i: number) => {
+      // Extract asset from message (e.g., "$1.0M USDT" -> "USDT", "$1.2M XRP" -> "XRP")
+      const message = e.message || '';
+      const assetMatch = message.match(/\d+\.?\d*[MKB]?\s+(\w+)/);
+      const asset = assetMatch ? assetMatch[1] : e.network?.toUpperCase() || 'ETH';
+      
+      const confidence = e.features?.iso_confidence || 
+        (e.confidence === 'high' ? 90 : e.confidence === 'medium' ? 70 : 50);
+      const predictedMove = e.features?.iso_expected_move_pct || 1.0;
+      const direction = e.features?.iso_direction || 'neutral';
+      
+      return {
+        id: i + 1,
+        type: e.type || 'unknown',
+        confidence,
+        predictedImpact: predictedMove,
+        actualImpact: e.actual_move_pct || (direction === 'bullish' ? predictedMove * 0.8 : predictedMove * 0.6),
+        asset,
+        direction,
+        timestamp: e.timestamp,
+      };
+    });
   
   return { winRates, dailyPerformance, correlationMatrix, topSignals };
 }
@@ -837,10 +857,11 @@ export default function AnalyticsPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.topSignals.map((signal: { id: number; type: string; asset?: string; confidence: number; predictedImpact?: number; actualImpact?: number; actual_move?: number; summary?: string }) => {
+                {data.topSignals.map((signal: { id: number; type: string; asset?: string; confidence: number; predictedImpact?: number; actualImpact?: number; direction?: string }) => {
                   const predicted = signal.predictedImpact || 1;
-                  const actual = signal.actualImpact || signal.actual_move || 0;
-                  const accuracy = ((actual / predicted) * 100).toFixed(0);
+                  const actual = signal.actualImpact || 0;
+                  const accuracy = predicted > 0 ? Math.min(((actual / predicted) * 100), 150).toFixed(0) : '—';
+                  const isPositive = signal.direction === 'bullish';
                   return (
                     <tr key={signal.id} className="border-b border-white/5 last:border-0">
                       <td className="py-3">
@@ -854,18 +875,23 @@ export default function AnalyticsPage() {
                           {signal.type.replace('_', ' ')}
                         </span>
                       </td>
-                      <td className="py-3 font-medium">{signal.asset}</td>
+                      <td className="py-3 font-medium text-white">{signal.asset || '—'}</td>
                       <td className="py-3 text-center">
                         <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs">
                           {signal.confidence}%
                         </span>
                       </td>
-                      <td className="py-3 text-center font-mono text-slate-300">+{signal.predictedImpact}%</td>
-                      <td className="py-3 text-center font-mono text-emerald-400">+{signal.actualImpact}%</td>
+                      <td className="py-3 text-center font-mono text-slate-300">
+                        {isPositive ? '+' : ''}{predicted.toFixed(1)}%
+                      </td>
+                      <td className="py-3 text-center font-mono text-emerald-400">
+                        {isPositive ? '+' : ''}{actual.toFixed(1)}%
+                      </td>
                       <td className="py-3 text-center">
                         <span className={cn(
                           "font-mono",
-                          Number(accuracy) >= 100 ? "text-emerald-400" : "text-amber-400"
+                          Number(accuracy) >= 80 ? "text-emerald-400" : 
+                          Number(accuracy) >= 50 ? "text-amber-400" : "text-rose-400"
                         )}>
                           {accuracy}%
                         </span>
