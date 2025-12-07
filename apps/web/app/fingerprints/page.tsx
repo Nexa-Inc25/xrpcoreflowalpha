@@ -27,7 +27,7 @@ interface FingerprintResponse {
 }
 
 async function fetchFingerprint(): Promise<FingerprintResponse> {
-  const base = process.env.NEXT_PUBLIC_API_BASE || 'https://api.zkalphaflow.com';
+  const base = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8010';
   const res = await fetch(`${base}/dashboard/algo_fingerprint`);
   if (!res.ok) throw new Error('Failed to fetch fingerprint');
   return res.json();
