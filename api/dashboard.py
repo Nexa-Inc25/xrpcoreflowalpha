@@ -216,3 +216,42 @@ async def whale_transfers(chain: str = None, min_value: int = 1000000, limit: in
         "transfers": transfers,
         "count": len(transfers),
     }
+
+
+@router.get("/dashboard/algo_fingerprint")
+async def get_algo_fingerprint() -> Dict[str, Any]:
+    """Get current algorithmic fingerprint detection status.
+    
+    Returns the detected trading pattern frequency signature
+    and matched institutional algo profile.
+    """
+    try:
+        from predictors.frequency_fingerprinter import zk_fingerprinter, KNOWN_FINGERPRINTS
+        result = zk_fingerprinter.tick(source_label="api_query")
+        
+        # Get list of all known fingerprints for reference
+        known_algos = [
+            {"name": name, "freq_hz": round(freq, 6), "period_sec": round(1/freq, 1)}
+            for name, freq in KNOWN_FINGERPRINTS.items()
+        ]
+        
+        return {
+            "updated_at": _now_iso(),
+            "detection": {
+                "dominant_freq_hz": result.get("freq", 0),
+                "power": result.get("power", 0),
+                "matched_algo": result.get("fingerprint", "unknown"),
+                "confidence": result.get("confidence", 0),
+            },
+            "known_fingerprints": sorted(known_algos, key=lambda x: x["freq_hz"], reverse=True),
+            "status": "active" if result.get("confidence", 0) > 50 else "monitoring",
+        }
+    except Exception as e:
+        print(f"[Dashboard] Error getting fingerprint: {e}")
+        return {
+            "updated_at": _now_iso(),
+            "detection": {"dominant_freq_hz": 0, "power": 0, "matched_algo": "unknown", "confidence": 0},
+            "known_fingerprints": [],
+            "status": "error",
+            "error": str(e),
+        }
