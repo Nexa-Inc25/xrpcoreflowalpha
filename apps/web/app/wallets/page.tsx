@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import {
   Wallet,
   Search,
@@ -15,6 +16,7 @@ import {
   Loader2,
   ArrowRight,
   Zap,
+  Eye,
 } from 'lucide-react';
 import { cn, formatUSD } from '../../lib/utils';
 import { fetchWhaleTransfers } from '../../lib/api';
@@ -267,16 +269,22 @@ export default function WalletsPage() {
                       </div>
                     </div>
 
-                    {/* Time & Link */}
+                    {/* Time & Links */}
                     <div className="flex items-center gap-3 text-xs text-slate-500">
                       <span>{new Date(transfer.timestamp * 1000).toLocaleString()}</span>
+                      <Link
+                        href={`/flow/${encodeURIComponent(transfer.hash)}`}
+                        className="flex items-center gap-1 text-brand-sky hover:underline"
+                      >
+                        View Details <Eye className="w-3 h-3" />
+                      </Link>
                       <a
                         href={getExplorerUrl(transfer.blockchain, transfer.hash)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-brand-sky hover:underline"
+                        className="flex items-center gap-1 text-slate-400 hover:text-slate-200"
                       >
-                        View TX <ExternalLink className="w-3 h-3" />
+                        Explorer <ExternalLink className="w-3 h-3" />
                       </a>
                     </div>
                   </div>
