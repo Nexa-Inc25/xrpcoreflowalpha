@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
   Wallet,
@@ -17,9 +17,42 @@ import {
   ArrowRight,
   Zap,
   Eye,
+  AlertTriangle,
+  Shield,
+  Clock,
+  FileWarning,
 } from 'lucide-react';
 import { cn, formatUSD } from '../../lib/utils';
 import { fetchWhaleTransfers } from '../../lib/api';
+
+// Wallet analysis types
+interface WalletFlag {
+  tx_hash: string;
+  flag: string;
+  timestamp: string;
+  value?: number;
+  value_eth?: number;
+  note?: string;
+  token_symbol?: string;
+}
+
+interface WalletAnalysis {
+  address: string;
+  analyzed_at: string;
+  summary: {
+    total_transactions: number;
+    total_token_transfers: number;
+    total_eth_received: number;
+    total_eth_sent: number;
+    unique_tokens: string[];
+  };
+  flags: {
+    wrapped_securities: WalletFlag[];
+    settlement_timing: WalletFlag[];
+    total_flags: number;
+  };
+  etherscan_link: string;
+}
 
 interface WhaleTransfer {
   id: string;
@@ -47,6 +80,8 @@ export default function WalletsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [chainFilter, setChainFilter] = useState<string>('all');
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+  const [analyzeAddress, setAnalyzeAddress] = useState('');
+  const [activeTab, setActiveTab] = useState<'whales' | 'analyze'>('whales');
 
   // Fetch real whale transfers from API
   const { data: whaleData, isLoading, refetch, isFetching } = useQuery({
@@ -57,6 +92,22 @@ export default function WalletsPage() {
     }),
     refetchInterval: 60000,
   });
+
+  // Wallet analysis mutation
+  const analysisMutation = useMutation({
+    mutationFn: async (address: string): Promise<WalletAnalysis> => {
+      const base = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8010';
+      const res = await fetch(`${base}/wallet/analyze/${address}`);
+      if (!res.ok) throw new Error('Analysis failed');
+      return res.json();
+    },
+  });
+
+  const handleAnalyze = () => {
+    if (analyzeAddress.startsWith('0x') && analyzeAddress.length === 42) {
+      analysisMutation.mutate(analyzeAddress);
+    }
+  };
 
   const transfers: WhaleTransfer[] = whaleData?.transfers || [];
   
@@ -111,26 +162,225 @@ export default function WalletsPage() {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-8"
+          className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-6"
         >
           <div>
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-sky/20 to-blue-500/20 border border-brand-sky/30 flex items-center justify-center">
                 <Wallet className="w-5 h-5 text-brand-sky" />
               </div>
-              <h1 className="text-2xl font-semibold">Whale Transfers</h1>
+              <h1 className="text-2xl font-semibold">Wallet Intelligence</h1>
             </div>
-            <p className="text-slate-400">Real-time large transaction tracking via Whale Alert API</p>
+            <p className="text-slate-400">Track whale transfers & analyze institutional wallets</p>
           </div>
-          <button 
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-sky text-white font-medium hover:bg-brand-sky/90 transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={cn("w-4 h-4", isFetching && "animate-spin")} />
-            Refresh
-          </button>
         </motion.div>
+
+        {/* Tab Navigation */}
+        <div className="flex items-center gap-2 mb-6">
+          <button
+            onClick={() => setActiveTab('whales')}
+            className={cn(
+              "px-4 py-2 rounded-xl font-medium text-sm transition-all",
+              activeTab === 'whales' 
+                ? "bg-brand-sky text-white" 
+                : "bg-surface-1 text-slate-400 hover:text-white"
+            )}
+          >
+            <Eye className="w-4 h-4 inline mr-2" />
+            Whale Transfers
+          </button>
+          <button
+            onClick={() => setActiveTab('analyze')}
+            className={cn(
+              "px-4 py-2 rounded-xl font-medium text-sm transition-all",
+              activeTab === 'analyze' 
+                ? "bg-brand-purple text-white" 
+                : "bg-surface-1 text-slate-400 hover:text-white"
+            )}
+          >
+            <Shield className="w-4 h-4 inline mr-2" />
+            Analyze Wallet
+          </button>
+        </div>
+
+        {/* Wallet Analysis Tab */}
+        {activeTab === 'analyze' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="space-y-6"
+          >
+            {/* Search Box */}
+            <div className="glass-card rounded-2xl p-6">
+              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Shield className="w-5 h-5 text-brand-purple" />
+                Institutional Wallet Analysis
+              </h2>
+              <p className="text-slate-400 text-sm mb-4">
+                Analyze any Ethereum wallet for wrapped securities, FTD patterns, and suspicious timing with equity markets.
+              </p>
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  placeholder="Enter ETH address (0x...)"
+                  value={analyzeAddress}
+                  onChange={(e) => setAnalyzeAddress(e.target.value)}
+                  className="flex-1 px-4 py-3 rounded-xl bg-slate-800 border border-white/10 text-sm placeholder:text-slate-500 focus:outline-none focus:border-brand-purple/50 font-mono"
+                />
+                <button
+                  onClick={handleAnalyze}
+                  disabled={analysisMutation.isPending || !analyzeAddress.startsWith('0x')}
+                  className="px-6 py-3 rounded-xl bg-brand-purple text-white font-medium hover:bg-brand-purple/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {analysisMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Search className="w-4 h-4" />
+                  )}
+                  Analyze
+                </button>
+              </div>
+
+              {/* Quick Links to Known Wallets */}
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="text-xs text-slate-500">Quick analyze:</span>
+                {[
+                  { label: 'Citadel', addr: '0x5a52e96bacdabb82fd05763e25335261b270efcb' },
+                  { label: 'GSR', addr: '0x15abb66ba754f05cbc0165a64a11cded1543de48' },
+                  { label: 'Cumberland', addr: '0xcd531ae9efcce479654c4926dec5f6209531ca7b' },
+                ].map(w => (
+                  <button
+                    key={w.addr}
+                    onClick={() => {
+                      setAnalyzeAddress(w.addr);
+                      analysisMutation.mutate(w.addr);
+                    }}
+                    className="px-2 py-1 rounded bg-slate-800 text-xs text-slate-300 hover:bg-slate-700 transition-colors"
+                  >
+                    {w.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Analysis Results */}
+            {analysisMutation.data && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="glass-card rounded-2xl p-6"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold">Analysis Results</h3>
+                  <a
+                    href={analysisMutation.data.etherscan_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-brand-sky hover:underline flex items-center gap-1"
+                  >
+                    View on Etherscan <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+
+                {/* Summary Stats */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                  <div className="p-3 rounded-xl bg-slate-800/50">
+                    <div className="text-2xl font-bold">{analysisMutation.data.summary.total_transactions}</div>
+                    <div className="text-xs text-slate-400">Transactions</div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-800/50">
+                    <div className="text-2xl font-bold">{analysisMutation.data.summary.total_token_transfers}</div>
+                    <div className="text-xs text-slate-400">Token Transfers</div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-800/50">
+                    <div className="text-2xl font-bold">{analysisMutation.data.summary.total_eth_received.toFixed(2)}</div>
+                    <div className="text-xs text-slate-400">ETH Received</div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-800/50">
+                    <div className="text-2xl font-bold text-amber-400">{analysisMutation.data.flags.total_flags}</div>
+                    <div className="text-xs text-slate-400">Flags Detected</div>
+                  </div>
+                </div>
+
+                {/* Flags */}
+                {analysisMutation.data.flags.total_flags > 0 ? (
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-medium text-amber-400 flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4" />
+                      Suspicious Activity Detected
+                    </h4>
+                    {[...analysisMutation.data.flags.wrapped_securities, ...analysisMutation.data.flags.settlement_timing].map((flag, i) => (
+                      <div key={i} className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 text-xs font-medium">
+                            {flag.flag}
+                          </span>
+                          {flag.token_symbol && (
+                            <span className="text-sm text-slate-300">{flag.token_symbol}</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-slate-400">{flag.note}</p>
+                        <div className="mt-2 flex items-center gap-4 text-xs text-slate-500">
+                          <span>{new Date(flag.timestamp).toLocaleString()}</span>
+                          {flag.value && <span>${flag.value.toLocaleString()}</span>}
+                          {flag.value_eth && <span>{flag.value_eth.toFixed(2)} ETH</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center">
+                    <Check className="w-6 h-6 text-emerald-400 mx-auto mb-2" />
+                    <p className="text-emerald-400 font-medium">No suspicious patterns detected</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {analysisMutation.data.summary.total_transactions === 0 
+                        ? "Note: No transactions found. You may need an Etherscan API key."
+                        : "Wallet activity appears normal"}
+                    </p>
+                  </div>
+                )}
+
+                {/* Unique Tokens */}
+                {analysisMutation.data.summary.unique_tokens.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="text-sm font-medium mb-2">Tokens Held</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {analysisMutation.data.summary.unique_tokens.map(token => (
+                        <span key={token} className="px-2 py-1 rounded bg-slate-800 text-xs">
+                          {token}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {analysisMutation.error && (
+              <div className="glass-card rounded-2xl p-6 border border-red-500/20">
+                <div className="flex items-center gap-2 text-red-400">
+                  <FileWarning className="w-5 h-5" />
+                  <span>Analysis failed. Make sure ETHERSCAN_API_KEY is configured.</span>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* Whale Transfers Tab */}
+        {activeTab === 'whales' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            {/* Refresh Button */}
+            <div className="flex justify-end mb-4">
+              <button 
+                onClick={() => refetch()}
+                disabled={isFetching}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-sky text-white font-medium hover:bg-brand-sky/90 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={cn("w-4 h-4", isFetching && "animate-spin")} />
+                Refresh
+              </button>
+            </div>
 
         {/* Search & Chain Filter */}
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -308,6 +558,8 @@ export default function WalletsPage() {
             ))
           )}
         </div>
+          </motion.div>
+        )}
       </div>
     </div>
   );

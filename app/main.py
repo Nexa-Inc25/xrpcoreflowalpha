@@ -112,6 +112,10 @@ app.include_router(analytics_router)
 app.include_router(correlations_router)
 app.include_router(latency_router)
 app.include_router(monitoring_router)
+
+# Wallet analysis for institutional tracking
+from api.wallet_analysis import router as wallet_analysis_router
+app.include_router(wallet_analysis_router)
 app.mount("/static", StaticFiles(directory="clients"), name="static")
 app.middleware("http")(api_key_middleware)
 
