@@ -119,25 +119,44 @@ async def get_signals_pending_outcome(interval_hours: int, limit: int = 100) -> 
     - no outcome exists for that interval yet
     """
     try:
-        cutoff = datetime.utcnow() - timedelta(hours=interval_hours)
+        # Use SQLite-compatible datetime string for comparison
+        cutoff = (datetime.utcnow() - timedelta(hours=interval_hours)).strftime('%Y-%m-%d %H:%M:%S')
         
-        rows = await fetch(
-            """
-            SELECT s.* FROM signals s
-            LEFT JOIN signal_outcomes o 
-                ON s.signal_id = o.signal_id AND o.interval_hours = $1
-            WHERE s.detected_at <= $2
-                AND o.id IS NULL
-            ORDER BY s.detected_at ASC
-            LIMIT $3
-            """,
-            interval_hours, cutoff, limit
-        )
+        # Check if using SQLite (different query syntax)
+        if is_sqlite():
+            rows = await fetch(
+                """
+                SELECT s.* FROM signals s
+                LEFT JOIN signal_outcomes o 
+                    ON s.signal_id = o.signal_id AND o.interval_hours = ?
+                WHERE datetime(s.detected_at) <= datetime(?)
+                    AND o.id IS NULL
+                ORDER BY s.detected_at ASC
+                LIMIT ?
+                """,
+                interval_hours, cutoff, limit
+            )
+        else:
+            rows = await fetch(
+                """
+                SELECT s.* FROM signals s
+                LEFT JOIN signal_outcomes o 
+                    ON s.signal_id = o.signal_id AND o.interval_hours = $1
+                WHERE s.detected_at <= $2
+                    AND o.id IS NULL
+                ORDER BY s.detected_at ASC
+                LIMIT $3
+                """,
+                interval_hours, cutoff, limit
+            )
         
-        return [dict(r) for r in rows]
+        result = [dict(r) for r in rows]
+        if result:
+            print(f"[OutcomeChecker] Found {len(result)} pending signals for {interval_hours}h interval")
+        return result
         
     except Exception as e:
-        print(f"[DB] Failed to get pending signals: {e}")
+        print(f"[DB] Failed to get pending signals for {interval_hours}h: {e}")
         return []
 
 
@@ -161,37 +180,53 @@ async def store_outcome(
         eth_change = ((price_eth - entry_price_eth) / entry_price_eth * 100) if entry_price_eth > 0 else 0
         
         # Determine if prediction was correct
-        # For XRP signals, use XRP change; for ETH signals, use ETH change
         # A "hit" is when direction matches and move is >= 50% of predicted
         primary_change = xrp_change  # Default to XRP for XRPL-centric tracker
         
+        # Map direction aliases
+        dir_up = predicted_direction in ("up", "bullish", "long")
+        dir_down = predicted_direction in ("down", "bearish", "short")
+        
         hit = False
-        if predicted_direction == "up" and primary_change > 0:
+        if dir_up and primary_change > 0:
             hit = primary_change >= (predicted_move_pct * 0.5)
-        elif predicted_direction == "down" and primary_change < 0:
+        elif dir_down and primary_change < 0:
             hit = abs(primary_change) >= (abs(predicted_move_pct) * 0.5)
         elif predicted_direction == "neutral":
             hit = abs(primary_change) < 1.0  # Less than 1% move is correct for neutral
         
-        await execute(
-            """
-            INSERT INTO signal_outcomes (
-                signal_id, interval_hours, price_xrp, price_eth, price_btc,
-                xrp_change_pct, eth_change_pct, btc_change_pct, hit
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            ON CONFLICT (signal_id, interval_hours) DO UPDATE SET
-                price_xrp = EXCLUDED.price_xrp,
-                price_eth = EXCLUDED.price_eth,
-                xrp_change_pct = EXCLUDED.xrp_change_pct,
-                eth_change_pct = EXCLUDED.eth_change_pct,
-                hit = EXCLUDED.hit,
-                checked_at = NOW()
-            """,
-            signal_id, interval_hours, price_xrp, price_eth, 0.0,
-            xrp_change, eth_change, 0.0, hit
-        )
+        # Use SQLite-compatible INSERT OR REPLACE
+        if is_sqlite():
+            await execute(
+                """
+                INSERT OR REPLACE INTO signal_outcomes (
+                    signal_id, interval_hours, price_xrp, price_eth, price_btc,
+                    xrp_change_pct, eth_change_pct, btc_change_pct, hit, checked_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """,
+                signal_id, interval_hours, price_xrp, price_eth, 0.0,
+                xrp_change, eth_change, 0.0, 1 if hit else 0
+            )
+        else:
+            await execute(
+                """
+                INSERT INTO signal_outcomes (
+                    signal_id, interval_hours, price_xrp, price_eth, price_btc,
+                    xrp_change_pct, eth_change_pct, btc_change_pct, hit
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                ON CONFLICT (signal_id, interval_hours) DO UPDATE SET
+                    price_xrp = EXCLUDED.price_xrp,
+                    price_eth = EXCLUDED.price_eth,
+                    xrp_change_pct = EXCLUDED.xrp_change_pct,
+                    eth_change_pct = EXCLUDED.eth_change_pct,
+                    hit = EXCLUDED.hit,
+                    checked_at = NOW()
+                """,
+                signal_id, interval_hours, price_xrp, price_eth, 0.0,
+                xrp_change, eth_change, 0.0, hit
+            )
         
-        print(f"[DB] Stored outcome {signal_id[:16]}... {interval_hours}h: XRP {xrp_change:+.2f}% hit={hit}")
+        print(f"[Outcome] {signal_id[:12]}... {interval_hours}h: XRP {xrp_change:+.2f}% hit={hit}")
         return True
         
     except Exception as e:

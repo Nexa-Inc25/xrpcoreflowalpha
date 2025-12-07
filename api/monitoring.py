@@ -570,3 +570,94 @@ async def get_system_alerts() -> Dict[str, Any]:
         "alert_count": len(alerts),
         "alerts": alerts,
     }
+
+
+# =============================================================================
+# ADMIN ACTIONS
+# =============================================================================
+
+@router.post("/admin/trigger-outcome-check")
+async def trigger_outcome_check() -> Dict[str, Any]:
+    """
+    Manually trigger outcome checking for all intervals.
+    Useful for testing and debugging the outcome pipeline.
+    """
+    results = {
+        "timestamp": _now_iso(),
+        "intervals_checked": [],
+        "total_processed": 0,
+        "errors": [],
+    }
+    
+    try:
+        from workers.outcome_checker import check_outcomes_for_interval
+        
+        for interval in [1, 4, 12, 24]:
+            try:
+                processed = await check_outcomes_for_interval(interval)
+                results["intervals_checked"].append({
+                    "interval_hours": interval,
+                    "processed": processed,
+                })
+                results["total_processed"] += processed
+            except Exception as e:
+                results["errors"].append(f"{interval}h: {str(e)}")
+        
+    except Exception as e:
+        results["errors"].append(f"Import error: {str(e)}")
+    
+    return results
+
+
+@router.post("/admin/collect-latency-sample")
+async def collect_latency_sample() -> Dict[str, Any]:
+    """
+    Manually collect a latency sample for ML training.
+    """
+    try:
+        from predictors.latency_pinger import collect_single_sample
+        sample = await collect_single_sample()
+        return {
+            "timestamp": _now_iso(),
+            "success": True,
+            "sample": sample,
+        }
+    except ImportError:
+        # Create a simple sample collector if pinger doesn't exist
+        import httpx
+        
+        start = time.time()
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                await client.get("https://api.coingecko.com/api/v3/ping")
+            latency = (time.time() - start) * 1000
+            
+            # Store in DB
+            conn = _get_db_connection()
+            if conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "INSERT INTO latency_events (endpoint, latency_ms, collected_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
+                    ("coingecko_ping", latency)
+                )
+                conn.commit()
+                conn.close()
+            
+            return {
+                "timestamp": _now_iso(),
+                "success": True,
+                "latency_ms": round(latency, 2),
+                "endpoint": "coingecko_ping",
+            }
+        except Exception as e:
+            return {
+                "timestamp": _now_iso(),
+                "success": False,
+                "error": str(e),
+            }
+    except Exception as e:
+        return {
+            "timestamp": _now_iso(),
+            "success": False,
+            "error": str(e),
+        }
