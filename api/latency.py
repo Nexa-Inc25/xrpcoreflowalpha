@@ -654,3 +654,72 @@ async def debug_latency_model() -> Dict[str, Any]:
             "updated_at": _now_iso(),
             "error": str(e),
         }
+
+
+# ============================================================
+# EDUCATOR COURSE CONTENT
+# ============================================================
+
+COURSE_LESSONS = [
+    {"id": "order_flow", "title": "Order Flow Basics", "description": "Understanding order book imbalance and HFT detection"},
+    {"id": "hft_patterns", "title": "HFT Pattern Recognition", "description": "Identifying Citadel, Jump, and other algo signatures"},
+    {"id": "spoofing", "title": "Spoofing Detection", "description": "Recognizing and trading around spoofing behavior"},
+    {"id": "correlations", "title": "Cross-Market Correlations", "description": "Trading XRP/SPY/ES correlations"},
+    {"id": "futures_basics", "title": "Futures for Crypto Traders", "description": "ES, NQ basics and overnight sessions"},
+    {"id": "risk_mgmt", "title": "Position Sizing", "description": "Managing risk with correlated assets"},
+    {"id": "latency_arb", "title": "Latency Edge", "description": "Using HFT activity as leading indicators"},
+    {"id": "xrpl_settlement", "title": "XRPL Settlement Layer", "description": "Institutional flow routing through XRPL"},
+]
+
+
+@router.get("/educator/course")
+async def get_course_content() -> Dict[str, Any]:
+    """
+    Get futures trading course content and current market regime.
+    
+    Returns lesson list, current regime analysis, and pro tier benefits.
+    """
+    # Get market regime from correlations
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.get("http://localhost:8010/analytics/heatmap?assets=xrp,btc,eth,spy,gold")
+            if resp.status_code == 200:
+                data = resp.json()
+                matrix = data.get("matrix", {})
+                
+                btc_eth = matrix.get("BTC", {}).get("ETH", 0)
+                xrp_spy = matrix.get("XRP", {}).get("SPY", 0)
+                
+                if btc_eth > 0.7 and xrp_spy > 0.3:
+                    regime = "risk_on"
+                elif btc_eth > 0.7 and xrp_spy < -0.2:
+                    regime = "divergence"
+                else:
+                    regime = "neutral"
+            else:
+                regime = "unknown"
+    except:
+        regime = "unknown"
+    
+    return {
+        "updated_at": _now_iso(),
+        "course": {
+            "name": "ZK Alpha Flow Futures Trading",
+            "lessons": COURSE_LESSONS,
+            "total_lessons": len(COURSE_LESSONS),
+        },
+        "market_regime": regime,
+        "pro_benefits": [
+            "Live Slack alerts with teaching context",
+            "Correlation-based trade signals",
+            "HFT pattern notifications",
+            "Course material + real examples",
+            "Educator dashboard access",
+        ],
+        "pricing": {
+            "basic": {"price": 79, "features": ["Core tracker", "Basic alerts"]},
+            "pro": {"price": 199, "features": ["Full course", "Live Slack", "Priority support"]},
+        },
+        "cta_url": "https://zkalphaflow.com/settings",
+    }

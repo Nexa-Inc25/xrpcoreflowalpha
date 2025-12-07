@@ -194,6 +194,14 @@ async def _startup():
     except Exception as e:
         print(f"[STARTUP] Slack latency bot skipped: {e}")
     
+    # Educator bot for futures trading courses
+    try:
+        from workers.educator_bot import start_educator_bot
+        asyncio.create_task(start_educator_bot())
+        print("[STARTUP] Educator bot started")
+    except Exception as e:
+        print(f"[STARTUP] Educator bot skipped: {e}")
+    
     if DATABENTO_API_KEY:
         asyncio.create_task(start_databento_macro_tracker())
     elif POLYGON_API_KEY:
