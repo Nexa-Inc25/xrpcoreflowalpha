@@ -226,6 +226,126 @@ function getEventDescription(event: any): string {
   return `Flow activity detected. Low confidence signal - pattern developing.`;
 }
 
+// Helper component for event row content (shared between Link and div wrappers)
+function EventRowContent({ 
+  event, 
+  description, 
+  isIsoFlow, 
+  isHighConf, 
+  isMediumConf, 
+  conf, 
+  type, 
+  network, 
+  usd, 
+  ruleScore,
+  getTypeIcon,
+  getTypeColor
+}: {
+  event: any;
+  description: string;
+  isIsoFlow: boolean;
+  isHighConf: boolean;
+  isMediumConf: boolean;
+  conf: string;
+  type: string;
+  network: any;
+  usd: number | undefined;
+  ruleScore: number | undefined;
+  getTypeIcon: () => JSX.Element;
+  getTypeColor: () => string;
+}) {
+  return (
+    <>
+      {/* Type icon */}
+      <div className={cn(
+        "flex-shrink-0 w-9 h-9 rounded-lg border flex items-center justify-center mt-0.5",
+        getTypeColor()
+      )}>
+        {getTypeIcon()}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        {isIsoFlow ? (
+          <IsoFlowCard event={event} />
+        ) : (
+          <>
+            {/* Message - use meaningful description */}
+            <p className="text-sm leading-relaxed text-slate-200 group-hover:text-white transition-colors line-clamp-2">
+              {description}
+            </p>
+
+            {/* Meta row */}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {/* Confidence badge */}
+              <span className={cn(
+                "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium",
+                isHighConf && "badge-high",
+                isMediumConf && "badge-medium",
+                !isHighConf && !isMediumConf && "badge-low"
+              )}>
+                <span className={cn(
+                  "w-1.5 h-1.5 rounded-full",
+                  isHighConf && "bg-emerald-400",
+                  isMediumConf && "bg-amber-400",
+                  !isHighConf && !isMediumConf && "bg-slate-400"
+                )} />
+                {conf || 'low'}
+              </span>
+
+              {/* Type */}
+              <span className="px-2 py-0.5 rounded-full bg-surface-2/80 text-[10px] font-medium uppercase tracking-wider text-slate-300">
+                {type}
+              </span>
+
+              {/* Network */}
+              {network && (
+                <span className="px-2 py-0.5 rounded-full bg-surface-1 text-[10px] text-slate-400 border border-white/5">
+                  {String(network).toUpperCase()}
+                </span>
+              )}
+
+              {/* USD value */}
+              {typeof usd === 'number' && usd > 0 && (
+                <span className="text-[11px] font-mono text-slate-400">
+                  {formatUSD(usd)}
+                </span>
+              )}
+
+              {/* Time */}
+              {event.timestamp && (
+                <span className="text-[11px] text-slate-500 ml-auto">
+                  {timeAgo(event.timestamp)}
+                </span>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Right side: score + expand icon */}
+      <div className="flex-shrink-0 flex flex-col items-end gap-2">
+        {ruleScore != null && ruleScore >= 50 && (
+          <div className={cn(
+            "px-2 py-1 rounded-lg text-xs font-semibold tabular-nums",
+            ruleScore >= 80 
+              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" 
+              : ruleScore >= 60 
+                ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                : "bg-slate-700/50 text-slate-300 border border-slate-600/50"
+          )}>
+            {ruleScore.toFixed(0)}
+          </div>
+        )}
+        <div className="flex items-center gap-1">
+          <BarChart3 className="w-4 h-4 text-slate-600 group-hover:text-brand-sky transition-colors" />
+          <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-slate-400 group-hover:translate-x-0.5 transition-all" />
+        </div>
+      </div>
+    </>
+  );
+}
+
 const EventRow = forwardRef<HTMLLIElement, EventRowProps>(function EventRow({ 
   event, 
   index, 
@@ -233,7 +353,11 @@ const EventRow = forwardRef<HTMLLIElement, EventRowProps>(function EventRow({
   onHover,
   onSelect
 }, ref) {
-  const txHash = event.features?.tx_hash || event.features?.txHash;
+  // Only use REAL blockchain tx hashes (must start with 0x for ETH or be valid XRPL hash)
+  const rawTxHash = event.features?.tx_hash || event.features?.txHash || event.tx_hash;
+  const txHash = rawTxHash && (rawTxHash.startsWith('0x') || /^[A-F0-9]{64}$/i.test(rawTxHash)) 
+    ? rawTxHash 
+    : undefined;
   const conf = String(event.confidence || '').toLowerCase();
   const type = String(event.type || '').toLowerCase();
   const network = event.network || event.features?.network;
@@ -286,97 +410,45 @@ const EventRow = forwardRef<HTMLLIElement, EventRowProps>(function EventRow({
         <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b from-emerald-400 to-emerald-600" />
       )}
 
-      <Link
-        href={`/flow/${encodeURIComponent(txHash || event.id || 'unknown')}`}
-        className="flex items-start gap-4 px-5 py-4 w-full text-left"
-      >
-        {/* Type icon */}
-        <div className={cn(
-          "flex-shrink-0 w-9 h-9 rounded-lg border flex items-center justify-center mt-0.5",
-          getTypeColor()
-        )}>
-          {getTypeIcon()}
+      {/* Content wrapper - only link if we have a real tx hash */}
+      {txHash ? (
+        <Link
+          href={`/flow/${encodeURIComponent(txHash)}`}
+          className="flex items-start gap-4 px-5 py-4 w-full text-left"
+        >
+          <EventRowContent 
+            event={event} 
+            description={description} 
+            isIsoFlow={isIsoFlow}
+            isHighConf={isHighConf}
+            isMediumConf={isMediumConf}
+            conf={conf}
+            type={type}
+            network={network}
+            usd={usd}
+            ruleScore={ruleScore}
+            getTypeIcon={getTypeIcon}
+            getTypeColor={getTypeColor}
+          />
+        </Link>
+      ) : (
+        <div className="flex items-start gap-4 px-5 py-4 w-full text-left cursor-default">
+          <EventRowContent 
+            event={event} 
+            description={description} 
+            isIsoFlow={isIsoFlow}
+            isHighConf={isHighConf}
+            isMediumConf={isMediumConf}
+            conf={conf}
+            type={type}
+            network={network}
+            usd={usd}
+            ruleScore={ruleScore}
+            getTypeIcon={getTypeIcon}
+            getTypeColor={getTypeColor}
+          />
         </div>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          {isIsoFlow ? (
-            <IsoFlowCard event={event} />
-          ) : (
-            <>
-              {/* Message - use meaningful description */}
-              <p className="text-sm leading-relaxed text-slate-200 group-hover:text-white transition-colors line-clamp-2">
-                {description}
-              </p>
-
-              {/* Meta row */}
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                {/* Confidence badge */}
-                <span className={cn(
-                  "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium",
-                  isHighConf && "badge-high",
-                  isMediumConf && "badge-medium",
-                  !isHighConf && !isMediumConf && "badge-low"
-                )}>
-                  <span className={cn(
-                    "w-1.5 h-1.5 rounded-full",
-                    isHighConf && "bg-emerald-400",
-                    isMediumConf && "bg-amber-400",
-                    !isHighConf && !isMediumConf && "bg-slate-400"
-                  )} />
-                  {conf || 'low'}
-                </span>
-
-                {/* Type */}
-                <span className="px-2 py-0.5 rounded-full bg-surface-2/80 text-[10px] font-medium uppercase tracking-wider text-slate-300">
-                  {type}
-                </span>
-
-                {/* Network */}
-                {network && (
-                  <span className="px-2 py-0.5 rounded-full bg-surface-1 text-[10px] text-slate-400 border border-white/5">
-                    {String(network).toUpperCase()}
-                  </span>
-                )}
-
-                {/* USD value */}
-                {typeof usd === 'number' && usd > 0 && (
-                  <span className="text-[11px] font-mono text-slate-400">
-                    {formatUSD(usd)}
-                  </span>
-                )}
-
-                {/* Time */}
-                {event.timestamp && (
-                  <span className="text-[11px] text-slate-500 ml-auto">
-                    {timeAgo(event.timestamp)}
-                  </span>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Right side: score + expand icon */}
-        <div className="flex-shrink-0 flex flex-col items-end gap-2">
-          {ruleScore != null && ruleScore >= 50 && (
-            <div className={cn(
-              "px-2 py-1 rounded-lg text-xs font-semibold tabular-nums",
-              ruleScore >= 80 
-                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" 
-                : ruleScore >= 60 
-                  ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
-                  : "bg-slate-700/50 text-slate-300 border border-slate-600/50"
-            )}>
-              {ruleScore.toFixed(0)}
-            </div>
-          )}
-          <div className="flex items-center gap-1">
-            <BarChart3 className="w-4 h-4 text-slate-600 group-hover:text-brand-sky transition-colors" />
-            <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-slate-400 group-hover:translate-x-0.5 transition-all" />
-          </div>
-        </div>
-      </Link>
+      )}
     </motion.li>
   );
 });
