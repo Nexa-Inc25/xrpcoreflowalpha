@@ -94,6 +94,11 @@ services:
         value: "75"
       - key: HFT_LATENCY_THRESHOLD
         value: "50"
+      # Wallet analysis APIs
+      - key: ETHERSCAN_API_KEY
+        type: SECRET
+      - key: DUNE_API_KEY
+        type: SECRET
 
 workers:
   - name: worker
