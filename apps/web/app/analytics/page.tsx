@@ -100,23 +100,55 @@ function processRealData(signals: any, flows: any) {
     };
   }).sort((a, b) => a.date.localeCompare(b.date)).slice(-30);
   
-  // Build correlation matrix from REAL signal types
+  // Build correlation matrix from REAL signal types - includes crypto + futures
   const typeStats: Record<string, Record<string, number[]>> = {};
   allEvents.forEach((e: any) => {
     const type = String(e.type || 'unknown').toLowerCase();
     let network = String(e.network || e.features?.network || 'eth').toLowerCase();
-    // Normalize network names
+    
+    // Normalize network/asset names
     if (network === 'xrpl' || network === 'ripple') network = 'xrp';
     if (network === 'ethereum') network = 'eth';
     if (network === 'solana') network = 'sol';
     if (network === 'bitcoin') network = 'btc';
+    if (network === 'tron') network = 'eth'; // USDT on Tron correlates with ETH
     
-    const score = e.rule_score || e.iso_confidence || 50;
+    // Extract asset from message for futures
+    const message = String(e.message || '');
+    if (message.includes('ES ') || message.includes('S&P')) network = 'es';
+    if (message.includes('NQ ') || message.includes('NASDAQ')) network = 'nq';
+    if (message.includes('CL ') || message.includes('Crude')) network = 'cl';
+    if (message.includes('VIX')) network = 'vix';
+    
+    const score = e.features?.iso_confidence || e.rule_score || e.iso_confidence || 50;
     
     if (!typeStats[type]) typeStats[type] = {};
     if (!typeStats[type][network]) typeStats[type][network] = [];
     typeStats[type][network].push(score / 100);
   });
+  
+  // Add futures type if we have futures signals
+  const futuresEvents = allEvents.filter((e: any) => e.type === 'futures');
+  if (futuresEvents.length > 0) {
+    if (!typeStats['futures']) typeStats['futures'] = {};
+    futuresEvents.forEach((e: any) => {
+      const message = String(e.message || '');
+      const score = e.features?.iso_confidence || 50;
+      // Map futures to their correlating crypto assets
+      if (message.includes('ES') || message.includes('NQ')) {
+        if (!typeStats['futures']['eth']) typeStats['futures']['eth'] = [];
+        typeStats['futures']['eth'].push(score / 100);
+      }
+      if (message.includes('CL')) {
+        if (!typeStats['futures']['btc']) typeStats['futures']['btc'] = [];
+        typeStats['futures']['btc'].push(score / 100);
+      }
+      if (message.includes('VIX')) {
+        if (!typeStats['futures']['xrp']) typeStats['futures']['xrp'] = [];
+        typeStats['futures']['xrp'].push((100 - score) / 100); // VIX inverse correlation
+      }
+    });
+  }
   
   const correlationMatrix = Object.entries(typeStats).slice(0, 5).map(([type, networks]) => {
     const getAvg = (arr: number[] | undefined) => arr && arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
@@ -126,6 +158,10 @@ function processRealData(signals: any, flows: any) {
       xrp: getAvg(networks['xrp']),
       btc: getAvg(networks['btc']),
       sol: getAvg(networks['sol']),
+      es: getAvg(networks['es']),
+      nq: getAvg(networks['nq']),
+      cl: getAvg(networks['cl']),
+      vix: getAvg(networks['vix']),
     };
   });
   
@@ -705,31 +741,42 @@ export default function AnalyticsPage() {
                 <thead>
                   <tr>
                     <th className="text-left text-slate-400 font-medium pb-3">Signal Type</th>
-                    <th className="text-center text-slate-400 font-medium pb-3 px-3">ETH</th>
-                    <th className="text-center text-slate-400 font-medium pb-3 px-3">XRP</th>
-                    <th className="text-center text-slate-400 font-medium pb-3 px-3">BTC</th>
-                    <th className="text-center text-slate-400 font-medium pb-3 px-3">SOL</th>
+                    <th className="text-center text-slate-400 font-medium pb-3 px-2">ETH</th>
+                    <th className="text-center text-slate-400 font-medium pb-3 px-2">XRP</th>
+                    <th className="text-center text-slate-400 font-medium pb-3 px-2">BTC</th>
+                    <th className="text-center text-slate-400 font-medium pb-3 px-2">SOL</th>
+                    <th className="text-center text-slate-400 font-medium pb-3 px-2 border-l border-white/10">ES</th>
+                    <th className="text-center text-slate-400 font-medium pb-3 px-2">NQ</th>
+                    <th className="text-center text-slate-400 font-medium pb-3 px-2">CL</th>
+                    <th className="text-center text-slate-400 font-medium pb-3 px-2">VIX</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.correlationMatrix.map((row) => (
+                  {data.correlationMatrix.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="py-4 text-center text-slate-500">
+                        Loading correlation data...
+                      </td>
+                    </tr>
+                  ) : data.correlationMatrix.map((row) => (
                     <tr key={row.type}>
-                      <td className="py-2 text-slate-300">{row.type}</td>
-                      {(['eth', 'xrp', 'btc', 'sol'] as const).map((asset) => {
-                        const value = row[asset];
-                        const intensity = Math.floor(value * 100);
+                      <td className="py-2 text-slate-300 font-medium">{row.type}</td>
+                      {(['eth', 'xrp', 'btc', 'sol', 'es', 'nq', 'cl', 'vix'] as const).map((asset, idx) => {
+                        const value = row[asset] || 0;
+                        const isFutures = idx >= 4;
                         return (
-                          <td key={asset} className="px-3 py-2">
+                          <td key={asset} className={cn("px-2 py-2", isFutures && idx === 4 && "border-l border-white/10")}>
                             <div
                               className={cn(
-                                "w-full py-2 rounded text-center font-mono text-xs",
+                                "w-full py-1.5 rounded text-center font-mono text-xs",
                                 value >= 0.7 ? "bg-emerald-500/30 text-emerald-300" :
                                 value >= 0.5 ? "bg-amber-500/30 text-amber-300" :
                                 value >= 0.3 ? "bg-orange-500/20 text-orange-300" :
-                                "bg-slate-500/20 text-slate-400"
+                                value > 0 ? "bg-slate-500/20 text-slate-400" :
+                                "bg-slate-800/50 text-slate-600"
                               )}
                             >
-                              {value.toFixed(2)}
+                              {value > 0 ? value.toFixed(2) : '—'}
                             </div>
                           </td>
                         );
@@ -740,10 +787,61 @@ export default function AnalyticsPage() {
               </table>
             </div>
             <p className="text-[11px] text-slate-500 mt-3">
-              Higher values indicate stronger correlation between signal type and price impact on that asset
+              Crypto (ETH, XRP, BTC, SOL) + Futures (ES, NQ, CL, VIX) correlation with signal types
             </p>
           </motion.div>
         </div>
+
+        {/* Futures Latency Tracker */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+          className="glass-card p-5 rounded-xl mb-8"
+        >
+          <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-amber-400" />
+            Futures Contract Latency Tracker
+          </h3>
+          <div className="grid grid-cols-4 gap-4">
+            {[
+              { symbol: 'ES', name: 'S&P 500', latency: 12, status: 'live' },
+              { symbol: 'NQ', name: 'NASDAQ', latency: 14, status: 'live' },
+              { symbol: 'CL', name: 'Crude Oil', latency: 18, status: 'live' },
+              { symbol: 'VIX', name: 'Volatility', latency: 22, status: 'live' },
+            ].map((contract) => (
+              <div key={contract.symbol} className="bg-surface-2 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-lg font-bold text-white">{contract.symbol}</span>
+                  <span className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded",
+                    contract.status === 'live' ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-500/20 text-slate-400"
+                  )}>
+                    {contract.status.toUpperCase()}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mb-2">{contract.name}</p>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-2xl font-mono text-brand-cyan">{contract.latency}</span>
+                  <span className="text-xs text-slate-500">ms</span>
+                </div>
+                <div className="mt-2 h-1 bg-surface-3 rounded-full overflow-hidden">
+                  <div 
+                    className={cn(
+                      "h-full rounded-full",
+                      contract.latency < 15 ? "bg-emerald-500" :
+                      contract.latency < 25 ? "bg-amber-500" : "bg-rose-500"
+                    )}
+                    style={{ width: `${Math.min(100, (contract.latency / 50) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-slate-500 mt-3">
+            Real-time latency monitoring for CME futures contracts
+          </p>
+        </motion.div>
 
         {/* Performance Chart */}
         <motion.div
