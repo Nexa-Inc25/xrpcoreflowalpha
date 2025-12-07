@@ -103,21 +103,30 @@ function processRealData(signals: any, flows: any) {
   const typeStats: Record<string, Record<string, number[]>> = {};
   allEvents.forEach((e: any) => {
     const type = String(e.type || 'unknown').toLowerCase();
-    const network = String(e.network || e.features?.network || 'eth').toLowerCase();
-    const score = e.rule_score || 50;
+    let network = String(e.network || e.features?.network || 'eth').toLowerCase();
+    // Normalize network names
+    if (network === 'xrpl' || network === 'ripple') network = 'xrp';
+    if (network === 'ethereum') network = 'eth';
+    if (network === 'solana') network = 'sol';
+    if (network === 'bitcoin') network = 'btc';
+    
+    const score = e.rule_score || e.iso_confidence || 50;
     
     if (!typeStats[type]) typeStats[type] = {};
     if (!typeStats[type][network]) typeStats[type][network] = [];
     typeStats[type][network].push(score / 100);
   });
   
-  const correlationMatrix = Object.entries(typeStats).slice(0, 5).map(([type, networks]) => ({
-    type: type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-    eth: networks['eth'] ? (networks['eth'].reduce((a, b) => a + b, 0) / networks['eth'].length) : 0,
-    xrp: networks['xrp'] || networks['xrpl'] ? ((networks['xrp'] || networks['xrpl'] || []).reduce((a: number, b: number) => a + b, 0) / (networks['xrp'] || networks['xrpl'] || [1]).length) : 0,
-    btc: networks['btc'] ? (networks['btc'].reduce((a, b) => a + b, 0) / networks['btc'].length) : 0,
-    sol: networks['sol'] || networks['solana'] ? ((networks['sol'] || networks['solana'] || []).reduce((a: number, b: number) => a + b, 0) / (networks['sol'] || networks['solana'] || [1]).length) : 0,
-  }));
+  const correlationMatrix = Object.entries(typeStats).slice(0, 5).map(([type, networks]) => {
+    const getAvg = (arr: number[] | undefined) => arr && arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+    return {
+      type: type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      eth: getAvg(networks['eth']),
+      xrp: getAvg(networks['xrp']),
+      btc: getAvg(networks['btc']),
+      sol: getAvg(networks['sol']),
+    };
+  });
   
   // Top performing signals from REAL data
   const topSignals = allEvents
@@ -303,7 +312,7 @@ export default function AnalyticsPage() {
                     )}>
                       {tier} Confidence
                     </span>
-                    <span className="text-sm font-mono">{stats.rate}%</span>
+                    <span className="text-sm font-mono">{Math.round(stats.rate)}%</span>
                   </div>
                   <div className="h-2 rounded-full bg-surface-2 overflow-hidden">
                     <motion.div
