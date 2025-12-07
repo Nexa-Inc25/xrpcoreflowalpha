@@ -267,12 +267,22 @@ export default function AnalyticsPage() {
   // Process data - use real DB analytics if available, otherwise fallback to signal processing
   const data = useMemo(() => {
     if (hasRealAnalytics) {
-      // Use real database analytics
+      // Use real database analytics - map API fields to expected format
+      const mappedSignals = (realAnalytics.top_signals || []).map((s: any) => ({
+        id: s.id,
+        type: s.type,
+        asset: s.summary?.match(/\d+\.?\d*[MKB]?\s+(\w+)/)?.[1] || 'USD',
+        confidence: s.confidence,
+        predictedImpact: 1.0, // Default predicted move
+        actualImpact: s.actual_move || 0,
+        direction: (s.actual_move || 0) > 0 ? 'bullish' : 'bearish',
+        timestamp: s.detected_at,
+      }));
       return {
         winRates: realAnalytics.win_rates,
         dailyPerformance: realAnalytics.daily_performance || [],
         correlationMatrix: [], // Not yet in real data
-        topSignals: realAnalytics.top_signals || [],
+        topSignals: mappedSignals,
       };
     }
     // Fallback to processing signals (for when DB is not available)
