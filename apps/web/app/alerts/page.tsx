@@ -51,13 +51,9 @@ interface SystemAlert {
   action: string;
 }
 
-// No mock data - empty initial state
-const mockAlerts: Alert[] = [];
-const mockHistory: AlertHistory[] = [];
-
 export default function AlertsPage() {
-  const [alerts, setAlerts] = useState<Alert[]>(mockAlerts);
-  const [history, setHistory] = useState<AlertHistory[]>(mockHistory);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [history, setHistory] = useState<AlertHistory[]>([]);
   const [activeTab, setActiveTab] = useState<'rules' | 'history' | 'system'>('system');
   
   // Fetch system alerts from API

@@ -166,60 +166,6 @@ async def _fetch_price_history(asset: str) -> List[float]:
     return prices
 
 
-def _generate_mock_correlation() -> float:
-    """Generate realistic mock correlation value."""
-    # Biased towards moderate correlations
-    base = random.gauss(0.3, 0.4)
-    return max(-1.0, min(1.0, base))
-
-
-def _generate_mock_matrix(assets: List[str]) -> Dict[str, Dict[str, float]]:
-    """Generate mock correlation matrix with realistic values."""
-    # Predefined realistic correlations for known pairs
-    # VIX is key - inverse to SPY, positive during risk-off
-    known_correlations = {
-        ("xrp", "btc"): 0.72,
-        ("xrp", "eth"): 0.68,
-        ("btc", "eth"): 0.85,
-        ("xrp", "spy"): 0.35,
-        ("xrp", "es"): 0.38,
-        ("xrp", "gold"): 0.15,
-        ("xrp", "vix"): -0.28,  # XRP inversely correlated with fear
-        ("btc", "spy"): 0.42,
-        ("btc", "gold"): 0.22,
-        ("btc", "vix"): -0.35,  # BTC drops when VIX spikes
-        ("eth", "spy"): 0.48,
-        ("eth", "vix"): -0.40,  # ETH more sensitive to VIX
-        ("spy", "es"): 0.98,
-        ("spy", "qqq"): 0.92,
-        ("spy", "gold"): -0.15,
-        ("spy", "vix"): -0.82,  # Strong inverse - key risk indicator
-        ("es", "vix"): -0.80,   # Futures also inverse
-        ("qqq", "vix"): -0.78,  # Tech more volatile
-        ("gold", "vix"): 0.25,  # Gold rises with fear
-        ("gld", "vix"): 0.25,
-    }
-    
-    matrix = {}
-    for a1 in assets:
-        matrix[a1] = {}
-        for a2 in assets:
-            if a1 == a2:
-                matrix[a1][a2] = 1.0
-            else:
-                # Check known correlations
-                key = tuple(sorted([a1.lower(), a2.lower()]))
-                if key in known_correlations:
-                    corr = known_correlations[key]
-                    # Add small noise
-                    corr += random.uniform(-0.05, 0.05)
-                else:
-                    corr = _generate_mock_correlation()
-                matrix[a1][a2] = round(corr, 3)
-    
-    return matrix
-
-
 async def _compute_correlation(asset1: str, asset2: str) -> float:
     """Compute correlation between two assets using real price data."""
     prices1, prices2 = await asyncio.gather(
@@ -284,44 +230,14 @@ async def get_correlations(
 async def get_correlation_heatmap(
     assets: str = Query("xrp,eth,btc,spy,gold", description="Comma-separated assets"),
     raw: bool = Query(False, description="Raw data mode"),
-    mock: bool = Query(False, description="Return mock data for testing"),
 ) -> Dict[str, Any]:
     """
     Generate correlation heatmap matrix for multi-asset analysis.
     
     Supports crypto (XRP, BTC, ETH, SOL) and equities/futures (SPY, ES, QQQ, VIX, GLD).
-    Use ?mock=true for testing/demo data with realistic correlation values.
+    Uses real-time price data from CoinGecko and Polygon APIs.
     """
     asset_list = [a.strip().lower() for a in assets.split(",")]
-    
-    # Mock mode - return predefined realistic correlations
-    if mock:
-        matrix = _generate_mock_matrix(asset_list)
-        
-        # Generate insights
-        insights = []
-        for a1 in asset_list:
-            for a2 in asset_list:
-                if a1 < a2:  # Avoid duplicates
-                    corr = matrix[a1][a2]
-                    if abs(corr) > 0.7:
-                        insights.append({
-                            "pair": f"{a1.upper()}/{a2.upper()}",
-                            "correlation": corr,
-                            "strength": "strong",
-                            "signal": "Moves together" if corr > 0 else "Inverse relationship",
-                        })
-        
-        return {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "assets": [a.upper() for a in asset_list],
-            "matrix": {k.upper(): {k2.upper(): v2 for k2, v2 in v.items()} for k, v in matrix.items()},
-            "insights": insights[:5],
-            "raw_mode": raw,
-            "data_source": "mock",
-            "cached_ttl_seconds": 0,
-            "supported_assets": ALL_ASSETS,
-        }
     
     # Live mode - fetch real price data
     price_data = {}
@@ -333,20 +249,19 @@ async def get_correlation_heatmap(
     # Check if we got enough data (rate limiting check)
     data_available = sum(1 for p in price_data.values() if len(p) >= 10)
     
-    # If rate limited (no data), use historical baseline correlations
+    # If rate limited (no data), return empty matrix with error message
     if data_available < 2:
-        print(f"[Correlations] Using baseline correlations (rate limited, got {data_available} assets)")
-        matrix = _generate_mock_matrix(asset_list)  # Use realistic baselines
+        print(f"[Correlations] No sufficient data available (rate limited, got {data_available} assets)")
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "assets": [a.upper() for a in asset_list],
-            "matrix": {k.upper(): {k2.upper(): v2 for k2, v2 in v.items()} for k, v in matrix.items()},
+            "matrix": {a.upper(): {b.upper(): 0.0 for b in asset_list} for a in asset_list},
             "insights": [],
             "raw_mode": raw,
-            "data_source": "baseline_historical",  # Indicates fallback
-            "cached_ttl_seconds": _CACHE_TTL,
+            "data_source": "api_rate_limited",
+            "cached_ttl_seconds": 60,
             "supported_assets": ALL_ASSETS,
-            "note": "Using historical baseline correlations (API rate limited)",
+            "note": "Insufficient data - API rate limited. Please try again in a minute.",
         }
     
     # Compute correlation matrix from live data

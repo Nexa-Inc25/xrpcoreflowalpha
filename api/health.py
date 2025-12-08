@@ -1,12 +1,31 @@
 import time
 import redis.asyncio as redis
 from fastapi import APIRouter
+from datetime import datetime, timezone
+from typing import Dict, Any
 
 from app.config import (
     REDIS_URL,
+    APP_VERSION,
+    APP_ENV
 )
 
 router = APIRouter()
+
+
+@router.get("/health")
+async def health_check() -> Dict[str, Any]:
+    """
+    Basic health check endpoint for DigitalOcean App Platform.
+    Returns 200 OK if the service is running.
+    """
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version": APP_VERSION,
+        "environment": APP_ENV,
+        "service": "zkalphaflow-api"
+    }
 
 
 async def _get_redis() -> redis.Redis:

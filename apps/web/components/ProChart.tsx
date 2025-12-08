@@ -28,42 +28,11 @@ interface ChartData {
 
 interface ProChartProps {
   symbol: string;
-  data?: ChartData[];
+  data: ChartData[];  // Required - no mock data
   height?: number;
   showVolume?: boolean;
   showIndicators?: boolean;
   className?: string;
-}
-
-// Generate mock OHLCV data
-function generateMockData(days: number = 30): ChartData[] {
-  const data: ChartData[] = [];
-  const now = Date.now();
-  const day = 24 * 60 * 60 * 1000;
-  let price = 3500 + Math.random() * 500;
-
-  for (let i = days; i >= 0; i--) {
-    const volatility = 0.02 + Math.random() * 0.03;
-    const change = (Math.random() - 0.5) * volatility;
-    const open = price;
-    const close = price * (1 + change);
-    const high = Math.max(open, close) * (1 + Math.random() * 0.01);
-    const low = Math.min(open, close) * (1 - Math.random() * 0.01);
-    const volume = Math.floor(Math.random() * 1000000000) + 100000000;
-
-    data.push({
-      time: now - i * day,
-      open,
-      high,
-      low,
-      close,
-      volume,
-    });
-
-    price = close;
-  }
-
-  return data;
 }
 
 // Calculate moving average
@@ -118,7 +87,7 @@ export default function ProChart({
   const [crosshair, setCrosshair] = useState<{ x: number; y: number; data: ChartData | null } | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
 
-  const data = useMemo(() => propData || generateMockData(60), [propData]);
+  const data = useMemo(() => propData || [], [propData]);
   const ma20 = useMemo(() => calculateMA(data, 20), [data]);
   const ma50 = useMemo(() => calculateMA(data, 50), [data]);
   const rsi = useMemo(() => calculateRSI(data), [data]);

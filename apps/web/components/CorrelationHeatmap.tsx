@@ -23,13 +23,12 @@ interface HeatmapData {
 
 interface Props {
   assets?: string;
-  mock?: boolean;
   compact?: boolean;
 }
 
-async function fetchHeatmap(assets: string, mock: boolean): Promise<HeatmapData> {
+async function fetchHeatmap(assets: string): Promise<HeatmapData> {
   const base = process.env.NEXT_PUBLIC_API_BASE || 'https://api.zkalphaflow.com';
-  const res = await fetch(`${base}/analytics/heatmap?assets=${assets}&mock=${mock}`);
+  const res = await fetch(`${base}/analytics/heatmap?assets=${assets}`);
   if (!res.ok) throw new Error('Failed to fetch heatmap');
   return res.json();
 }
@@ -51,12 +50,11 @@ function getTextColor(value: number): string {
 
 export default function CorrelationHeatmap({ 
   assets = 'xrp,eth,btc,spy,gold', 
-  mock = false,  // Always false in production - real CoinGecko/Polygon data
   compact = false 
 }: Props) {
   const { data, isLoading, error } = useQuery({
-    queryKey: ['correlation_heatmap', assets, mock],
-    queryFn: () => fetchHeatmap(assets, mock),
+    queryKey: ['correlation_heatmap', assets],
+    queryFn: () => fetchHeatmap(assets),
     staleTime: 60_000,
     refetchInterval: 60_000,
   });

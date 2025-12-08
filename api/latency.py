@@ -23,56 +23,7 @@ from fastapi.responses import StreamingResponse
 from app.config import REDIS_URL
 
 
-# ============================================================
-# MOCK DATA GENERATORS
-# ============================================================
-
-def _generate_mock_latency_events(count: int = 20) -> List[Dict]:
-    """Generate mock latency events for testing/demos."""
-    exchanges = ['binance', 'cme', 'coinbase', 'kraken']
-    symbols = ['BTCUSDT', 'ES', 'ETHUSDT', 'NQ', 'XRPUSDT']
-    signatures = ['citadel_hft', 'jump_crypto', 'wintermute_mm', 'tower_research', 'virtu_financial', None]
-    
-    events = []
-    for i in range(count):
-        latency = random.uniform(5, 150)
-        is_hft = latency < 50
-        anomaly_score = 95 if latency < 15 else 85 if latency < 30 else 70 if latency < 50 else 50 if latency < 80 else 30
-        
-        events.append({
-            'timestamp': time.time() - random.uniform(0, 900),
-            'exchange': random.choice(exchanges),
-            'symbol': random.choice(symbols),
-            'latency_ms': latency,
-            'anomaly_score': anomaly_score,
-            'is_hft': is_hft,
-            'order_book_imbalance': random.uniform(-0.4, 0.4),
-            'spread_bps': random.uniform(3, 35),
-            'features': {
-                'matched_signature': random.choice(signatures),
-                'is_spoofing': random.random() > 0.92,
-                'spoof_confidence': random.uniform(0, 85),
-            },
-            'correlation_hint': random.choice(['strong', 'moderate', 'weak', None]),
-        })
-    
-    return sorted(events, key=lambda x: x['timestamp'], reverse=True)
-
-
-def _generate_mock_statistics() -> Dict:
-    """Generate mock latency statistics."""
-    return {
-        'count': random.randint(150, 500),
-        'mean_ms': random.uniform(35, 65),
-        'median_ms': random.uniform(30, 55),
-        'p95_ms': random.uniform(80, 120),
-        'p99_ms': random.uniform(120, 180),
-        'min_ms': random.uniform(3, 10),
-        'max_ms': random.uniform(150, 300),
-        'anomaly_count': random.randint(15, 45),
-        'anomaly_rate': random.uniform(0.08, 0.18),
-        'total_pings': random.randint(500, 2000),
-    }
+# Real-time latency monitoring only - no mock data
 
 router = APIRouter()
 
@@ -89,28 +40,12 @@ def _now_iso() -> str:
 async def get_latency_state(
     exchange: Optional[str] = Query(None, description="Filter by exchange (e.g., binance, cme)"),
     include_predictions: bool = Query(False, description="Include XGBoost predictions"),
-    mock: bool = Query(False, description="Return mock data for testing"),
 ) -> Dict[str, Any]:
     """
     Get current latency pinging state with order book confirmations.
     
     Returns real-time latency metrics, anomaly scores, and XRPL correlations.
-    Use ?mock=true for testing/demo data.
     """
-    # Mock mode for testing
-    if mock:
-        mock_anomalies = [e for e in _generate_mock_latency_events(15) if e['anomaly_score'] >= 70]
-        return {
-            "updated_at": _now_iso(),
-            "statistics": _generate_mock_statistics(),
-            "recent_anomalies": mock_anomalies[:10],
-            "status": "active",
-            "prediction_model": {
-                "is_fitted": True,
-                "model_version": "xgb_v1.0_tuned",
-                "training_rmse": 8.5,
-            } if include_predictions else None,
-        }
     
     try:
         from predictors.latency_pinger import latency_pinger
@@ -155,27 +90,12 @@ async def get_latency_anomalies(
     exchange: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=500),
     min_score: float = Query(0, ge=0, le=100),
-    mock: bool = Query(False, description="Return mock data for testing"),
 ) -> Dict[str, Any]:
     """
     Get recent latency anomalies for algo tracking.
     
     Filters by exchange and minimum anomaly score.
-    Use ?mock=true for testing/demo data.
     """
-    # Mock mode
-    if mock:
-        events = _generate_mock_latency_events(limit * 2)
-        filtered = [
-            e for e in events
-            if e['anomaly_score'] >= min_score
-            and (not exchange or e['exchange'].lower() == exchange.lower())
-        ][:limit]
-        return {
-            "updated_at": _now_iso(),
-            "count": len(filtered),
-            "anomalies": filtered,
-        }
     try:
         r = await _get_redis()
         events_json = await r.lrange("recent_latency_events", 0, limit * 2)
@@ -219,42 +139,12 @@ async def predict_latency(
     ask_depth: float = Query(1000000),
     recent_volatility: float = Query(0.02),
     volume_ratio: float = Query(1.0),
-    mock: bool = Query(False, description="Return mock prediction"),
 ) -> Dict[str, Any]:
     """
     Get XGBoost latency prediction for given market conditions.
     
     Returns predicted latency, anomaly probability, and contributing features.
-    Use ?mock=true for testing/demo data.
     """
-    # Mock mode
-    if mock:
-        pred_latency = 20 + abs(bid_ask_imbalance) * 50 + spread_bps * 0.5
-        is_anomaly = pred_latency < 40 or abs(bid_ask_imbalance) > 0.25
-        return {
-            "updated_at": _now_iso(),
-            "prediction": {
-                "predicted_latency_ms": pred_latency,
-                "confidence_score": random.uniform(75, 95),
-                "is_anomaly_predicted": is_anomaly,
-                "anomaly_probability": 0.7 if is_anomaly else 0.2,
-                "contributing_features": {
-                    "bid_ask_imbalance": abs(bid_ask_imbalance) * 0.4,
-                    "spread_bps": spread_bps * 0.02,
-                    "recent_volatility": recent_volatility * 5,
-                },
-                "model_version": "xgb_v1.0_tuned",
-                "exchange": exchange,
-                "symbol": symbol,
-                "timestamp": time.time(),
-            },
-            "input": {
-                "exchange": exchange,
-                "symbol": symbol,
-                "bid_ask_imbalance": bid_ask_imbalance,
-                "spread_bps": spread_bps,
-            },
-        }
     try:
         from ml.latency_xgboost import predict_latency as xgb_predict
         
@@ -377,30 +267,12 @@ async def get_hft_signatures() -> Dict[str, Any]:
 @router.get("/latency/xrpl_correlation")
 async def get_xrpl_correlation(
     window_minutes: int = Query(15, ge=1, le=60),
-    mock: bool = Query(False, description="Return mock correlation data"),
 ) -> Dict[str, Any]:
     """
     Get correlation between latency anomalies and XRPL flows.
     
     Shows how futures/equities latency spikes correlate with XRP settlements.
-    Use ?mock=true for testing/demo data.
     """
-    # Mock mode
-    if mock:
-        strength = random.uniform(0.3, 0.85)
-        return {
-            "updated_at": _now_iso(),
-            "window_minutes": window_minutes,
-            "latency_events_count": random.randint(50, 200),
-            "latency_anomaly_count": random.randint(10, 40),
-            "xrpl_settlements_count": random.randint(5, 25),
-            "correlation_strength": strength,
-            "interpretation": (
-                "strong" if strength > 0.7 else
-                "moderate" if strength > 0.4 else
-                "weak"
-            ),
-        }
     try:
         r = await _get_redis()
         

@@ -36,11 +36,8 @@ interface WatchItem {
   addedAt: string;
 }
 
-// No mock data - empty initial state
-const mockWatchlist: WatchItem[] = [];
-
 export default function WatchlistPage() {
-  const [items, setItems] = useState<WatchItem[]>(mockWatchlist);
+  const [items, setItems] = useState<WatchItem[]>([]);
   const [filter, setFilter] = useState<'all' | 'wallet' | 'token' | 'contract'>('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');

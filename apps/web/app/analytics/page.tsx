@@ -598,7 +598,7 @@ export default function AnalyticsPage() {
               <div className="grid lg:grid-cols-2 gap-6">
                 {/* Main Heatmap */}
                 <div className="lg:col-span-2">
-                  <CorrelationHeatmap assets="xrp,btc,eth,spy,es,gold" mock={false} />
+                  <CorrelationHeatmap assets="xrp,btc,eth,spy,es,gold" />
                 </div>
                 
                 {/* XRP-Centric Correlations Card */}
