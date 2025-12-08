@@ -207,6 +207,130 @@ async def process_latency_anomaly(event: dict):
 EDUCATOR_WEBHOOK_URL = os.getenv("SLACK_EDUCATOR_WEBHOOK_URL")
 
 
+# ============================================================
+# INSTITUTIONAL WALLET ALERTS
+# ============================================================
+
+MIN_WALLET_USD_VALUE = 10_000_000  # Only alert on $10M+ transfers involving tracked wallets
+
+# Known institutional wallets - import from wallets module at runtime
+_KNOWN_WALLET_ADDRESSES: set = set()
+_WALLET_LABELS: dict = {}
+
+
+def _load_wallet_data():
+    """Lazy load wallet data from wallets module."""
+    global _KNOWN_WALLET_ADDRESSES, _WALLET_LABELS
+    if not _KNOWN_WALLET_ADDRESSES:
+        try:
+            from api.wallets import KNOWN_WALLETS
+            _KNOWN_WALLET_ADDRESSES = {w["address"].lower() for w in KNOWN_WALLETS}
+            _WALLET_LABELS = {w["address"].lower(): w["label"] for w in KNOWN_WALLETS}
+        except Exception:
+            pass
+
+
+async def send_wallet_alert(signal: dict) -> bool:
+    """Send alert when large transfer involves tracked institutional wallet."""
+    if not SLACK_WEBHOOK_URL:
+        return False
+    
+    _load_wallet_data()
+    if not _KNOWN_WALLET_ADDRESSES:
+        return False
+    
+    usd_value = signal.get("usd_value", 0) or signal.get("value_usd", 0)
+    if usd_value < MIN_WALLET_USD_VALUE:
+        return False
+    
+    # Check if from/to is a known institutional wallet
+    from_addr = str(signal.get("from") or signal.get("source") or signal.get("features", {}).get("from") or "").lower()
+    to_addr = str(signal.get("to") or signal.get("destination") or signal.get("features", {}).get("to") or "").lower()
+    
+    from_label = _WALLET_LABELS.get(from_addr)
+    to_label = _WALLET_LABELS.get(to_addr)
+    
+    if not from_label and not to_label:
+        return False  # Neither address is a tracked wallet
+    
+    # Build alert
+    chain = signal.get("chain", signal.get("network", "ETH")).upper()
+    symbol = signal.get("symbol", "ETH")
+    amount = signal.get("amount", 0)
+    tx_hash = signal.get("tx_hash", "")[:16]
+    
+    # Format USD
+    if usd_value >= 1_000_000_000:
+        usd_str = f"${usd_value/1_000_000_000:.2f}B"
+    elif usd_value >= 1_000_000:
+        usd_str = f"${usd_value/1_000_000:.1f}M"
+    else:
+        usd_str = f"${usd_value/1_000:,.0f}K"
+    
+    # Direction arrow
+    if from_label and to_label:
+        direction = f"*{from_label}* → *{to_label}*"
+        emoji = "🔄"
+    elif from_label:
+        direction = f"*{from_label}* → External"
+        emoji = "📤"
+    else:
+        direction = f"External → *{to_label}*"
+        emoji = "📥"
+    
+    message = {
+        "blocks": [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"{emoji} *Institutional Wallet Alert*\n\n"
+                            f"*Flow:* {direction}\n"
+                            f"*Amount:* {amount:,.0f} {symbol} ({usd_str})\n"
+                            f"*Chain:* {chain}\n"
+                            f"*TX:* `{tx_hash}...`"
+                }
+            },
+            {
+                "type": "context",
+                "elements": [
+                    {"type": "mrkdwn", "text": "🏦 Tracked institutional wallet activity detected"}
+                ]
+            },
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "View Details"},
+                        "url": f"https://www.zkalphaflow.com/flow/{signal.get('tx_hash', '')}"
+                    },
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "View on Etherscan"},
+                        "url": f"https://etherscan.io/tx/{signal.get('tx_hash', '')}"
+                    }
+                ]
+            }
+        ]
+    }
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(SLACK_WEBHOOK_URL, json=message) as resp:
+                return resp.status == 200
+    except Exception as e:
+        print(f"[SlackAlert] Wallet alert error: {e}")
+        return False
+
+
+async def process_wallet_alert(signal: dict):
+    """Process signal and send wallet alert if it involves a tracked institutional wallet."""
+    sent = await send_wallet_alert(signal)
+    if sent:
+        print(f"[SlackAlert] Sent wallet alert for {signal.get('tx_hash', '')[:16]}")
+
+
 async def send_educator_notification(data: dict, event_type: str = "latency") -> bool:
     """Send notification to educator Slack channel for course content."""
     webhook = EDUCATOR_WEBHOOK_URL or SLACK_WEBHOOK_URL

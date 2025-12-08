@@ -25,6 +25,29 @@ import {
 import { cn, formatUSD } from '../../lib/utils';
 import { fetchWhaleTransfers } from '../../lib/api';
 
+// API base for wallet endpoints
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://api.zkalphaflow.com';
+
+// Institutional wallet types
+interface InstitutionalWallet {
+  address: string;
+  label: string;
+  entity: string;
+  chain: string;
+  type: string;
+  verified: boolean;
+  source: string;
+  notes: string;
+}
+
+interface WalletBalance {
+  address: string;
+  label?: string;
+  type?: string;
+  balance_eth?: number;
+  error?: string;
+}
+
 // Wallet analysis types
 interface WalletFlag {
   tx_hash: string;
@@ -81,7 +104,8 @@ export default function WalletsPage() {
   const [chainFilter, setChainFilter] = useState<string>('all');
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
   const [analyzeAddress, setAnalyzeAddress] = useState('');
-  const [activeTab, setActiveTab] = useState<'whales' | 'analyze'>('whales');
+  const [activeTab, setActiveTab] = useState<'whales' | 'analyze' | 'institutional'>('whales');
+  const [selectedEntity, setSelectedEntity] = useState<string>('all');
 
   // Fetch real whale transfers from API
   const { data: whaleData, isLoading, refetch, isFetching } = useQuery({
@@ -201,7 +225,22 @@ export default function WalletsPage() {
             <Shield className="w-4 h-4 inline mr-2" />
             Analyze Wallet
           </button>
+          <button
+            onClick={() => setActiveTab('institutional')}
+            className={cn(
+              "px-4 py-2 rounded-xl font-medium text-sm transition-all",
+              activeTab === 'institutional' 
+                ? "bg-amber-500 text-white" 
+                : "bg-surface-1 text-slate-400 hover:text-white"
+            )}
+          >
+            <Wallet className="w-4 h-4 inline mr-2" />
+            Institutional
+          </button>
         </div>
+
+        {/* Institutional Wallets Tab */}
+        {activeTab === 'institutional' && <InstitutionalWalletsTab selectedEntity={selectedEntity} setSelectedEntity={setSelectedEntity} />}
 
         {/* Wallet Analysis Tab */}
         {activeTab === 'analyze' && (
@@ -560,7 +599,262 @@ export default function WalletsPage() {
         </div>
           </motion.div>
         )}
+
+        {/* Institutional Wallets Tab */}
+        {activeTab === 'institutional' && (
+          <InstitutionalWalletsTab 
+            selectedEntity={selectedEntity} 
+            setSelectedEntity={setSelectedEntity} 
+          />
+        )}
       </div>
     </div>
+  );
+}
+
+// Institutional Wallets Tab Component
+function InstitutionalWalletsTab({ 
+  selectedEntity, 
+  setSelectedEntity 
+}: { 
+  selectedEntity: string; 
+  setSelectedEntity: (e: string) => void;
+}) {
+  const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+
+  // Fetch institutional wallets
+  const { data: walletsData, isLoading } = useQuery({
+    queryKey: ['institutional-wallets', selectedEntity],
+    queryFn: async () => {
+      const url = selectedEntity === 'all' 
+        ? `${API_BASE}/wallets`
+        : `${API_BASE}/wallets?entity=${selectedEntity}`;
+      const res = await fetch(url);
+      return res.json();
+    },
+  });
+
+  // Fetch entity balances (only for Ethereum entities)
+  const { data: balancesData, isLoading: balancesLoading, refetch: refetchBalances } = useQuery({
+    queryKey: ['entity-balances', selectedEntity],
+    queryFn: async () => {
+      if (selectedEntity === 'all' || !['binance', 'gsr', 'cumberland', 'wintermute', 'coinbase', 'kraken', 'alameda'].includes(selectedEntity)) {
+        return null;
+      }
+      const res = await fetch(`${API_BASE}/wallets/entity/${selectedEntity}/balances`);
+      return res.json();
+    },
+    enabled: selectedEntity !== 'all',
+  });
+
+  const wallets: InstitutionalWallet[] = walletsData?.wallets || [];
+  const entities = walletsData?.entities_summary || {};
+
+  const copyAddress = async (address: string) => {
+    await navigator.clipboard.writeText(address);
+    setCopiedAddress(address);
+    setTimeout(() => setCopiedAddress(null), 2000);
+  };
+
+  const getChainColor = (chain: string) => {
+    switch (chain) {
+      case 'ethereum': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+      case 'xrpl': return 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30';
+      default: return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
+    }
+  };
+
+  const getEntityColor = (entity: string) => {
+    switch (entity) {
+      case 'binance': return 'bg-amber-500/20 text-amber-400';
+      case 'ripple': return 'bg-cyan-500/20 text-cyan-400';
+      case 'gsr': return 'bg-purple-500/20 text-purple-400';
+      case 'cumberland': return 'bg-emerald-500/20 text-emerald-400';
+      case 'wintermute': return 'bg-blue-500/20 text-blue-400';
+      case 'coinbase': return 'bg-indigo-500/20 text-indigo-400';
+      case 'kraken': return 'bg-violet-500/20 text-violet-400';
+      case 'alameda': return 'bg-red-500/20 text-red-400';
+      default: return 'bg-slate-500/20 text-slate-400';
+    }
+  };
+
+  const getExplorerUrl = (chain: string, address: string) => {
+    if (chain === 'ethereum') return `https://etherscan.io/address/${address}`;
+    if (chain === 'xrpl') return `https://xrpscan.com/account/${address}`;
+    return '#';
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      {/* Entity Filter */}
+      <div className="glass-card rounded-2xl p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-slate-400 mr-2">Filter by entity:</span>
+          <button
+            onClick={() => setSelectedEntity('all')}
+            className={cn(
+              "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+              selectedEntity === 'all' ? "bg-brand-sky text-white" : "bg-slate-800 text-slate-400 hover:text-white"
+            )}
+          >
+            All ({walletsData?.total || 0})
+          </button>
+          {Object.entries(entities).map(([entity, data]: [string, any]) => (
+            <button
+              key={entity}
+              onClick={() => setSelectedEntity(entity)}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors capitalize",
+                selectedEntity === entity ? getEntityColor(entity) : "bg-slate-800 text-slate-400 hover:text-white"
+              )}
+            >
+              {entity} ({data.count})
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Entity Balance Summary (if available) */}
+      {balancesData && !balancesData.error && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-card rounded-2xl p-6 border border-amber-500/20"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold capitalize flex items-center gap-2">
+              <Wallet className="w-5 h-5 text-amber-400" />
+              {selectedEntity} Live Balances
+            </h3>
+            <button
+              onClick={() => refetchBalances()}
+              disabled={balancesLoading}
+              className="text-xs text-slate-400 hover:text-white flex items-center gap-1"
+            >
+              <RefreshCw className={cn("w-3 h-3", balancesLoading && "animate-spin")} />
+              Refresh
+            </button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div className="p-3 rounded-xl bg-slate-800/50">
+              <div className="text-2xl font-bold text-amber-400">{balancesData.total_eth?.toFixed(2) || '0'}</div>
+              <div className="text-xs text-slate-400">Total ETH</div>
+            </div>
+            <div className="p-3 rounded-xl bg-slate-800/50">
+              <div className="text-2xl font-bold">{balancesData.wallet_count || 0}</div>
+              <div className="text-xs text-slate-400">Wallets Tracked</div>
+            </div>
+          </div>
+          <div className="text-xs text-slate-500">Source: {balancesData.source}</div>
+        </motion.div>
+      )}
+
+      {/* Wallets List */}
+      <div className="space-y-3">
+        {isLoading ? (
+          <div className="text-center py-16">
+            <Loader2 className="w-8 h-8 text-brand-sky mx-auto mb-4 animate-spin" />
+            <p className="text-slate-400">Loading institutional wallets...</p>
+          </div>
+        ) : wallets.length === 0 ? (
+          <div className="text-center py-16">
+            <Wallet className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-slate-300 mb-2">No wallets found</h3>
+          </div>
+        ) : (
+          wallets.map((wallet, index) => (
+            <motion.div
+              key={wallet.address}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.03 }}
+              className="glass-card p-4 rounded-xl hover:border-white/10 transition-colors"
+            >
+              <div className="flex items-start gap-4">
+                {/* Entity Badge */}
+                <div className={cn(
+                  "w-14 h-14 rounded-xl flex flex-col items-center justify-center flex-shrink-0 border",
+                  getChainColor(wallet.chain)
+                )}>
+                  <span className="text-xs font-bold uppercase">{wallet.chain === 'ethereum' ? 'ETH' : 'XRP'}</span>
+                </div>
+
+                {/* Wallet Details */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="font-medium">{wallet.label}</span>
+                    <span className={cn("px-2 py-0.5 rounded text-[10px] uppercase font-medium", getEntityColor(wallet.entity))}>
+                      {wallet.entity}
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] bg-slate-700 text-slate-300">
+                      {wallet.type}
+                    </span>
+                    {wallet.verified && (
+                      <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400 flex items-center gap-1">
+                        <Check className="w-3 h-3" /> Verified
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Address */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <code className="font-mono text-xs text-slate-400 bg-slate-800 px-2 py-1 rounded">
+                      {wallet.address.slice(0, 10)}...{wallet.address.slice(-8)}
+                    </code>
+                    <button
+                      onClick={() => copyAddress(wallet.address)}
+                      className="p-1 hover:bg-white/5 rounded"
+                    >
+                      {copiedAddress === wallet.address ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5 text-slate-500" />
+                      )}
+                    </button>
+                    <a
+                      href={getExplorerUrl(wallet.chain, wallet.address)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1 hover:bg-white/5 rounded text-slate-500 hover:text-brand-sky"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+
+                  {/* Notes */}
+                  <p className="text-xs text-slate-500">{wallet.notes}</p>
+                  <p className="text-[10px] text-slate-600 mt-1">Source: {wallet.source}</p>
+                </div>
+
+                {/* Balance (if available from balancesData) */}
+                {balancesData?.wallets && (
+                  <div className="text-right flex-shrink-0">
+                    {balancesData.wallets.find((b: WalletBalance) => b.address.toLowerCase() === wallet.address.toLowerCase())?.balance_eth !== undefined && (
+                      <div className="text-sm font-bold text-amber-400">
+                        {balancesData.wallets.find((b: WalletBalance) => b.address.toLowerCase() === wallet.address.toLowerCase())?.balance_eth?.toFixed(4)} ETH
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          ))
+        )}
+      </div>
+
+      {/* Citadel Note */}
+      <div className="glass-card rounded-2xl p-4 border border-slate-700">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <h4 className="font-medium text-amber-400">Citadel Securities Note</h4>
+            <p className="text-xs text-slate-400 mt-1">
+              Citadel operates through partners (EDX Markets, prime brokers) and does not have publicly disclosed crypto wallet addresses. 
+              Track via proxy signals: monitor large flows TO/FROM Binance, Coinbase, and Kraken for institutional activity patterns.
+            </p>
+          </div>
+        </div>
+      </div>
+    </motion.div>
   );
 }
