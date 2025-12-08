@@ -68,7 +68,7 @@ services:
         type: SECRET
       - key: REDIS_URL
         scope: RUN_TIME
-        value: ${redis.DATABASE_URL}
+        value: ${redis-db.DATABASE_URL}
       # Multi-asset correlation engine
       - key: ENABLE_EQUITY_CORRELATION
         value: "true"
@@ -147,12 +147,12 @@ workers:
         type: SECRET
       - key: REDIS_URL
         scope: RUN_TIME
-        value: ${redis.DATABASE_URL}
+        value: ${redis-db.DATABASE_URL}
 
 databases:
-  - name: redis
+  - name: redis-db
     engine: REDIS
-    production: false
+    production: true
     version: "7"
 
 domains:
