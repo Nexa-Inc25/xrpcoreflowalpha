@@ -48,3 +48,19 @@ jobs:
         run: |
           docker push "$IMAGE_WORKER:${GITHUB_SHA}"
           docker push "$IMAGE_WORKER:latest"
+
+      - name: Trigger DigitalOcean App Platform Deployment
+        env:
+          DO_API_TOKEN: ${{ secrets.DO_API_TOKEN }}
+          DO_APP_ID: ${{ secrets.DO_APP_ID }}
+        run: |
+          if [ -z "${DO_API_TOKEN}" ] || [ -z "${DO_APP_ID}" ]; then
+            echo "DO_API_TOKEN or DO_APP_ID not set, skipping app platform deploy trigger"
+            exit 0
+          fi
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${DO_API_TOKEN}" \
+            "https://api.digitalocean.com/v2/apps/${DO_APP_ID}/deployments" \
+            -d '{"force_build": false}'
+          echo "Deployment triggered"
