@@ -97,9 +97,9 @@ function processRealData(signals: any, flows: any) {
       hitRate: events.length > 0 ? Math.round((hits / events.length) * 100) : 0,
       avgImpact: events.reduce((acc: number, e: any) => acc + (e.iso_expected_move_pct || e.rule_score || 5), 0) / events.length,
       totalVolume: events.reduce((acc: number, e: any) => {
-        // Cap individual event value at $100B to prevent data bugs (e.g., XRP drops not converted)
+        // Cap individual event value at $10B - anything higher is a data bug
         const rawValue = e.features?.usd_value || e.iso_amount_usd || 0;
-        const cappedValue = Math.min(rawValue, 100_000_000_000);
+        const cappedValue = Math.min(rawValue, 10_000_000_000);
         return acc + cappedValue;
       }, 0),
     };

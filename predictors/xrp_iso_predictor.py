@@ -92,8 +92,17 @@ def _infer_amount_usd(signal: Dict[str, Any]) -> float:
         ask = _safe_float(signal.get("ask_depth_usd"), 0.0)
         return max(bid, ask)
     if stype == "trustline":
-        # Trustlines are often stables; treat limit_value as USD magnitude.
-        return _safe_float(signal.get("limit_value"), 0.0)
+        # Trustlines limit_value can be absurdly large (100T+ for institutional limits)
+        # Only treat as USD-equivalent if it looks like a stablecoin AND is reasonable
+        currency = str(signal.get("currency", "")).upper()
+        limit = _safe_float(signal.get("limit_value"), 0.0)
+        # Stablecoin currencies that are USD-denominated
+        is_stable = currency in ("USD", "USDT", "USDC", "RLUSD", "XUSD", "FUSD")
+        # Cap at $10B max for any trustline - anything higher is clearly not USD value
+        if is_stable and limit <= 10_000_000_000:
+            return limit
+        # For non-stables or huge limits, don't treat as USD value
+        return 0.0
     if stype == "rwa_amm":
         chg = (signal.get("amm_liquidity_change") or {}).get("lp_change_pct")
         base = _safe_float(chg, 0.0)
