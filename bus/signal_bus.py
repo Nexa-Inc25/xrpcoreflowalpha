@@ -15,12 +15,28 @@ from predictors.xrp_iso_predictor import enrich_iso_signal
 
 _redis: Optional[redis.Redis] = None
 _redis_warned: bool = False  # Only warn once about Redis connection issues
+_redis_disabled: bool = False  # Set if Redis URL is invalid/empty
 
 
-async def _get_redis() -> redis.Redis:
-    global _redis
+async def _get_redis() -> Optional[redis.Redis]:
+    global _redis, _redis_disabled, _redis_warned
+    if _redis_disabled:
+        return None
     if _redis is None:
-        _redis = redis.from_url(REDIS_URL, decode_responses=True)
+        if not REDIS_URL:
+            if not _redis_warned:
+                print("[REDIS] REDIS_URL not configured - running without Redis (in-memory only)")
+                _redis_warned = True
+            _redis_disabled = True
+            return None
+        try:
+            _redis = redis.from_url(REDIS_URL, decode_responses=True)
+        except Exception as e:
+            if not _redis_warned:
+                print(f"[REDIS] Failed to connect: {e} - running without Redis")
+                _redis_warned = True
+            _redis_disabled = True
+            return None
     return _redis
 
 
@@ -115,10 +131,11 @@ async def publish_signal(signal: Dict[str, Any]) -> None:
         pass
     
     data = json.dumps(signal, separators=(",", ":"))
-    try:
-        await r.xadd("signals", {"json": data}, maxlen=5000, approximate=True)
-    except Exception as e:
-        _redis_error("xadd", e)
+    if r:
+        try:
+            await r.xadd("signals", {"json": data}, maxlen=5000, approximate=True)
+        except Exception as e:
+            _redis_error("xadd", e)
     
     # Store signal to database for analytics tracking
     try:
@@ -141,6 +158,8 @@ async def publish_signal(signal: Dict[str, Any]) -> None:
 
 async def fetch_recent_signals(window_seconds: int = 900, types: Optional[List[str]] = None) -> List[Dict[str, Any]]:
     r = await _get_redis()
+    if not r:
+        return []  # Redis not available
     now_ms = int(time.time() * 1000)
     start = now_ms - window_seconds * 1000
     start_id = f"{start}-0"
@@ -167,14 +186,21 @@ async def fetch_recent_signals(window_seconds: int = 900, types: Optional[List[s
 # Cross-signal helpers (for SDUI feed and alerts)
 async def publish_cross_signal(cross: Dict[str, Any]) -> None:
     r = await _get_redis()
+    if not r:
+        return  # Redis not available
     if "timestamp" not in cross:
         cross["timestamp"] = int(time.time())
     data = json.dumps(cross, separators=(",", ":"))
-    await r.xadd("cross_signals", {"json": data}, maxlen=1000, approximate=True)
+    try:
+        await r.xadd("cross_signals", {"json": data}, maxlen=1000, approximate=True)
+    except Exception as e:
+        _redis_error("xadd_cross", e)
 
 
 async def fetch_recent_cross_signals(limit: int = 10) -> List[Dict[str, Any]]:
     r = await _get_redis()
+    if not r:
+        return []  # Redis not available
     try:
         rows = await r.xrevrange("cross_signals", max="+", min="-", count=limit)
     except Exception as e:

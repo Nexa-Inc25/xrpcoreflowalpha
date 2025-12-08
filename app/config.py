@@ -49,7 +49,9 @@ POSTGRES_DB = os.getenv("POSTGRES_DB", "xrpflow")
 POSTGRES_USER = os.getenv("POSTGRES_USER", "xrpflow")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "password")
 POSTGRES_SSLMODE = os.getenv("POSTGRES_SSLMODE", "require")
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+# Redis URL - empty string disables Redis (graceful degradation)
+_redis_url = os.getenv("REDIS_URL", "")
+REDIS_URL = _redis_url if _redis_url.startswith(("redis://", "rediss://", "unix://")) else ""
 
 EQUITY_TICKERS = [t.strip() for t in os.getenv("EQUITY_TICKERS", "AAPL,MSFT,TSLA").split(",") if t.strip()]
 VERIFIER_ALLOWLIST = [a.strip().lower() for a in os.getenv("VERIFIER_ALLOWLIST", "").split(",") if a.strip()]
