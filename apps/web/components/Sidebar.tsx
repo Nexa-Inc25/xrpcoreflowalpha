@@ -41,7 +41,7 @@ export default function Sidebar() {
   const { data: alertData } = useQuery({
     queryKey: ['system_alerts'],
     queryFn: async () => {
-      const base = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8010';
+      const base = process.env.NEXT_PUBLIC_API_BASE || 'https://api.zkalphaflow.com';
       const res = await fetch(`${base}/admin/alerts`);
       if (!res.ok) return { alert_count: 0 };
       return res.json();

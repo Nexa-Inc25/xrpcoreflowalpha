@@ -66,7 +66,7 @@ export default function DashboardPage() {
     let wsFailCount = 0;
     
     const connectSSE = () => {
-      const base = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8010';
+      const base = process.env.NEXT_PUBLIC_API_BASE || 'https://api.zkalphaflow.com';
       eventSource = new EventSource(`${base}/events/sse`);
       
       eventSource.onopen = () => {
@@ -93,7 +93,7 @@ export default function DashboardPage() {
     };
     
     const connectWS = () => {
-      const base = process.env.NEXT_PUBLIC_API_WS_BASE || 'ws://localhost:8010';
+      const base = process.env.NEXT_PUBLIC_API_WS_BASE || 'wss://api.zkalphaflow.com';
       socket = new WebSocket(base.replace(/\/$/, '') + '/events');
 
       socket.onopen = () => {

@@ -166,7 +166,7 @@ function formatAlgoName(name: string) {
 }
 
 async function fetchAlgoDetail(algo: string): Promise<AlgoDetail> {
-  const base = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8010';
+  const base = process.env.NEXT_PUBLIC_API_BASE || 'https://api.zkalphaflow.com';
   const res = await fetch(`${base}/dashboard/algo_fingerprint/${algo}`);
   if (!res.ok) {
     throw new Error(`API returned ${res.status}: ${res.statusText}`);

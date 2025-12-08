@@ -17,7 +17,7 @@ import {
   Info
 } from 'lucide-react';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.zkalphaflow.com';
 
 interface PipelineHealth {
   timestamp: string;

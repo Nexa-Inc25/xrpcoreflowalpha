@@ -120,7 +120,7 @@ export default function WalletsPage() {
   // Wallet analysis mutation
   const analysisMutation = useMutation({
     mutationFn: async (address: string): Promise<WalletAnalysis> => {
-      const base = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8010';
+      const base = process.env.NEXT_PUBLIC_API_BASE || 'https://api.zkalphaflow.com';
       const res = await fetch(`${base}/wallet/analyze/${address}`);
       if (!res.ok) throw new Error('Analysis failed');
       return res.json();
