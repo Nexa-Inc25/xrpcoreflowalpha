@@ -296,30 +296,76 @@ async def list_wallets(
     }
 
 
-@router.get("/wallets/{address}")
-async def get_wallet_detail(address: str) -> Dict[str, Any]:
+# NOTE: More specific routes MUST come before the generic /{address} route
+
+
+@router.get("/wallets/entity/{entity_name}/balances")
+async def get_entity_balances(entity_name: str) -> Dict[str, Any]:
     """
-    Get details for a specific wallet address.
+    Get LIVE balances for all wallets belonging to an entity.
     
-    Returns cached metadata only - for live balances, use Etherscan/XRPSCAN APIs directly.
+    Example: /wallets/entity/binance/balances
     """
-    # Normalize address for comparison
-    addr_lower = address.lower()
+    entity_lower = entity_name.strip().lower()
+    entity_wallets = [w for w in KNOWN_WALLETS if w["entity"] == entity_lower and w["chain"] == "ethereum"]
     
-    for wallet in KNOWN_WALLETS:
-        if wallet["address"].lower() == addr_lower:
-            return {
-                "found": True,
-                "wallet": wallet,
-                "updated_at": _now_iso(),
-                "note": "For live balance, query Etherscan/XRPSCAN directly"
-            }
+    if not entity_wallets:
+        return {
+            "entity": entity_name,
+            "error": f"No Ethereum wallets found for entity '{entity_name}'",
+            "available_entities": list(set(w["entity"] for w in KNOWN_WALLETS)),
+            "updated_at": _now_iso()
+        }
+    
+    if not ETHERSCAN_API_KEY:
+        return {
+            "entity": entity_name,
+            "error": "ETHERSCAN_API_KEY not configured. Cannot fetch live balances.",
+            "updated_at": _now_iso()
+        }
+    
+    balances = []
+    total_eth = 0.0
+    
+    async with httpx.AsyncClient(timeout=15) as client:
+        for wallet in entity_wallets:
+            try:
+                url = f"https://api.etherscan.io/api?module=account&action=balance&address={wallet['address']}&tag=latest&apikey={ETHERSCAN_API_KEY}"
+                resp = await client.get(url)
+                data = resp.json()
+                
+                if data.get("status") == "1":
+                    balance_wei = int(data.get("result", 0))
+                    balance_eth = balance_wei / 1e18
+                    total_eth += balance_eth
+                    
+                    balances.append({
+                        "address": wallet["address"],
+                        "label": wallet.get("label"),
+                        "type": wallet.get("type"),
+                        "balance_eth": balance_eth
+                    })
+                else:
+                    balances.append({
+                        "address": wallet["address"],
+                        "label": wallet.get("label"),
+                        "error": data.get("message", "API error")
+                    })
+            except Exception as e:
+                balances.append({
+                    "address": wallet["address"],
+                    "label": wallet.get("label"),
+                    "error": str(e)
+                })
     
     return {
-        "found": False,
-        "address": address,
+        "entity": entity_name,
+        "chain": "ethereum",
+        "wallet_count": len(entity_wallets),
+        "total_eth": total_eth,
+        "wallets": balances,
         "updated_at": _now_iso(),
-        "note": "Address not in known institutional wallet database. May still be institutional - check Arkham/Etherscan labels."
+        "source": "Etherscan API (live)"
     }
 
 
@@ -404,71 +450,29 @@ async def get_wallet_balance(address: str) -> Dict[str, Any]:
         }
 
 
-@router.get("/wallets/entity/{entity_name}/balances")
-async def get_entity_balances(entity_name: str) -> Dict[str, Any]:
+# Generic address lookup - MUST be last as it catches all /{address} patterns
+@router.get("/wallets/{address}")
+async def get_wallet_detail(address: str) -> Dict[str, Any]:
     """
-    Get LIVE balances for all wallets belonging to an entity.
+    Get details for a specific wallet address.
     
-    Example: /wallets/entity/binance/balances
+    Returns cached metadata only - for live balances, use Etherscan/XRPSCAN APIs directly.
     """
-    entity_lower = entity_name.strip().lower()
-    entity_wallets = [w for w in KNOWN_WALLETS if w["entity"] == entity_lower and w["chain"] == "ethereum"]
+    # Normalize address for comparison
+    addr_lower = address.lower()
     
-    if not entity_wallets:
-        return {
-            "entity": entity_name,
-            "error": f"No Ethereum wallets found for entity '{entity_name}'",
-            "available_entities": list(set(w["entity"] for w in KNOWN_WALLETS)),
-            "updated_at": _now_iso()
-        }
-    
-    if not ETHERSCAN_API_KEY:
-        return {
-            "entity": entity_name,
-            "error": "ETHERSCAN_API_KEY not configured. Cannot fetch live balances.",
-            "updated_at": _now_iso()
-        }
-    
-    balances = []
-    total_eth = 0.0
-    
-    async with httpx.AsyncClient(timeout=15) as client:
-        for wallet in entity_wallets:
-            try:
-                url = f"https://api.etherscan.io/api?module=account&action=balance&address={wallet['address']}&tag=latest&apikey={ETHERSCAN_API_KEY}"
-                resp = await client.get(url)
-                data = resp.json()
-                
-                if data.get("status") == "1":
-                    balance_wei = int(data.get("result", 0))
-                    balance_eth = balance_wei / 1e18
-                    total_eth += balance_eth
-                    
-                    balances.append({
-                        "address": wallet["address"],
-                        "label": wallet.get("label"),
-                        "type": wallet.get("type"),
-                        "balance_eth": balance_eth
-                    })
-                else:
-                    balances.append({
-                        "address": wallet["address"],
-                        "label": wallet.get("label"),
-                        "error": data.get("message", "API error")
-                    })
-            except Exception as e:
-                balances.append({
-                    "address": wallet["address"],
-                    "label": wallet.get("label"),
-                    "error": str(e)
-                })
+    for wallet in KNOWN_WALLETS:
+        if wallet["address"].lower() == addr_lower:
+            return {
+                "found": True,
+                "wallet": wallet,
+                "updated_at": _now_iso(),
+                "note": "For live balance, query Etherscan/XRPSCAN directly"
+            }
     
     return {
-        "entity": entity_name,
-        "chain": "ethereum",
-        "wallet_count": len(entity_wallets),
-        "total_eth": total_eth,
-        "wallets": balances,
+        "found": False,
+        "address": address,
         "updated_at": _now_iso(),
-        "source": "Etherscan API (live)"
+        "note": "Address not in known institutional wallet database. May still be institutional - check Arkham/Etherscan labels."
     }
