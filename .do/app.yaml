@@ -95,6 +95,9 @@ services:
         value: "require"
       - key: APP_ENV
         value: "prod"
+      # CORS Configuration
+      - key: CORS_ALLOW_ORIGINS
+        value: "https://zkalphaflow-q3alj.ondigitalocean.app,https://zkalphaflow.com,http://localhost:3000"
       # Latency tracking and XGBoost
       - key: BINANCE_WS_URL
         value: "wss://stream.binance.com:9443/ws"
