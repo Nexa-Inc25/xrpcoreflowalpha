@@ -72,23 +72,24 @@ jobs:
           curl -f https://api.zkalphaflow.com/health || exit 1
           echo "API is healthy!"
       
-      - name: Notify Slack (Failures Only)
-        if: failure()
-        uses: slackapi/slack-github-action@v1.24.0
-        with:
-          payload: |
-            {
-              "text": "⚠️ Deployment Failed",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*❌ Deployment Failed*\nCommit: `${{ github.sha }}`\nBranch: ${{ github.ref }}\n<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Logs>"
-                  }
-                }
-              ]
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK || '' }}
-        continue-on-error: true
+      # Slack notifications - uncomment when SLACK_WEBHOOK secret is added
+      # - name: Notify Slack (Failures Only)
+      #   if: failure()
+      #   uses: slackapi/slack-github-action@v1.24.0
+      #   with:
+      #     payload: |
+      #       {
+      #         "text": "⚠️ Deployment Failed",
+      #         "blocks": [
+      #           {
+      #             "type": "section",
+      #             "text": {
+      #               "type": "mrkdwn",
+      #               "text": "*❌ Deployment Failed*\nCommit: `${{ github.sha }}`\nBranch: ${{ github.ref }}\n<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Logs>"
+      #             }
+      #           }
+      #         ]
+      #       }
+      #   env:
+      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+      #   continue-on-error: true

@@ -53,7 +53,8 @@ interface BacktestStats {
 
 // Fetch real backtest data from API
 async function fetchBacktestResults(): Promise<BacktestResult[]> {
-  const base = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8010';
+  const base = process.env.NEXT_PUBLIC_API_BASE || 'https://api.zkalphaflow.com';
+  const wsUrl = process.env.NEXT_PUBLIC_API_WS_BASE || 'wss://api.zkalphaflow.com';
   const res = await fetch(`${base}/analytics/backtest`);
   if (!res.ok) return [];
   const data = await res.json();
