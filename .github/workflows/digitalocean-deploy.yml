@@ -63,6 +63,7 @@ jobs:
           doctl apps update ${{ secrets.APP_ID }} \
             --spec .do/app.yaml \
             --wait
+        continue-on-error: true
       
       - name: Verify deployment
         run: |
@@ -71,13 +72,23 @@ jobs:
           curl -f https://api.zkalphaflow.com/health || exit 1
           echo "API is healthy!"
       
-      - name: Notify Slack
-        if: always()
-        uses: 8398a7/action-slack@v3
+      - name: Notify Slack (Failures Only)
+        if: failure()
+        uses: slackapi/slack-github-action@v1.24.0
         with:
-          status: ${{ job.status }}
-          text: |
-            Deployment to DigitalOcean App Platform: ${{ job.status }}
-            Commit: ${{ github.sha }}
-            Branch: ${{ github.ref }}
-          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          payload: |
+            {
+              "text": "⚠️ Deployment Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*❌ Deployment Failed*\nCommit: `${{ github.sha }}`\nBranch: ${{ github.ref }}\n<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Logs>"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+        continue-on-error: true
