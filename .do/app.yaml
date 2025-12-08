@@ -153,6 +153,7 @@ databases:
   - name: redis-db
     engine: REDIS
     production: true
+    cluster_name: redis-zkalphaflow
     version: "7"
 
 domains:
