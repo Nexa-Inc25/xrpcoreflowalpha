@@ -27,10 +27,17 @@ class XRPFlowAlphaExecution:
         self.enabled: bool = EXECUTION_ENABLED
         seed = os.getenv("EXECUTION_SEED") or ""
         self.wallet: Optional[Wallet] = Wallet.from_seed(seed) if (self.enabled and seed) else None
-        self._redis = redis.from_url(REDIS_URL, decode_responses=True)
+        self._redis: Optional[redis.Redis] = None
+        if REDIS_URL and REDIS_URL.startswith(("redis://", "rediss://", "unix://")):
+            try:
+                self._redis = redis.from_url(REDIS_URL, decode_responses=True)
+            except Exception:
+                pass
 
     # --- Circuit breaker helpers (Redis-backed) ---
     async def _breaker_until(self) -> float:
+        if not self._redis:
+            return 0.0
         try:
             v = await self._redis.get("exec:breaker_until")
             return float(v) if v else 0.0
@@ -45,16 +52,19 @@ class XRPFlowAlphaExecution:
 
     async def _trip_breaker(self) -> None:
         until = time.time() + float(CIRCUIT_BREAKER_COOLDOWN_SECONDS)
-        try:
-            await self._redis.set("exec:breaker_until", str(until), ex=CIRCUIT_BREAKER_COOLDOWN_SECONDS)
-        except Exception:
-            pass
+        if self._redis:
+            try:
+                await self._redis.set("exec:breaker_until", str(until), ex=CIRCUIT_BREAKER_COOLDOWN_SECONDS)
+            except Exception:
+                pass
         try:
             print(f"[CIRCUIT] Tripped – execution disabled for {CIRCUIT_BREAKER_COOLDOWN_SECONDS}s (until {int(until)})")
         except Exception:
             pass
 
     async def _inc_losses(self) -> int:
+        if not self._redis:
+            return 0
         try:
             n = await self._redis.incr("exec:consecutive_losses")
             return int(n or 0)
@@ -62,6 +72,8 @@ class XRPFlowAlphaExecution:
             return 0
 
     async def _reset_losses(self) -> None:
+        if not self._redis:
+            return
         try:
             await self._redis.set("exec:consecutive_losses", "0", ex=7 * 24 * 3600)
         except Exception:
