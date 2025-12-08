@@ -121,6 +121,8 @@ workers:
         type: SECRET
       - key: ALERTS_SLACK_WEBHOOK
         type: SECRET
+      - key: REDIS_URL
+        type: SECRET
 
 domains:
   - domain: zkalphaflow.com
