@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bell,
@@ -17,6 +18,8 @@ import {
   Volume2,
   VolumeX,
   Filter,
+  Server,
+  Info,
 } from 'lucide-react';
 import { cn, timeAgo } from '../../lib/utils';
 
@@ -41,6 +44,13 @@ interface AlertHistory {
   read: boolean;
 }
 
+interface SystemAlert {
+  level: 'warning' | 'info' | 'error';
+  component: string;
+  message: string;
+  action: string;
+}
+
 // No mock data - empty initial state
 const mockAlerts: Alert[] = [];
 const mockHistory: AlertHistory[] = [];
@@ -48,7 +58,19 @@ const mockHistory: AlertHistory[] = [];
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState<Alert[]>(mockAlerts);
   const [history, setHistory] = useState<AlertHistory[]>(mockHistory);
-  const [activeTab, setActiveTab] = useState<'rules' | 'history'>('rules');
+  const [activeTab, setActiveTab] = useState<'rules' | 'history' | 'system'>('system');
+  
+  // Fetch system alerts from API
+  const { data: systemAlerts } = useQuery({
+    queryKey: ['system_alerts'],
+    queryFn: async () => {
+      const base = process.env.NEXT_PUBLIC_API_BASE || 'https://api.zkalphaflow.com';
+      const res = await fetch(`${base}/admin/alerts`);
+      if (!res.ok) return { alerts: [], alert_count: 0 };
+      return res.json();
+    },
+    refetchInterval: 30_000,
+  });
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const toggleAlert = (id: string) => {
@@ -126,6 +148,23 @@ export default function AlertsPage() {
         {/* Tabs */}
         <div className="flex gap-1 p-1 rounded-xl bg-surface-1 border border-white/5 mb-6">
           <button
+            onClick={() => setActiveTab('system')}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors relative",
+              activeTab === 'system' 
+                ? "bg-brand-sky/20 text-brand-sky" 
+                : "text-slate-400 hover:text-white"
+            )}
+          >
+            <Server className="w-4 h-4" />
+            System
+            {(systemAlerts?.alert_count || 0) > 0 && activeTab !== 'system' && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-[10px] flex items-center justify-center text-black font-bold">
+                {systemAlerts?.alert_count}
+              </span>
+            )}
+          </button>
+          <button
             onClick={() => setActiveTab('rules')}
             className={cn(
               "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors",
@@ -158,7 +197,68 @@ export default function AlertsPage() {
 
         {/* Content */}
         <AnimatePresence mode="wait">
-          {activeTab === 'rules' ? (
+          {activeTab === 'system' ? (
+            <motion.div
+              key="system"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-4"
+            >
+              {(!systemAlerts?.alerts || systemAlerts.alerts.length === 0) ? (
+                <div className="text-center py-16">
+                  <Check className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-slate-300 mb-2">All systems operational</h3>
+                  <p className="text-sm text-slate-500">No issues detected</p>
+                </div>
+              ) : (
+                (systemAlerts.alerts as SystemAlert[]).map((alert, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className={cn(
+                      "glass-card p-4 rounded-xl border",
+                      alert.level === 'error' && "border-red-500/30 bg-red-500/5",
+                      alert.level === 'warning' && "border-amber-500/30 bg-amber-500/5",
+                      alert.level === 'info' && "border-blue-500/30 bg-blue-500/5"
+                    )}
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className={cn(
+                        "w-10 h-10 rounded-lg border flex items-center justify-center flex-shrink-0",
+                        alert.level === 'error' && "text-red-400 bg-red-500/10 border-red-500/30",
+                        alert.level === 'warning' && "text-amber-400 bg-amber-500/10 border-amber-500/30",
+                        alert.level === 'info' && "text-blue-400 bg-blue-500/10 border-blue-500/30"
+                      )}>
+                        {alert.level === 'error' ? <AlertTriangle className="w-5 h-5" /> : 
+                         alert.level === 'warning' ? <AlertTriangle className="w-5 h-5" /> : 
+                         <Info className="w-5 h-5" />}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={cn(
+                            "text-xs px-2 py-0.5 rounded uppercase font-medium",
+                            alert.level === 'error' && "bg-red-500/20 text-red-400",
+                            alert.level === 'warning' && "bg-amber-500/20 text-amber-400",
+                            alert.level === 'info' && "bg-blue-500/20 text-blue-400"
+                          )}>
+                            {alert.level}
+                          </span>
+                          <span className="text-xs text-slate-500">{alert.component}</span>
+                        </div>
+                        <h3 className="font-medium text-slate-200">{alert.message}</h3>
+                        <p className="text-sm text-slate-400 mt-1">
+                          <span className="text-slate-500">Action:</span> {alert.action}
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))
+              )}
+            </motion.div>
+          ) : activeTab === 'rules' ? (
             <motion.div
               key="rules"
               initial={{ opacity: 0, y: 10 }}
@@ -169,8 +269,8 @@ export default function AlertsPage() {
               {alerts.length === 0 ? (
                 <div className="text-center py-16">
                   <Bell className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-slate-300 mb-2">No alerts configured</h3>
-                  <p className="text-sm text-slate-500">Create your first alert to get started</p>
+                  <h3 className="text-lg font-medium text-slate-300 mb-2">No custom alerts configured</h3>
+                  <p className="text-sm text-slate-500">Create your first alert rule to get notified</p>
                 </div>
               ) : (
                 alerts.map((alert, index) => (
