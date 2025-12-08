@@ -53,8 +53,8 @@ COINGECKO_IDS = {
 # Polygon tickers for equities/futures
 POLYGON_TICKERS = {
     "spy": "SPY",     # S&P 500 ETF
-    "es": "ES=F",     # S&P 500 Futures (proxy)
-    "nq": "NQ=F",     # Nasdaq Futures (proxy)
+    "es": "^GSPC",    # S&P 500 Index (Yahoo Finance)
+    "nq": "^NDX",     # Nasdaq 100 Index (Yahoo Finance)
     "qqq": "QQQ",     # Nasdaq ETF
     "gld": "GLD",     # Gold ETF
     "vix": "VIX",     # Volatility Index
