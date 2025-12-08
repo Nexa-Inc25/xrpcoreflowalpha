@@ -41,3 +41,7 @@ cachetools==5.3.2
 # Warning: Adds ~2GB to container size
 # torch==2.0.1
 # torchvision==0.15.2
+
+# Fine-tuning dependencies (HMM, advanced ML)
+# hmmlearn==0.3.0  # For Hidden Markov Models (requires scikit-learn)
+# neuralprophet==0.5.0  # For Neural Prophet (requires torch)

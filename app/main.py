@@ -21,6 +21,7 @@ from api.flows import router as flows_router
 from api.analytics import router as analytics_router
 from api.correlations import router as correlations_router
 from api.latency import router as latency_router
+from api.tuned_analytics import router as tuned_analytics_router
 from api.monitoring import router as monitoring_router
 from fastapi.staticfiles import StaticFiles
 from observability.impact import start_binance_depth_worker
@@ -113,6 +114,7 @@ app.include_router(flows_router)
 app.include_router(analytics_router)
 app.include_router(correlations_router)
 app.include_router(latency_router)
+app.include_router(tuned_analytics_router)
 app.include_router(monitoring_router)
 
 # Wallet analysis for institutional tracking
