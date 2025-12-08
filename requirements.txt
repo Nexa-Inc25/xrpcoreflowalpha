@@ -36,3 +36,8 @@ prophet==1.1.5
 # Rate limiting and caching
 python-multipart==0.0.6
 cachetools==5.3.2
+
+# Optional: Neural Network Training (uncomment to enable GRU)
+# Warning: Adds ~2GB to container size
+# torch==2.0.1
+# torchvision==0.15.2
