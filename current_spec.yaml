@@ -1,0 +1,218 @@
+databases:
+- cluster_name: zkalphaflow-prod
+  engine: REDIS
+  name: redis-db
+  production: true
+  version: "7"
+domains:
+- domain: zkalphaflow.com
+  type: PRIMARY
+- domain: www.zkalphaflow.com
+  type: ALIAS
+ingress:
+  rules:
+  - component:
+      name: web
+    match:
+      path:
+        prefix: /
+  - component:
+      name: api
+      preserve_path_prefix: true
+    match:
+      path:
+        prefix: /api
+name: zkalphaflow
+region: nyc
+services:
+- dockerfile_path: apps/web/Dockerfile
+  envs:
+  - key: NEXT_PUBLIC_API_BASE
+    scope: RUN_AND_BUILD_TIME
+    value: https://api.zkalphaflow.com
+  - key: NEXT_PUBLIC_API_WS_BASE
+    scope: RUN_AND_BUILD_TIME
+    value: wss://api.zkalphaflow.com
+  - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+    scope: RUN_AND_BUILD_TIME
+    value: pk_live_Y2xlcmsuemthbHBoYWZsb3cuY29tJA
+  - key: NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL
+    scope: RUN_AND_BUILD_TIME
+    value: /
+  - key: NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL
+    scope: RUN_AND_BUILD_TIME
+    value: /
+  github:
+    branch: main
+    deploy_on_push: true
+    repo: Nexa-Inc25/xrpcoreflowalpha
+  http_port: 3000
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  name: web
+  source_dir: apps/web
+- dockerfile_path: Dockerfile
+  envs:
+  - key: DATABASE_URL
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:6hYBfpYUhNzG5Iy/lXqZOQmfklE2oLQU:vWSf1B8IWNey+o1sDKsvog==]
+  - key: ALCHEMY_WS_URL
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:RM2rwFUPVYH3BmFGVHCZ6+BN3SoyP9p0:mOFSF+zCe3OcKxvfust6cA==]
+  - key: ALCHEMY_API_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:iePXbfB+l0DGcg1JTeyn/YxF9QFTrruG:4j+B5DDLI+tdOQ+QO1EDJg==]
+  - key: XRPL_WSS
+    scope: RUN_AND_BUILD_TIME
+    value: wss://s1.ripple.com/
+  - key: FINNHUB_API_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:GkGBrz9nt4Y1XMsG3kFtX/IX5nVeMt7Y:IYVs45BXo6HrK7WVHeidVQ==]
+  - key: POLYGON_API_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:xM+31rIPUyGcUyJPhathqKmxPAtf3/Hl:Zrssr2OXbIX0lBQJJmGXkw==]
+  - key: COINGECKO_API_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:qBggQBxVJT5lzPDMfDHLjT2UeqWb2edq:qVDo6nS1K+zrsy88IKeSjQ==]
+  - key: SOLANA_RPC_URL
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:Iat3mAcHMhNJBCAudqSm5gS+rhlNrKoN:/cwDdJZAWpkFzOjO6dISVA==]
+  - key: SENTRY_DSN
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:qtGlI9TknDwnTbT0an/TCUrujfDvnd5K:6fzZtrSjumC+Tnv8dpMQcA==]
+  - key: ALERTS_SLACK_WEBHOOK
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:vpKf9ZIcCdNxo+ykr3V/mE2u5ZTIN1rX:wHMyWOC4H9p1N2WW9WcLjA==]
+  - key: WHALE_ALERT_API_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:8I5Ds5pq1QDKA+M35S3W9UWa31ByrEJ6:cCwxvIoHGNnYMlSnC00/sA==]
+  - key: ALPHA_VANTAGE_API_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:YhOkdoNQ4CJFGM6/ONm5VADfeQQhWIsL:8QwNIpRBMGaRPvsHLC1m6Q==]
+  - key: REDIS_URL
+    scope: RUN_TIME
+    value: ${redis-db.DATABASE_URL}
+  - key: ENABLE_EQUITY_CORRELATION
+    scope: RUN_AND_BUILD_TIME
+    value: "true"
+  - key: ENABLE_FUTURES_CORRELATION
+    scope: RUN_AND_BUILD_TIME
+    value: "true"
+  - key: ENABLE_FOREX_CORRELATION
+    scope: RUN_AND_BUILD_TIME
+    value: "true"
+  - key: CORRELATION_UPDATE_INTERVAL
+    scope: RUN_AND_BUILD_TIME
+    value: "60"
+  - key: POSTGRES_HOST
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:W0StrnLbH9wFaCdi+qmRIc66rjvkO2BB:tFpS6NJvklKTn6ziZ1jLLQ==]
+  - key: POSTGRES_PORT
+    scope: RUN_AND_BUILD_TIME
+    value: "25060"
+  - key: POSTGRES_DB
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:1px8tH2U4Cwg0eL/XYv6QXF68fwQaf7e:98su6ZsOfSk+YVqDg9kjZA==]
+  - key: POSTGRES_USER
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:wQHJChsJjLSlp5pGyp+TBdqJEOycyV/c:t7sllAEDiB8227uE7xUecA==]
+  - key: POSTGRES_PASSWORD
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:uHmRs2vPQLE3zD+B6GcFsaFaEu+skSH/:W+1ls2cHaubuZIRiI+rfvA==]
+  - key: POSTGRES_SSLMODE
+    scope: RUN_AND_BUILD_TIME
+    value: require
+  - key: APP_ENV
+    scope: RUN_AND_BUILD_TIME
+    value: prod
+  - key: BINANCE_WS_URL
+    scope: RUN_AND_BUILD_TIME
+    value: wss://stream.binance.com:9443/ws
+  - key: LATENCY_PING_INTERVAL
+    scope: RUN_AND_BUILD_TIME
+    value: "5"
+  - key: XGBOOST_RETRAIN_INTERVAL
+    scope: RUN_AND_BUILD_TIME
+    value: "86400"
+  - key: SLACK_EDUCATOR_WEBHOOK_URL
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:AtCorbtG6gTGajvgxl5kaqpF6UL48TjC:8fMP/TyJ8SzxkPhqfyqeiA==]
+  - key: SLACK_BOT_TOKEN
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:mkeri25KgkbYjIr8hq5/qgXrTzEu0oRA:vZ7SIO5Ea7X0J5VuztZtZA==]
+  - key: MIN_LATENCY_ANOMALY_SCORE
+    scope: RUN_AND_BUILD_TIME
+    value: "75"
+  - key: HFT_LATENCY_THRESHOLD
+    scope: RUN_AND_BUILD_TIME
+    value: "50"
+  - key: ETHERSCAN_API_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:pWI6qEMKfCvjm+nV5kFqXC0GaS8M6fnn:DDpfuOA0+X61LwNp+YUXnQ==]
+  - key: DUNE_API_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:EvsSpZmi546Ixvg9WStoywUibkl75aGg:cw1k9l48jA+4JZ0L5nM3Sw==]
+  - key: CLERK_SECRET_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:OzmzHjc4zwI5/Xm6eu7Tiy4+5gbu8tYw:e2BcDhVj/zzThRq9mNAEvg==]
+  - key: SLACK_COURSE_WEBHOOK_URL
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:vc2lNrV8RdN+E+neKBtfzQyF1dXHmtKY:rTAHlfaTT7sUK4jawJB9Nw==]
+  - key: ENABLE_SLACK_COURSES
+    scope: RUN_AND_BUILD_TIME
+    value: "true"
+  github:
+    branch: main
+    deploy_on_push: true
+    repo: Nexa-Inc25/xrpcoreflowalpha
+  http_port: 8000
+  instance_count: 1
+  instance_size_slug: basic-xs
+  name: api
+workers:
+- dockerfile_path: Dockerfile
+  envs:
+  - key: DATABASE_URL
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:RFYKHTsYPS48wXDp9LyHBPebeZ9I9hLK:QspAmpJq52dFKwAfMgAi7Q==]
+  - key: ALCHEMY_WS_URL
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:qZYESXUwyd3lNyhXSt9zTaW/9JQulQb0:YpZpxZhUcNx6Wdm4K6QU+A==]
+  - key: ALERTS_SLACK_WEBHOOK
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:iVyRNJKNNs8W5pL6xvHqbfmkUgDbloUp:RyhOniz1TDcHtaVjDs+EIA==]
+  - key: REDIS_URL
+    scope: RUN_TIME
+    value: ${redis-db.DATABASE_URL}
+  github:
+    branch: main
+    deploy_on_push: true
+    repo: Nexa-Inc25/xrpcoreflowalpha
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  name: worker
+  run_command: python -m worker.run

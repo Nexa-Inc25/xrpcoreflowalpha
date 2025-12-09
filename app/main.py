@@ -87,9 +87,22 @@ if SENTRY_DSN:
         pass
 
 app = FastAPI()
+
+# Fix CORS for production - if no specific origins are set, use default production domains
+cors_origins = CORS_ALLOW_ORIGINS
+if not cors_origins or cors_origins == ["*"]:
+    # Default to our production domains if CORS_ALLOW_ORIGINS is not properly set
+    cors_origins = [
+        "https://zkalphaflow-q3alj.ondigitalocean.app",
+        "https://zkalphaflow.com",
+        "https://www.zkalphaflow.com",
+        "http://localhost:3000",
+        "http://localhost:3001",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ALLOW_ORIGINS or ["*"],
+    allow_origins=cors_origins,
     allow_credentials=CORS_ALLOW_CREDENTIALS,
     allow_methods=CORS_ALLOW_METHODS or ["*"],
     allow_headers=CORS_ALLOW_HEADERS or ["*"],
