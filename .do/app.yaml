@@ -152,8 +152,7 @@ workers:
 databases:
   - name: redis-db
     engine: REDIS
-    production: true
-    cluster_name: redis-zkalphaflow
+    production: false
     version: "7"
 
 domains:
