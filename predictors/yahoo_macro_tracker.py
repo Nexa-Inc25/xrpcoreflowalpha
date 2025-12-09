@@ -9,8 +9,8 @@ from predictors.frequency_fingerprinter import FrequencyFingerprinter
 
 
 _TICKERS: Dict[str, Dict[str, object]] = {
-    "ES": {"ticker": "ES=F", "multiplier": 50.0, "label": "macro_es"},
-    "NQ": {"ticker": "NQ=F", "multiplier": 20.0, "label": "macro_nq"},
+    "ES": {"ticker": "^GSPC", "multiplier": 1.0, "label": "macro_es"},  # S&P 500 Index
+    "NQ": {"ticker": "^NDX", "multiplier": 1.0, "label": "macro_nq"},   # Nasdaq 100 Index
 }
 
 
