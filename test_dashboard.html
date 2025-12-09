@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZK Alpha Flow - Test Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+            color: #e0e6f1;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 { 
+            text-align: center; 
+            margin-bottom: 30px; 
+            font-size: 2.5em;
+            background: linear-gradient(45deg, #00ff88, #00aaff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+        .card h2 {
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            color: #00ff88;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(45deg, #00ff88, #00aaff);
+            color: #0a0e27;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 255, 136, 0.3);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.9em;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            margin-left: 10px;
+        }
+        .status.success { background: rgba(0, 255, 136, 0.2); color: #00ff88; }
+        .status.error { background: rgba(255, 88, 88, 0.2); color: #ff5858; }
+        .status.loading { background: rgba(255, 170, 0, 0.2); color: #ffaa00; }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .metric {
+            padding: 10px;
+            background: rgba(0, 255, 136, 0.1);
+            border-radius: 8px;
+            text-align: center;
+        }
+        .metric .value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #00ff88;
+        }
+        .metric .label {
+            font-size: 0.85em;
+            color: #a0a8c0;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 ZK Alpha Flow - Test Dashboard</h1>
+        
+        <div class="grid">
+            <!-- Integrated Forecast -->
+            <div class="card">
+                <h2>📊 Integrated Forecast <span id="forecast-status" class="status"></span></h2>
+                <button onclick="testForecast()">Test All Models (HMM + Fourier + Prophet)</button>
+                <div id="forecast-result" class="result"></div>
+                <div class="metrics" id="forecast-metrics"></div>
+            </div>
+
+            <!-- HMM Flow State -->
+            <div class="card">
+                <h2>🔄 HMM Flow State Analysis <span id="hmm-status" class="status"></span></h2>
+                <button onclick="testHMM()">Analyze Flow States</button>
+                <div id="hmm-result" class="result"></div>
+            </div>
+
+            <!-- Fourier Correlations -->
+            <div class="card">
+                <h2>🌊 Fourier Correlations <span id="fourier-status" class="status"></span></h2>
+                <button onclick="testFourier()">Calculate Frequency Correlations</button>
+                <div id="fourier-result" class="result"></div>
+            </div>
+
+            <!-- Real-Time Signals -->
+            <div class="card">
+                <h2>⚡ Real-Time Signals <span id="signals-status" class="status"></span></h2>
+                <button onclick="testSignals()">Get Trading Signals</button>
+                <div id="signals-result" class="result"></div>
+            </div>
+
+            <!-- Prophet Forecast -->
+            <div class="card">
+                <h2>📈 Prophet Optimization <span id="prophet-status" class="status"></span></h2>
+                <button onclick="testProphet()">Run Prophet with Tuning</button>
+                <div id="prophet-result" class="result"></div>
+            </div>
+
+            <!-- Backtesting -->
+            <div class="card">
+                <h2>📉 Backtesting <span id="backtest-status" class="status"></span></h2>
+                <button onclick="testBacktest()">Run Strategy Backtest</button>
+                <div id="backtest-result" class="result"></div>
+            </div>
+        </div>
+
+        <!-- Live Metrics -->
+        <div class="card">
+            <h2>📡 Live System Metrics</h2>
+            <div class="metrics" id="live-metrics">
+                <div class="metric">
+                    <div class="value" id="accuracy">--</div>
+                    <div class="label">Model Accuracy</div>
+                </div>
+                <div class="metric">
+                    <div class="value" id="migration">--</div>
+                    <div class="label">XRP Migration Score</div>
+                </div>
+                <div class="metric">
+                    <div class="value" id="signals-count">--</div>
+                    <div class="label">Active Signals</div>
+                </div>
+                <div class="metric">
+                    <div class="value" id="confidence">--</div>
+                    <div class="label">Avg Confidence</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+
+        function setStatus(id, status, text = '') {
+            const elem = document.getElementById(id);
+            elem.className = `status ${status}`;
+            elem.textContent = text || status;
+        }
+
+        async function testForecast() {
+            setStatus('forecast-status', 'loading', 'Loading...');
+            const resultDiv = document.getElementById('forecast-result');
+            const metricsDiv = document.getElementById('forecast-metrics');
+            
+            try {
+                const response = await fetch(`${API_BASE}/analytics/forecast?asset=xrp&tune=all&horizon=24`);
+                const data = await response.json();
+                
+                setStatus('forecast-status', 'success', 'Success');
+                
+                // Display results
+                resultDiv.textContent = JSON.stringify(data, null, 2);
+                
+                // Update metrics
+                if (data.accuracy) {
+                    document.getElementById('accuracy').textContent = `${(data.accuracy * 100).toFixed(1)}%`;
+                }
+                if (data.xrp_migration_score) {
+                    document.getElementById('migration').textContent = `${(data.xrp_migration_score * 100).toFixed(1)}%`;
+                }
+                
+                // Show forecast metrics
+                if (data.forecast && data.forecast.length > 0) {
+                    const latest = data.forecast[0];
+                    metricsDiv.innerHTML = `
+                        <div class="metric">
+                            <div class="value">${latest.hmm_state || 'N/A'}</div>
+                            <div class="label">HMM State</div>
+                        </div>
+                        <div class="metric">
+                            <div class="value">${latest.fourier_cycle || 'N/A'}</div>
+                            <div class="label">Fourier Cycle</div>
+                        </div>
+                        <div class="metric">
+                            <div class="value">${latest.prophet_trend || 'N/A'}</div>
+                            <div class="label">Prophet Trend</div>
+                        </div>
+                        <div class="metric">
+                            <div class="value">${(latest.confidence * 100).toFixed(1)}%</div>
+                            <div class="label">Confidence</div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                setStatus('forecast-status', 'error', 'Error');
+                resultDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function testHMM() {
+            setStatus('hmm-status', 'loading', 'Loading...');
+            const resultDiv = document.getElementById('hmm-result');
+            
+            try {
+                const response = await fetch(`${API_BASE}/analytics/flow_state?venue=ripple,nyse&tune=hmm`);
+                const data = await response.json();
+                
+                setStatus('hmm-status', 'success', 'Success');
+                resultDiv.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                setStatus('hmm-status', 'error', 'Error');
+                resultDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function testFourier() {
+            setStatus('fourier-status', 'loading', 'Loading...');
+            const resultDiv = document.getElementById('fourier-result');
+            
+            try {
+                const response = await fetch(`${API_BASE}/analytics/correlations?assets=xrp,btc,eth,spy&tune=fourier`);
+                const data = await response.json();
+                
+                setStatus('fourier-status', 'success', 'Success');
+                resultDiv.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                setStatus('fourier-status', 'error', 'Error');
+                resultDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function testSignals() {
+            setStatus('signals-status', 'loading', 'Loading...');
+            const resultDiv = document.getElementById('signals-result');
+            
+            try {
+                const response = await fetch(`${API_BASE}/analytics/signals/realtime?tune=all&min_confidence=0.7`);
+                const data = await response.json();
+                
+                setStatus('signals-status', 'success', 'Success');
+                resultDiv.textContent = JSON.stringify(data, null, 2);
+                
+                if (data.total_signals !== undefined) {
+                    document.getElementById('signals-count').textContent = data.total_signals;
+                }
+                if (data.accuracy) {
+                    document.getElementById('confidence').textContent = `${(data.accuracy * 100).toFixed(1)}%`;
+                }
+            } catch (error) {
+                setStatus('signals-status', 'error', 'Error');
+                resultDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function testProphet() {
+            setStatus('prophet-status', 'loading', 'Loading...');
+            const resultDiv = document.getElementById('prophet-result');
+            
+            try {
+                const response = await fetch(`${API_BASE}/analytics/forecast?asset=xrp&tune=prophet&horizon=24`);
+                const data = await response.json();
+                
+                setStatus('prophet-status', 'success', 'Success');
+                resultDiv.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                setStatus('prophet-status', 'error', 'Error');
+                resultDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function testBacktest() {
+            setStatus('backtest-status', 'loading', 'Loading...');
+            const resultDiv = document.getElementById('backtest-result');
+            
+            try {
+                const response = await fetch(`${API_BASE}/analytics/backtest?strategy=integrated&period=30d`);
+                const data = await response.json();
+                
+                setStatus('backtest-status', 'success', 'Success');
+                resultDiv.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                setStatus('backtest-status', 'error', 'Error');
+                resultDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // Auto-refresh metrics every 30 seconds
+        setInterval(() => {
+            testSignals();
+        }, 30000);
+    </script>
+</body>
+</html>
