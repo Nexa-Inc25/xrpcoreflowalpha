@@ -27,7 +27,12 @@ _sqlite_path = Path(__file__).parent.parent / "data" / "signals.db"
 
 def _is_local_dev() -> bool:
     """Check if we're in local development (no real DB available)."""
-    return POSTGRES_HOST in ("db", "localhost", "127.0.0.1") and APP_ENV == "dev"
+    # Allow SQLite fallback if PostgreSQL is disabled or in dev mode
+    if POSTGRES_HOST in ("disabled", "none", ""):
+        return True
+    if APP_ENV in ("dev", "development"):
+        return True
+    return POSTGRES_HOST in ("db", "localhost", "127.0.0.1")
 
 
 def get_dsn() -> str:

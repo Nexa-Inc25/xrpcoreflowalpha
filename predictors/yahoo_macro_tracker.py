@@ -32,8 +32,15 @@ async def _seed(fp: FrequencyFingerprinter, ticker: str, multiplier: float, labe
     try:
         def _load():
             t = yf.Ticker(ticker)
-            # 2 days of 1m to cover overnight Globex
-            return t.history(period="2d", interval="1m", auto_adjust=False, actions=False)
+            # Try different periods if 2d fails
+            for period in ["2d", "1d", "5d"]:
+                try:
+                    df = t.history(period=period, interval="1m", auto_adjust=False, actions=False)
+                    if df is not None and not df.empty:
+                        return df
+                except Exception:
+                    continue
+            return pd.DataFrame()  # Return empty if all fail
 
         df: pd.DataFrame = await asyncio.to_thread(_load)
         if df is None or df.empty:
@@ -68,10 +75,19 @@ async def _poll_symbol(symbol: str, fp: FrequencyFingerprinter) -> None:
         try:
             def _load_latest():
                 t = yf.Ticker(ticker)
-                return t.history(period="1d", interval="1m", auto_adjust=False, actions=False)
+                # Try to get latest data with fallbacks
+                for period in ["1d", "2d", "5d"]:
+                    try:
+                        df = t.history(period=period, interval="1m", auto_adjust=False, actions=False)
+                        if df is not None and not df.empty:
+                            return df
+                    except Exception:
+                        continue
+                return pd.DataFrame()
 
             df: pd.DataFrame = await asyncio.to_thread(_load_latest)
             if df is None or df.empty:
+                print(f"[Yahoo] No data for {ticker}, retrying in 60s")
                 await asyncio.sleep(60.0)
                 continue
             if last_idx is not None:
