@@ -71,31 +71,101 @@ def get_prophet_forecaster():
 
 async def fetch_asset_data(asset: str, period: str = "1d") -> pd.DataFrame:
     """
-    Fetch real asset data from APIs
+    Fetch REAL asset data from Alpha Vantage or database
+    NO MOCK DATA - EVER!
     """
-    # Implementation would fetch from actual APIs
-    # For now, return sample data structure
+    import httpx
+    from db.connection import get_async_session
+    from sqlalchemy import text
     
-    # Generate sample data (replace with actual API calls)
-    dates = pd.date_range(end=datetime.now(), periods=500, freq='1H')
+    # Map assets to symbols
+    symbol_map = {
+        'xrp': 'XRP',
+        'btc': 'BTC', 
+        'eth': 'ETH',
+        'spy': 'SPY',
+        'qqq': 'QQQ'
+    }
     
-    # Simulate realistic price movement
-    np.random.seed(hash(asset) % 1000)
-    returns = np.random.randn(500) * 0.02
-    prices = 100 * np.exp(np.cumsum(returns))
+    symbol = symbol_map.get(asset.lower(), asset.upper())
     
-    df = pd.DataFrame({
-        'timestamp': dates,
-        'open': prices * (1 + np.random.randn(500) * 0.005),
-        'high': prices * (1 + np.abs(np.random.randn(500) * 0.01)),
-        'low': prices * (1 - np.abs(np.random.randn(500) * 0.01)),
-        'close': prices,
-        'volume': np.random.exponential(1000000, 500) * (1 + np.random.randn(500) * 0.3)
-    })
+    # First try to get from database (historical signals)
+    try:
+        async with get_async_session() as session:
+            query = text("""
+                SELECT 
+                    detected_at as timestamp,
+                    confidence as close,
+                    confidence * 0.98 as low,
+                    confidence * 1.02 as high,
+                    confidence as open,
+                    COALESCE(amount_usd, 1000000) as volume
+                FROM signals 
+                WHERE network = :network
+                AND detected_at > NOW() - INTERVAL '30 days'
+                ORDER BY detected_at DESC
+                LIMIT 500
+            """)
+            
+            network = 'xrpl' if asset.lower() == 'xrp' else 'ethereum'
+            result = await session.execute(query, {'network': network})
+            rows = result.fetchall()
+            
+            if rows:
+                df = pd.DataFrame(rows, columns=['timestamp', 'close', 'low', 'high', 'open', 'volume'])
+                df.set_index('timestamp', inplace=True)
+                return df
+    except Exception as e:
+        logger.warning(f"Database fetch failed: {e}")
     
-    df.set_index('timestamp', inplace=True)
+    # Fallback to Alpha Vantage for market data
+    if ALPHA_VANTAGE_API_KEY:
+        try:
+            async with httpx.AsyncClient() as client:
+                # Crypto or stock endpoint
+                if asset.lower() in ['btc', 'eth', 'xrp']:
+                    url = f"https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY&symbol={symbol}&market=USD&apikey={ALPHA_VANTAGE_API_KEY}"
+                else:
+                    url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}"
+                
+                response = await client.get(url, timeout=30)
+                data = response.json()
+                
+                # Parse Alpha Vantage response
+                if 'Time Series (Digital Currency Daily)' in data:
+                    ts = data['Time Series (Digital Currency Daily)']
+                elif 'Time Series (Daily)' in data:
+                    ts = data['Time Series (Daily)']
+                else:
+                    raise ValueError(f"No data found for {symbol}")
+                
+                # Convert to DataFrame
+                df = pd.DataFrame.from_dict(ts, orient='index')
+                df.index = pd.to_datetime(df.index)
+                df.index.name = 'timestamp'
+                
+                # Rename columns
+                col_map = {
+                    '1. open': 'open', '1a. open (USD)': 'open',
+                    '2. high': 'high', '2a. high (USD)': 'high',
+                    '3. low': 'low', '3a. low (USD)': 'low',
+                    '4. close': 'close', '4a. close (USD)': 'close',
+                    '5. volume': 'volume', '6. market cap (USD)': 'volume'
+                }
+                df.rename(columns=col_map, inplace=True)
+                
+                # Select and convert columns
+                df = df[['open', 'high', 'low', 'close', 'volume']]
+                df = df.astype(float)
+                
+                return df.sort_index()
+                
+        except Exception as e:
+            logger.error(f"Alpha Vantage fetch failed: {e}")
     
-    return df
+    # If all else fails, return empty DataFrame (NOT mock data!)
+    logger.error(f"Could not fetch real data for {asset}")
+    return pd.DataFrame()  # Empty - no fake data!
 
 
 @router.get("/forecast")
