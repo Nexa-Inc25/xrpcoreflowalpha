@@ -40,10 +40,6 @@ KNOWN_FINGERPRINTS: Dict[str, float] = {
     "ripple_odl": 1.0 / 120.0,          # ~8.3 mHz - Ripple ODL corridor
     "ripple_escrow": 1.0 / 300.0,       # ~3.3 mHz - Monthly escrow releases
     "bitstamp_xrp": 1.0 / 25.0,         # ~40 mHz - Bitstamp XRP market making
-    
-    # Unknown but tracked patterns
-    "ghostprint_2025": 1.0 / 11.7,      # ~85.5 mHz - Unidentified HFT
-    "phantom_accumulator": 1.0 / 95.0,  # ~10.5 mHz - Large slow buyer
 }
 
 
