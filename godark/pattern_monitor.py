@@ -1,17 +1,17 @@
 import time
 from typing import Any, Dict, List, Optional
 
-import redis.asyncio as redis
+from app.redis_utils import get_redis, REDIS_ENABLED
 
-from app.config import REDIS_URL
+# REDIS_URL import removed - using redis_utils
 
 _redis: Optional[redis.Redis] = None
 
 
-async def _get_redis() -> redis.Redis:
+async def _get_redis() :
     global _redis
     if _redis is None:
-        _redis = redis.from_url(REDIS_URL, decode_responses=True)
+        _redis = await get_redis()
     return _redis
 
 

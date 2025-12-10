@@ -1,7 +1,7 @@
 import asyncio
 from typing import Iterable
 
-import redis.asyncio as redis
+from app.redis_utils import get_redis, REDIS_ENABLED
 
 from app.config import (
     REDIS_URL,
@@ -19,7 +19,7 @@ async def _sadd_all(r: redis.Redis, key: str, vals: Iterable[str]) -> int:
 
 
 async def run_dynamic_ingest():
-    r = redis.from_url(REDIS_URL, decode_responses=True)
+    r = await get_redis()
     while True:
         try:
             await _sadd_all(r, "godark:partners:xrpl", [a.lower() for a in GODARK_XRPL_PARTNERS])

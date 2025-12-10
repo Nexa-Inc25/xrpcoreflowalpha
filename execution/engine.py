@@ -2,7 +2,7 @@ import os
 import time
 from typing import Optional, Dict, Any
 
-import redis.asyncio as redis
+from app.redis_utils import get_redis, REDIS_ENABLED
 
 from app.config import (
     XRPL_WSS,
@@ -30,7 +30,7 @@ class XRPFlowAlphaExecution:
         self._redis: Optional[redis.Redis] = None
         if REDIS_URL and REDIS_URL.startswith(("redis://", "rediss://", "unix://")):
             try:
-                self._redis = redis.from_url(REDIS_URL, decode_responses=True)
+                self._redis = await get_redis()
             except Exception:
                 pass
 

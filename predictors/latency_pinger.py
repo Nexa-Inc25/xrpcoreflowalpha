@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 
 import numpy as np
 import aiohttp
-import redis.asyncio as redis
+from app.redis_utils import get_redis, REDIS_ENABLED
 
 from app.config import REDIS_URL, POLYGON_API_KEY
 from observability.metrics import (
@@ -104,9 +104,9 @@ class LatencyPinger:
         self._anomaly_count = 0
         self._last_publish_ts = 0.0
     
-    async def _get_redis(self) -> redis.Redis:
+    async def _get_redis(self) :
         if self._redis is None:
-            self._redis = redis.from_url(REDIS_URL, decode_responses=True)
+            self._redis = await get_redis()
         return self._redis
     
     def _compute_imbalance(self, bids: List[Tuple[float, float]], asks: List[Tuple[float, float]], levels: int = 10) -> float:

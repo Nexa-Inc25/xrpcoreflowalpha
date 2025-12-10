@@ -4,7 +4,7 @@ import uuid
 from itertools import combinations
 from typing import Dict, List
 
-import redis.asyncio as redis
+from app.redis_utils import get_redis, REDIS_ENABLED
 
 from alerts.slack import send_slack_alert, build_cross_slack_payload
 from app.config import REDIS_URL, CROSS_SIGNAL_DEDUP_TTL
@@ -83,7 +83,7 @@ def _mk_cross(a: Dict, b: Dict) -> Dict:
 
 @async_retry(max_attempts=10, delay=2, backoff=1.5)
 async def _dedup_allow(cross: Dict) -> bool:
-    r = redis.from_url(REDIS_URL, decode_responses=True)
+    r = await get_redis()
     s1 = cross.get("signals", [{}])[0]
     s2 = cross.get("signals", [{}])[1]
     key = f"cross:dedup:{s1.get('type')}:{s2.get('type')}:{s1.get('tx_hash') or s1.get('id')}:{s2.get('tx_hash') or s2.get('id')}"

@@ -3,7 +3,7 @@ import json
 import time
 from typing import Any, Dict, Optional, Tuple, List
 
-import redis.asyncio as redis
+from app.redis_utils import get_redis, REDIS_ENABLED
 from xrpl.asyncio.clients import AsyncWebsocketClient
 from xrpl.models.requests import BookOffers, ServerInfo
 from xrpl.models.currencies import XRP, IssuedCurrency
@@ -18,8 +18,8 @@ OB_STATE_KEY = "ob:state"
 STABLE_CODES = {"USD", "USDC", "USDT"}
 
 
-async def _get_redis() -> redis.Redis:
-    return redis.from_url(REDIS_URL, decode_responses=True)
+async def _get_redis() :
+    return await get_redis()
 
 
 def _parse_pair(pair: str) -> Optional[Tuple[Dict[str, Any], Dict[str, Any], str]]:

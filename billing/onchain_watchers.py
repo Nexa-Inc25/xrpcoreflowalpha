@@ -3,7 +3,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
-import redis.asyncio as redis
+from app.redis_utils import get_redis, REDIS_ENABLED
 from web3 import Web3
 from web3.types import LogReceipt
 
@@ -26,10 +26,10 @@ _http: Optional[httpx.AsyncClient] = None
 _w3: Optional[Web3] = None
 
 
-async def _r() -> redis.Redis:
+async def _r() :
     global _redis
     if _redis is None:
-        _redis = redis.from_url(REDIS_URL, decode_responses=True)
+        _redis = await get_redis()
     return _redis
 
 

@@ -3,7 +3,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
-import redis.asyncio as redis
+from app.redis_utils import get_redis, REDIS_ENABLED
 
 from app.config import (
     SOLANA_RPC_URL,
@@ -19,10 +19,10 @@ _redis: Optional[redis.Redis] = None
 _client: Optional[httpx.AsyncClient] = None
 
 
-async def _r() -> redis.Redis:
+async def _r() :
     global _redis
     if _redis is None:
-        _redis = redis.from_url(REDIS_URL, decode_responses=True)
+        _redis = await get_redis()
     return _redis
 
 

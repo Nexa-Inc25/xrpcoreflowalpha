@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import aiohttp
-import redis.asyncio as redis
+from app.redis_utils import get_redis, REDIS_ENABLED
 
 # Environment config
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")

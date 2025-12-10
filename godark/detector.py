@@ -1,7 +1,7 @@
 from typing import Any, Dict, List
 
 from app.config import GODARK_XRPL_PARTNERS, GODARK_XRPL_DEST_TAGS, REDIS_URL
-import redis.asyncio as redis
+from app.redis_utils import get_redis, REDIS_ENABLED
 
 
 def _lower_list(xs: List[str]) -> List[str]:
@@ -21,7 +21,7 @@ async def annotate_godark(signal: Dict[str, Any]) -> Dict[str, Any]:
     tags = list(_sg(signal, "tags") or [])
     if _sg(signal, "type") == "xrp":
         # merge env seeds + dynamic partner set from redis
-        r = redis.from_url(REDIS_URL, decode_responses=True)
+        r = await get_redis()
         dyn = await r.smembers("godark:partners:xrpl")
         partners = set(_lower_list(GODARK_XRPL_PARTNERS)) | {str(x).lower() for x in (dyn or [])}
         dest = str(_sg(signal, "destination") or "").lower()

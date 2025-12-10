@@ -2,7 +2,7 @@ import asyncio
 import time
 from typing import Any, Dict, Optional
 
-import redis.asyncio as redis
+from app.redis_utils import get_redis, REDIS_ENABLED
 from xrpl.asyncio.clients import AsyncWebsocketClient
 from xrpl.models.requests import Subscribe, ServerInfo
 from utils.retry import async_retry
@@ -15,8 +15,8 @@ from alerts.slack import send_slack_alert, build_rich_slack_payload
 RWA_AMM_STATE_KEY = "rwa:amm:pools"
 
 
-async def _get_redis() -> redis.Redis:
-    return redis.from_url(REDIS_URL, decode_responses=True)
+async def _get_redis() :
+    return await get_redis()
 
 
 def _is_rwa_pool(final_fields: Dict[str, Any]) -> bool:

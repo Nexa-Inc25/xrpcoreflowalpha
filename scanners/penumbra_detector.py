@@ -1,7 +1,7 @@
 import time
 from typing import Any, Dict, Optional
 
-import redis.asyncio as redis
+from app.redis_utils import get_redis, REDIS_ENABLED
 
 from app.config import REDIS_URL, PENUMBRA_UNSHIELD_MIN_USD
 from bus.signal_bus import publish_signal
@@ -9,10 +9,10 @@ from bus.signal_bus import publish_signal
 _redis: Optional[redis.Redis] = None
 
 
-async def _get_redis() -> redis.Redis:
+async def _get_redis() :
     global _redis
     if _redis is None:
-        _redis = redis.from_url(REDIS_URL, decode_responses=True)
+        _redis = await get_redis()
     return _redis
 
 

@@ -18,9 +18,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 import numpy as np
-import redis.asyncio as redis
+from app.redis_utils import get_redis, REDIS_ENABLED
 
-from app.config import REDIS_URL
+# REDIS_URL import removed - using redis_utils
 
 
 # Try to import XGBoost, fallback to sklearn if unavailable
@@ -137,9 +137,9 @@ class LatencyXGBoostPredictor:
         # Training history
         self._training_history: List[Dict[str, Any]] = []
     
-    async def _get_redis(self) -> redis.Redis:
+    async def _get_redis(self) :
         if self._redis is None:
-            self._redis = redis.from_url(REDIS_URL, decode_responses=True)
+            self._redis = await get_redis()
         return self._redis
     
     def _initialize_model(self) -> None:

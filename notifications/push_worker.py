@@ -2,18 +2,18 @@ import asyncio
 import time
 from typing import Dict, Any, List, Optional
 
-import redis.asyncio as redis
+from app.redis_utils import get_redis, REDIS_ENABLED
 
-from app.config import REDIS_URL
+# REDIS_URL import removed - using redis_utils
 from bus.signal_bus import fetch_recent_signals, fetch_recent_cross_signals
 
 _redis: Optional[redis.Redis] = None
 
 
-async def _r() -> redis.Redis:
+async def _r() :
     global _redis
     if _redis is None:
-        _redis = redis.from_url(REDIS_URL, decode_responses=True)
+        _redis = await get_redis()
     return _redis
 
 

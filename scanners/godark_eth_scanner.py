@@ -4,7 +4,7 @@ import time
 from typing import Dict, Any, List, Set
 
 import websockets
-import redis.asyncio as redis
+from app.redis_utils import get_redis, REDIS_ENABLED
 
 from app.config import ALCHEMY_WS_URL, REDIS_URL, ENABLE_GODARK_ETH_SCANNER
 from bus.signal_bus import publish_signal
@@ -24,7 +24,7 @@ DECIMALS = {USDC: 6, USDT: 6, DAI: 18}
 
 @async_retry(max_attempts=10, delay=2, backoff=1.5)
 async def _get_eth_partners() -> Set[str]:
-    r = redis.from_url(REDIS_URL, decode_responses=True)
+    r = await get_redis()
     addrs = await r.smembers("godark:partners:ethereum")
     return {a.lower() for a in (addrs or [])}
 

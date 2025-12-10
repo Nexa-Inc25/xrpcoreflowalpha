@@ -3,7 +3,7 @@ import json
 from typing import Any, Dict, Optional
 
 import httpx
-import redis.asyncio as redis
+from app.redis_utils import get_redis, REDIS_ENABLED
 
 from app.config import REDIS_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_MIN_CONFIDENCE
 
@@ -11,10 +11,10 @@ from app.config import REDIS_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM
 _redis: Optional[redis.Redis] = None
 
 
-async def _r() -> redis.Redis:
+async def _r() :
     global _redis
     if _redis is None:
-        _redis = redis.from_url(REDIS_URL, decode_responses=True)
+        _redis = await get_redis()
     return _redis
 
 

@@ -15,7 +15,7 @@ from app.config import (
     MONSTER_TRUSTLINE_THRESHOLD,
 )
 from bus.signal_bus import publish_signal
-import redis.asyncio as redis
+from app.redis_utils import get_redis, REDIS_ENABLED
 from alerts.slack import send_slack_alert, build_rich_slack_payload
 from utils.tx_validate import validate_tx
 
@@ -23,7 +23,7 @@ from utils.tx_validate import validate_tx
 async def _get_dyn_partners() -> set[str]:
     """Get dynamic partners from Redis. Returns empty set if Redis unavailable."""
     try:
-        r = redis.from_url(REDIS_URL, decode_responses=True)
+        r = await get_redis()
         xs = await r.smembers("godark:partners:xrpl")
         return {x for x in (xs or [])}
     except Exception:

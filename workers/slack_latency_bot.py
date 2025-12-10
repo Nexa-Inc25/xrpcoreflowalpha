@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import aiohttp
-import redis.asyncio as redis
+from app.redis_utils import get_redis, REDIS_ENABLED
 
 # Environment config
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
@@ -195,7 +195,7 @@ async def subscribe_to_latency_flow() -> None:
     
     while True:
         try:
-            r = redis.from_url(REDIS_URL, decode_responses=True)
+            r = await get_redis()
             pubsub = r.pubsub()
             await pubsub.subscribe("latency_flow")
             
@@ -224,7 +224,7 @@ async def poll_recent_anomalies(interval: int = 60) -> None:
     
     while True:
         try:
-            r = redis.from_url(REDIS_URL, decode_responses=True)
+            r = await get_redis()
             events_json = await r.lrange("recent_latency_events", 0, 50)
             
             for event_str in events_json:

@@ -3,7 +3,7 @@ import os
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-import redis.asyncio as redis
+from app.redis_utils import get_redis, REDIS_ENABLED
 import redis as redis_sync
 
 from app.config import (
@@ -64,8 +64,8 @@ _INPUT_DIM = len(_TAG_VOCAB) + len(_NUMERIC_KEYS)
 _SEQ_LEN = 1  # per-cross sequence (can be extended later)
 
 
-async def _get_redis() -> redis.Redis:
-    return redis.from_url(REDIS_URL, decode_responses=True)
+async def _get_redis() :
+    return await get_redis()
 
 
 def _tags_from_signal(sig: Dict[str, Any]) -> List[str]:
