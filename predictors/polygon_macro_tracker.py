@@ -10,10 +10,10 @@ from predictors.wavelet_urgency import update_wavelet_urgency
 
 
 _TICKER_MAP: Dict[str, str] = {
-    # Popular options contracts on Polygon (SPY for S&P 500, QQQ for Nasdaq)
-    # These use the most liquid at-the-money options
-    "ES": "O:SPY",  # SPY options instead of ES futures
-    "NQ": "O:QQQ",  # QQQ options instead of NQ futures
+    # Use regular stock tickers - free Polygon tier supports stocks only
+    # SPY and QQQ ETFs track S&P 500 and Nasdaq 100
+    "ES": "SPY",  # SPY ETF (no O: prefix - stocks only)
+    "NQ": "QQQ",  # QQQ ETF (no O: prefix - stocks only)
 }
 
 

@@ -67,8 +67,7 @@ services:
       - key: ALPHA_VANTAGE_API_KEY
         type: SECRET
       - key: REDIS_URL
-        scope: RUN_TIME
-        value: ${redis-db.DATABASE_URL}
+        type: SECRET
       # Multi-asset correlation engine
       - key: ENABLE_EQUITY_CORRELATION
         value: "true"
@@ -146,14 +145,7 @@ workers:
       - key: ALERTS_SLACK_WEBHOOK
         type: SECRET
       - key: REDIS_URL
-        scope: RUN_TIME
-        value: ${redis-db.DATABASE_URL}
-
-databases:
-  - name: redis-db
-    engine: REDIS
-    production: false
-    version: "7"
+        type: SECRET
 
 domains:
   - domain: zkalphaflow.com
