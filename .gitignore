@@ -29,3 +29,12 @@ terraform.tfstate*
 apps/web/node_modules/
 apps/web/.next/
 apps/web/.env.local
+
+# Secret configuration files
+ALL_SECRETS.txt
+BULK_ENV_VARS.txt
+DEPLOYMENT_FIX.md
+ENV_VALUES.txt
+FIXED_ENV_VARS.txt
+*.secrets
+*.env.*

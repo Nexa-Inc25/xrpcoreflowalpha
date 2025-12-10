@@ -10,9 +10,10 @@ from predictors.wavelet_urgency import update_wavelet_urgency
 
 
 _TICKER_MAP: Dict[str, str] = {
-    # Continuous futures tickers on Polygon
-    "ES": "C:ES",
-    "NQ": "C:NQ",
+    # Popular options contracts on Polygon (SPY for S&P 500, QQQ for Nasdaq)
+    # These use the most liquid at-the-money options
+    "ES": "O:SPY",  # SPY options instead of ES futures
+    "NQ": "O:QQQ",  # QQQ options instead of NQ futures
 }
 
 
@@ -56,7 +57,7 @@ async def _poll_ticker(ticker: str, label: str, fp: FrequencyFingerprinter) -> N
     if not POLYGON_API_KEY:
         return
     timeout = aiohttp.ClientTimeout(total=10)
-    v3_url = f"https://api.polygon.io/v3/trades/{ticker}?order=desc&limit=1&market=futures&apiKey={POLYGON_API_KEY}"
+    v3_url = f"https://api.polygon.io/v3/trades/{ticker}?order=desc&limit=1&apiKey={POLYGON_API_KEY}"
     v2_url = f"https://api.polygon.io/v2/last/trade/{ticker}?apiKey={POLYGON_API_KEY}"
     async with aiohttp.ClientSession(timeout=timeout) as session:
         while True:
