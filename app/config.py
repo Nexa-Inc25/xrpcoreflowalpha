@@ -20,6 +20,13 @@ except Exception:
         except Exception:
             pass
 
+# Import configuration fixes for production deployment
+try:
+    from .config_fixes import fix_yahoo_symbol
+except ImportError:
+    def fix_yahoo_symbol(symbol: str) -> str:
+        return symbol
+
 APP_ENV = os.getenv("APP_ENV", "dev")
 DISABLE_EQUITY_FALLBACK = os.getenv("DISABLE_EQUITY_FALLBACK", "false").lower() == "true"
 APP_VERSION = os.getenv("APP_VERSION", "1.0.0")

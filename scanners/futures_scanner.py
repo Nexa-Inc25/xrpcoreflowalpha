@@ -18,12 +18,13 @@ from workers.scanner_monitor import mark_scanner_connected, record_scanner_signa
 DATABENTO_BASE = "https://hist.databento.com/v0"
 
 # Yahoo Finance symbols for futures ETF proxies
+# Using ETFs instead of indices for better availability
 YAHOO_FUTURES_PROXIES = {
-    "ES": {"symbol": "^GSPC", "name": "S&P 500", "type": "index"},
-    "NQ": {"symbol": "^NDX", "name": "Nasdaq 100", "type": "index"}, 
-    "VIX": {"symbol": "^VIX", "name": "VIX", "type": "volatility"},
-    "GC": {"symbol": "GLD", "name": "Gold ETF", "type": "commodity"},
-    "CL": {"symbol": "USO", "name": "Oil ETF", "type": "commodity"},
+    "ES": {"symbol": "SPY", "name": "S&P 500 ETF", "type": "equity"},     # SPY ETF instead of ^GSPC
+    "NQ": {"symbol": "QQQ", "name": "Nasdaq 100 ETF", "type": "equity"},  # QQQ ETF instead of ^NDX
+    "VIX": {"symbol": "^VIX", "name": "VIX", "type": "volatility"},       # VIX index works
+    "GC": {"symbol": "GLD", "name": "Gold ETF", "type": "commodity"},     # Gold ETF
+    "CL": {"symbol": "USO", "name": "Oil ETF", "type": "commodity"},      # Oil ETF
 }
 
 # Thresholds for significant moves
