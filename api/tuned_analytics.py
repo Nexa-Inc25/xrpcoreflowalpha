@@ -19,6 +19,7 @@ from ml.fourier_markov_prophet import FourierMarkovProphetIntegrator
 from ml.hmm_flow_predictor import DarkFlowHMM
 from ml.fourier_flow_analyzer import FourierFlowAnalyzer
 from ml.prophet_flow_tuner import TunedProphetForecaster
+from ml.smart_flow_forecaster import SmartFlowForecaster
 
 # Import data fetchers
 from app.config import (
@@ -35,6 +36,7 @@ integrator = None
 hmm_model = None
 fourier_analyzer = None
 prophet_forecaster = None
+smart_forecaster = None
 
 
 def get_integrator():
@@ -67,6 +69,14 @@ def get_prophet_forecaster():
     if prophet_forecaster is None:
         prophet_forecaster = TunedProphetForecaster()
     return prophet_forecaster
+
+
+def get_smart_forecaster():
+    """Get or create Smart Flow Forecaster instance"""
+    global smart_forecaster
+    if smart_forecaster is None:
+        smart_forecaster = SmartFlowForecaster()
+    return smart_forecaster
 
 
 async def fetch_asset_data(asset: str, period: str = "1d") -> pd.DataFrame:
@@ -680,3 +690,28 @@ async def debug_recent_signals(
         },
         "timestamp": datetime.now().isoformat()
     }
+
+
+@router.get("/smart_forecast")
+async def get_smart_forecast(
+    asset: str = Query("xrp", description="Asset to forecast"),
+    horizon: int = Query(24, description="Forecast horizon in hours"),
+    include_dark_pools: bool = Query(True, description="Include dark pool and whale signals")
+) -> Dict[str, Any]:
+    """
+    Generate SMART forecast using ensemble ML with dark pool integration.
+    
+    This combines:
+    - Real market data from Alpha Vantage
+    - Dark pool and whale flow signals from database
+    - XGBoost, Random Forest, and Gradient Boosting ensemble
+    - Feature importance and trading recommendations
+    """
+    smart = get_smart_forecaster()
+    result = await smart.smart_forecast(
+        asset=asset,
+        horizon_hours=horizon,
+        include_dark_pools=include_dark_pools
+    )
+    
+    return result
