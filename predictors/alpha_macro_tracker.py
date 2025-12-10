@@ -74,6 +74,10 @@ async def _seed_with_history(symbol: str, session: aiohttp.ClientSession, fp: Fr
 
 async def _poll_symbol(symbol: str, label: str, fp: FrequencyFingerprinter) -> None:
     if not ALPHA_VANTAGE_API_KEY:
+        print(f"[AlphaMacro] ERROR: ALPHA_VANTAGE_API_KEY required for {symbol} data!")
+        # Use Yahoo Finance as fallback
+        from predictors.yahoo_macro_tracker import _poll_ticker
+        await _poll_ticker(symbol, label, fp)
         return
     timeout = aiohttp.ClientTimeout(total=15)
     async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -119,6 +123,9 @@ async def _poll_symbol(symbol: str, label: str, fp: FrequencyFingerprinter) -> N
 
 async def start_alpha_macro_tracker(symbols: Optional[List[str]] = None) -> None:
     if not ALPHA_VANTAGE_API_KEY:
+        print("[AlphaMacro] ERROR: ALPHA_VANTAGE_API_KEY required! Using Yahoo fallback...")
+        from predictors.yahoo_macro_tracker import start_yahoo_macro_tracker
+        await start_yahoo_macro_tracker(symbols)
         return
     syms = symbols or ["ES", "NQ"]
     tasks: List[asyncio.Task] = []

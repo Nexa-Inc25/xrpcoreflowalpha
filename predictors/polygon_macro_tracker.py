@@ -55,6 +55,9 @@ def _ns_or_ms_to_seconds(ts_raw: float) -> float:
 
 async def _poll_ticker(ticker: str, label: str, fp: FrequencyFingerprinter) -> None:
     if not POLYGON_API_KEY:
+        print(f"[PolygonMacro] WARNING: No POLYGON_API_KEY for {ticker}. Using Yahoo Finance fallback...")
+        from predictors.yahoo_macro_tracker import _poll_ticker as yahoo_poll
+        await yahoo_poll(ticker, label, fp)
         return
     timeout = aiohttp.ClientTimeout(total=10)
     v3_url = f"https://api.polygon.io/v3/trades/{ticker}?order=desc&limit=1&apiKey={POLYGON_API_KEY}"
@@ -100,6 +103,9 @@ async def _poll_ticker(ticker: str, label: str, fp: FrequencyFingerprinter) -> N
 
 async def start_polygon_macro_tracker(symbols: Optional[List[str]] = None) -> None:
     if not POLYGON_API_KEY:
+        print("[PolygonMacro] ERROR: POLYGON_API_KEY required! Using Yahoo fallback...")
+        from predictors.yahoo_macro_tracker import start_yahoo_macro_tracker
+        await start_yahoo_macro_tracker(symbols)
         return
     syms = symbols or ["ES", "NQ"]
     tasks: List[asyncio.Task] = []

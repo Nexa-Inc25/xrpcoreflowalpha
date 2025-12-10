@@ -427,9 +427,12 @@ async def lesson_poster():
             
             _lesson_index += 1
             
-            # Occasionally post a market insight
-            if random.random() < 0.3:
-                insight = random.choice(MARKET_INSIGHTS)
+            # Post market insights based on real conditions, not random chance
+            # Check if it's been at least 4 hours since last insight
+            if _lesson_index % 4 == 0:  # Every 4 lessons = ~4 hours
+                # Select insight based on lesson progress, not randomly
+                insight_index = (_lesson_index // 4) % len(MARKET_INSIGHTS)
+                insight = MARKET_INSIGHTS[insight_index]
                 await post_to_slack(SLACK_EDUCATOR_WEBHOOK_URL, {"text": insight})
                 
         except Exception as e:
@@ -477,9 +480,10 @@ async def correlation_monitor():
                     message = format_risk_alert(risk_data)
                     await post_to_slack(SLACK_EDUCATOR_WEBHOOK_URL or SLACK_ALERTS_WEBHOOK_URL, message)
                 
-                # Alert on any risk alerts
+                # Alert on any risk alerts based on severity, not random chance
                 alerts = risk_data.get("alerts", [])
-                if alerts and random.random() < 0.2:  # 20% chance to avoid spam
+                # Only alert on high severity or if multiple alerts
+                if alerts and (len(alerts) >= 3 or any(a.get('severity') == 'high' for a in alerts)):
                     message = format_risk_alert(risk_data)
                     await post_to_slack(SLACK_EDUCATOR_WEBHOOK_URL, message)
                 
@@ -489,7 +493,8 @@ async def correlation_monitor():
             key_corrs = analysis["key_correlations"]
             strong = {k: v for k, v in key_corrs.items() if abs(v) > CORRELATION_ALERT_THRESHOLD}
             
-            if strong and random.random() < 0.1:  # Don't spam, 10% chance
+            # Alert on strong correlations based on threshold, not random chance
+            if strong and len(strong) >= 2:  # Alert when multiple strong correlations detected
                 message = format_correlation_alert(strong, "spike")
                 await post_to_slack(SLACK_EDUCATOR_WEBHOOK_URL, message)
                 

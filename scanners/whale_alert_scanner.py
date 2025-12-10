@@ -43,7 +43,26 @@ KNOWN_INSTITUTIONS = {
 async def fetch_recent_transactions(min_value: int = MIN_VALUE_USD, limit: int = 100) -> List[Dict[str, Any]]:
     """Fetch recent large transactions from Whale Alert API."""
     if not WHALE_ALERT_API_KEY:
-        return []
+        # NO FAKE DATA - if we don't have the API, we need to get it or use alternatives
+        print("[WhaleAlert] WARNING: No API key - cannot track whales. This is REQUIRED for real data.")
+        # Try to get data from our database instead of returning empty
+        from db.connection import get_async_session
+        from sqlalchemy import text
+        try:
+            async with get_async_session() as session:
+                query = text("""
+                    SELECT tx_hash, amount_usd, confidence, network, detected_at 
+                    FROM signals 
+                    WHERE signal_type = 'whale' 
+                    AND amount_usd > :min_value
+                    AND detected_at > NOW() - INTERVAL '10 minutes'
+                    ORDER BY detected_at DESC
+                    LIMIT :limit
+                """)
+                result = await session.execute(query, {'min_value': min_value, 'limit': limit})
+                return [dict(row) for row in result.fetchall()]
+        except:
+            return []  # Only return empty if we truly have NO data source
     
     # Get transactions from last 10 minutes
     start_time = int(time.time()) - 600
@@ -214,7 +233,19 @@ async def process_transaction(tx: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 async def run_whale_alert_scanner():
     """Main scanner loop - polls Whale Alert API every 60 seconds."""
     if not WHALE_ALERT_API_KEY:
-        print("[WhaleAlert] No API key configured, scanner disabled")
+        print("[WhaleAlert] ERROR: API key REQUIRED for whale tracking! Cannot show real whale data without it.")
+        print("[WhaleAlert] Attempting to use database history as fallback...")
+        # Still try to run with database data instead of completely disabling
+        while True:
+            try:
+                # Check database for any whale signals from other sources
+                transactions = await fetch_recent_transactions()
+                if transactions:
+                    print(f"[WhaleAlert] Found {len(transactions)} whale transactions from database")
+                await asyncio.sleep(60)
+            except Exception as e:
+                print(f"[WhaleAlert] Fallback error: {e}")
+                await asyncio.sleep(60)
         return
     
     print("[WhaleAlert] Scanner started")

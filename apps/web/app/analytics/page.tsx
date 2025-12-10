@@ -81,13 +81,15 @@ function processRealData(signals: any, flows: any) {
   
   // Calculate hits based on confidence (high/medium conf = likely hits)
   const dailyPerformance = Object.entries(eventsByDay).map(([date, events]) => {
-    // A "hit" is a high confidence signal or medium conf with good score
+    // A "hit" is based on ACTUAL OUTCOMES, not random numbers!
+    // Check if the signal has an outcome_verified field from the backend
     const hits = events.filter((e: any) => {
-      const conf = e.confidence || e.iso_confidence || 0;
-      const confStr = String(conf).toLowerCase();
-      if (confStr === 'high' || (typeof conf === 'number' && conf >= 70)) return true;
-      if (confStr === 'medium' || (typeof conf === 'number' && conf >= 50 && conf < 70)) return Math.random() > 0.4; // ~60% hit rate for medium
-      return Math.random() > 0.7; // ~30% hit rate for low conf
+      // Only count as hit if backend has verified the outcome as successful
+      // If no outcome data yet, don't count it (pending verification)
+      if (e.outcome_verified === true) return true;
+      if (e.outcome_verified === false) return false;
+      // No outcome data = pending, don't count yet
+      return false;
     }).length;
     
     return {

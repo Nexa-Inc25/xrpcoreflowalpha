@@ -13,6 +13,11 @@ from bus.signal_bus import publish_signal
 
 async def start_equities_scanner():
     if not FINNHUB_API_KEY:
+        print("[EQUITIES] ERROR: FINNHUB_API_KEY required for real equity data!")
+        print("[EQUITIES] Attempting Yahoo Finance fallback...")
+        # Use Yahoo Finance as fallback instead of returning nothing
+        from predictors.yahoo_macro_tracker import start_yahoo_macro_tracker
+        await start_yahoo_macro_tracker(symbols=["SPY", "QQQ", "AAPL", "MSFT"])
         return
     url = f"wss://ws.finnhub.io?token={FINNHUB_API_KEY}"
     async with websockets.connect(url, ping_interval=20, ping_timeout=20) as ws:

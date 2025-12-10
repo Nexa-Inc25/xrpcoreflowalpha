@@ -154,18 +154,9 @@ export default function EventDetailPanel({ event, onClose }: EventDetailPanelPro
     staleTime: 30_000,
   });
   
-  // Generate fallback price data if API fails
-  const generateFallbackPrices = () => {
-    const basePrice = symbol === 'xrp' ? 2.06 : symbol === 'eth' ? 3072 : 100;
-    const volatility = 0.02;
-    return Array.from({ length: 24 }, (_, i) => {
-      const randomWalk = (Math.random() - 0.5) * volatility;
-      return basePrice * (1 + randomWalk + (i / 100) * 0.01);
-    });
-  };
-  
+  // NO FAKE DATA - if API fails, show empty/error state
   const rawPrices = priceHistory?.map(p => p.p) || [];
-  const prices = rawPrices.length >= 2 ? rawPrices : generateFallbackPrices();
+  const prices = rawPrices.length >= 2 ? rawPrices : [];
   const currentPrice = prices[prices.length - 1] || 0;
   const priceChange = prices.length > 1 ? ((currentPrice - prices[0]) / prices[0]) * 100 : 0;
   const isPositive = priceChange >= 0;
