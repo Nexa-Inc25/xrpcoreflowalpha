@@ -1,12 +1,11 @@
 from typing import Optional, Dict, Any
 import time
 
-import redis.asyncio as redis
+from app.redis_utils import get_redis, REDIS_ENABLED
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 
 from app.config import (
-    REDIS_URL,
     STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET,
     STRIPE_PRICE_PRO_MONTHLY,
@@ -40,8 +39,8 @@ class CheckoutRequest(BaseModel):
     customer_email: Optional[str] = None
 
 
-async def _redis() -> redis.Redis:
-    return redis.from_url(REDIS_URL, decode_responses=True)
+async def _r():
+    return await get_redis()
 
 
 def _features_for_tier(tier: str) -> Dict[str, Any]:
@@ -61,12 +60,12 @@ async def me(request: Request) -> Dict[str, Any]:
     # Prefer middleware-resolved tier; else resolve by email; allow dev override via X-Plan
     middleware_tier = (getattr(request.state, "user_tier", None) or "").lower()
     email = (getattr(request.state, "user_email", None) or request.headers.get("X-User-Email") or "").strip().lower()
-    r = await _redis()
     plan = middleware_tier or "free"
     expires_iso = None
     source = None
     try:
-        if email:
+        if email and REDIS_ENABLED:
+            r = await _r()
             v = await r.get(f"billing:user:{email}")
             exp = await r.get(f"billing:user_expiry:{email}")
             src = await r.get(f"billing:user_source:{email}")

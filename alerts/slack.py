@@ -4,20 +4,17 @@ import hashlib
 import httpx
 from typing import Any, Dict, Optional
 
-import redis.asyncio as redis
 from utils.retry import async_retry
+from app.redis_utils import get_redis, REDIS_ENABLED
 
 from app.config import (
     ALERTS_SLACK_WEBHOOK,
-    REDIS_URL,
     ALERTS_DEDUP_TTL_SECONDS,
     ALERTS_RATE_WINDOW_SECONDS,
     ALERTS_RATE_MAX_PER_WINDOW,
     ALERTS_RATE_LIMIT_PER_CATEGORY,
 )
 from app.config import EXECUTION_ENABLED
-
-_redis: Optional[redis.Redis] = None
 
 
 def _fingerprint(payload: Dict[str, Any]) -> str:
@@ -28,14 +25,13 @@ def _fingerprint(payload: Dict[str, Any]) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
 
 
-async def _get_redis() -> redis.Redis:
-    global _redis
-    if _redis is None:
-        _redis = redis.from_url(REDIS_URL, decode_responses=True)
-    return _redis
+async def _get_redis():
+    return await get_redis()
 
 
 async def _allow_send(fp: str, category: Optional[str]) -> bool:
+    if not REDIS_ENABLED:
+        return True  # Allow all sends when Redis is disabled
     r = await _get_redis()
     try:
         dedup_key = f"alerts:dedup:{fp}"

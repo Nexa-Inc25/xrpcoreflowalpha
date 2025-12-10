@@ -1,17 +1,17 @@
 import secrets
 from typing import Optional, Dict, Any
 
-import redis.asyncio as redis
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 
-from app.config import REDIS_URL, ADMIN_PASSWORD
+from app.redis_utils import get_redis, REDIS_ENABLED
+from app.config import ADMIN_PASSWORD
 
 router = APIRouter()
 
 
-async def _r() -> redis.Redis:
-    return redis.from_url(REDIS_URL, decode_responses=True)
+async def _r():
+    return await get_redis()
 
 
 def _require_admin(req: Request) -> None:
@@ -35,19 +35,22 @@ async def create_key(req: Request, body: CreateKeyRequest) -> Dict[str, Any]:
     if not email:
         raise HTTPException(status_code=400, detail="invalid email")
     api_key = secrets.token_urlsafe(24)
-    r = await _r()
-    await r.set(f"billing:user:{email}", tier)
-    await r.hset(f"api:key:{api_key}", mapping={"email": email, "tier": tier})
-    await r.set(f"api:key:by_email:{email}", api_key)
+    if REDIS_ENABLED:
+        r = await _r()
+        await r.set(f"billing:user:{email}", tier)
+        await r.hset(f"api:key:{api_key}", mapping={"email": email, "tier": tier})
+        await r.set(f"api:key:by_email:{email}", api_key)
     return {"email": email, "tier": tier, "api_key": api_key}
 
 
 @router.get("/admin/keys")
 async def get_key(req: Request, email: Optional[str] = None) -> Dict[str, Any]:
     _require_admin(req)
-    r = await _r()
     if email:
         email_l = email.strip().lower()
+        if not REDIS_ENABLED:
+            return {"email": email_l, "found": False, "redis": "disabled"}
+        r = await _r()
         k = await r.get(f"api:key:by_email:{email_l}")
         if not k:
             return {"email": email_l, "found": False}
@@ -61,6 +64,8 @@ async def get_key(req: Request, email: Optional[str] = None) -> Dict[str, Any]:
 async def delete_key(req: Request, email: str) -> Dict[str, Any]:
     _require_admin(req)
     email_l = email.strip().lower()
+    if not REDIS_ENABLED:
+        return {"email": email_l, "deleted": False, "redis": "disabled"}
     r = await _r()
     k = await r.get(f"api:key:by_email:{email_l}")
     if not k:

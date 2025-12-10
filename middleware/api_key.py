@@ -1,20 +1,14 @@
 import time
 from typing import Optional, Dict, Any
 
-import redis.asyncio as redis
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from app.config import REDIS_URL
-
-_redis: Optional[redis.Redis] = None
+from app.redis_utils import get_redis, REDIS_ENABLED
 
 
-async def _r() -> redis.Redis:
-    global _redis
-    if _redis is None:
-        _redis = redis.from_url(REDIS_URL, decode_responses=True)
-    return _redis
+async def _r():
+    return await get_redis()
 
 
 async def api_key_middleware(request: Request, call_next):
@@ -30,6 +24,10 @@ async def api_key_middleware(request: Request, call_next):
     if not api_key:
         return await call_next(request)
 
+    if not REDIS_ENABLED:
+        # When Redis is disabled, skip API key validation
+        return await call_next(request)
+
     r = await _r()
     data = await r.hgetall(f"api:key:{api_key}")
     if not data:
@@ -43,7 +41,7 @@ async def api_key_middleware(request: Request, call_next):
     request.state.api_key_authenticated = True
 
     # Simple per-key rate limit for non-institutional: 10 req/sec
-    if tier != "institutional":
+    if tier != "institutional" and REDIS_ENABLED:
         now_bucket = int(time.time())
         key = f"ratelimit:{api_key}:{now_bucket}"
         try:

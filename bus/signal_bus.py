@@ -2,9 +2,7 @@ import json
 import time
 from typing import Any, Dict, List, Optional
 
-import redis.asyncio as redis
-
-from app.config import REDIS_URL
+from app.redis_utils import get_redis, REDIS_ENABLED
 from godark.detector import annotate_godark
 from godark.pattern_monitor import detect_godark_patterns
 from utils.retry import async_retry
@@ -13,31 +11,18 @@ from predictors.frequency_fingerprinter import zk_fingerprinter
 from observability.metrics import zk_flow_confidence_score
 from predictors.xrp_iso_predictor import enrich_iso_signal
 
-_redis: Optional[redis.Redis] = None
 _redis_warned: bool = False  # Only warn once about Redis connection issues
-_redis_disabled: bool = False  # Set if Redis URL is invalid/empty
 
 
-async def _get_redis() -> Optional[redis.Redis]:
-    global _redis, _redis_disabled, _redis_warned
-    if _redis_disabled:
+async def _get_redis():
+    """Get Redis connection with fallback to None if disabled."""
+    if not REDIS_ENABLED:
+        global _redis_warned
+        if not _redis_warned:
+            print("[REDIS] Redis is disabled - running without Redis (in-memory only)")
+            _redis_warned = True
         return None
-    if _redis is None:
-        if not REDIS_URL:
-            if not _redis_warned:
-                print("[REDIS] REDIS_URL not configured - running without Redis (in-memory only)")
-                _redis_warned = True
-            _redis_disabled = True
-            return None
-        try:
-            _redis = redis.from_url(REDIS_URL, decode_responses=True)
-        except Exception as e:
-            if not _redis_warned:
-                print(f"[REDIS] Failed to connect: {e} - running without Redis")
-                _redis_warned = True
-            _redis_disabled = True
-            return None
-    return _redis
+    return await get_redis()
 
 
 def _redis_error(op: str, e: Exception) -> None:

@@ -1,16 +1,15 @@
 from typing import Optional, Dict, Any, List
 
-import redis.asyncio as redis
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 
-from app.config import REDIS_URL
+from app.redis_utils import get_redis, REDIS_ENABLED
 
 router = APIRouter()
 
 
-async def _r() -> redis.Redis:
-    return redis.from_url(REDIS_URL, decode_responses=True)
+async def _r():
+    return await get_redis()
 
 
 class UserPreferences(BaseModel):
@@ -28,6 +27,8 @@ async def set_preferences(request: Request, body: UserPreferences) -> Dict[str, 
     email = _email_from(request)
     if not email:
         raise HTTPException(status_code=400, detail="email required via X-User-Email header or API key")
+    if not REDIS_ENABLED:
+        return {"email": email, "preferences": {}, "redis": "disabled"}
     r = await _r()
     data: Dict[str, Any] = {}
     if body.alert_usd_min is not None:
@@ -48,6 +49,8 @@ async def get_preferences(request: Request) -> Dict[str, Any]:
     email = _email_from(request)
     if not email:
         raise HTTPException(status_code=400, detail="email required via X-User-Email header or API key")
+    if not REDIS_ENABLED:
+        return {"email": email, "preferences": {}, "redis": "disabled"}
     r = await _r()
     out = await r.hgetall(f"user:prefs:{email}")
     return {"email": email, "preferences": out}
