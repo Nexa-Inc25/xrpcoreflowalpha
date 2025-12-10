@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test for zkalphaflow</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #fff; }
+        .status { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .connected { background: #0f4c0f; }
+        .disconnected { background: #4c0f0f; }
+        .error { background: #4c2a0f; }
+        pre { background: #000; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Connection Test</h1>
+    
+    <div id="status" class="status disconnected">Disconnected</div>
+    
+    <h3>Test Endpoints:</h3>
+    <button onclick="testWS('wss://api.zkalphaflow.com/events')">Test wss://api.zkalphaflow.com/events</button>
+    <button onclick="testWS('ws://localhost:8000/events')">Test ws://localhost:8000/events</button>
+    <button onclick="testSSE('https://api.zkalphaflow.com/events/sse')">Test SSE (api.zkalphaflow.com)</button>
+    <button onclick="testSSE('http://localhost:8000/events/sse')">Test SSE (localhost)</button>
+    
+    <h3>Console:</h3>
+    <pre id="console"></pre>
+    
+    <script>
+        let ws = null;
+        let eventSource = null;
+        const consoleEl = document.getElementById('console');
+        const statusEl = document.getElementById('status');
+        
+        function log(msg) {
+            const time = new Date().toISOString().split('T')[1].split('.')[0];
+            consoleEl.textContent = `[${time}] ${msg}\n` + consoleEl.textContent;
+            console.log(msg);
+        }
+        
+        function setStatus(connected, text) {
+            statusEl.textContent = text;
+            statusEl.className = `status ${connected ? 'connected' : 'disconnected'}`;
+        }
+        
+        function testWS(url) {
+            // Clean up existing connections
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            
+            log(`Connecting to WebSocket: ${url}`);
+            
+            try {
+                ws = new WebSocket(url);
+                
+                ws.onopen = () => {
+                    log('✅ WebSocket connected!');
+                    setStatus(true, `Connected to ${url}`);
+                };
+                
+                ws.onmessage = (event) => {
+                    log(`📦 Message: ${event.data}`);
+                };
+                
+                ws.onerror = (error) => {
+                    log(`❌ WebSocket error: ${error}`);
+                    setStatus(false, `Error connecting to ${url}`);
+                };
+                
+                ws.onclose = (event) => {
+                    log(`🔌 WebSocket closed: code=${event.code}, reason=${event.reason}`);
+                    setStatus(false, 'Disconnected');
+                };
+            } catch (error) {
+                log(`❌ Failed to create WebSocket: ${error}`);
+            }
+        }
+        
+        function testSSE(url) {
+            // Clean up existing connections
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            
+            log(`Connecting to SSE: ${url}`);
+            
+            try {
+                eventSource = new EventSource(url);
+                
+                eventSource.onopen = () => {
+                    log('✅ SSE connected!');
+                    setStatus(true, `SSE connected to ${url}`);
+                };
+                
+                eventSource.onmessage = (event) => {
+                    log(`📦 SSE Message: ${event.data}`);
+                };
+                
+                eventSource.onerror = (error) => {
+                    log(`❌ SSE error: ${error}`);
+                    setStatus(false, `SSE error for ${url}`);
+                };
+            } catch (error) {
+                log(`❌ Failed to create EventSource: ${error}`);
+            }
+        }
+        
+        // Check what the environment variables would be
+        log('Page loaded from: ' + window.location.origin);
+        log('Protocol: ' + window.location.protocol);
+    </script>
+</body>
+</html>
