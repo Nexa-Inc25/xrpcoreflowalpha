@@ -27,7 +27,7 @@ class XRPFlowAlphaExecution:
         self.enabled: bool = EXECUTION_ENABLED
         seed = os.getenv("EXECUTION_SEED") or ""
         self.wallet: Optional[Wallet] = Wallet.from_seed(seed) if (self.enabled and seed) else None
-        self._redis: Optional[redis.Redis] = None
+        self._redis = None  # Redis client instance
         if REDIS_URL and REDIS_URL.startswith(("redis://", "rediss://", "unix://")):
             try:
                 self._redis = await get_redis()

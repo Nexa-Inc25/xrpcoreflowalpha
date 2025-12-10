@@ -21,7 +21,7 @@ from app.config import (
 from observability.metrics import onchain_receipt_total
 
 
-_redis: Optional[redis.Redis] = None
+_redis = None  # Redis client instance
 _http: Optional[httpx.AsyncClient] = None
 _w3: Optional[Web3] = None
 

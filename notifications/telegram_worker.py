@@ -8,7 +8,7 @@ from app.redis_utils import get_redis, REDIS_ENABLED
 from app.config import REDIS_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_MIN_CONFIDENCE
 
 
-_redis: Optional[redis.Redis] = None
+_redis = None  # Redis client instance
 
 
 async def _r() :

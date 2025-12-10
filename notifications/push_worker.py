@@ -7,7 +7,7 @@ from app.redis_utils import get_redis, REDIS_ENABLED
 # REDIS_URL import removed - using redis_utils
 from bus.signal_bus import fetch_recent_signals, fetch_recent_cross_signals
 
-_redis: Optional[redis.Redis] = None
+_redis = None  # Redis client instance
 
 
 async def _r() :

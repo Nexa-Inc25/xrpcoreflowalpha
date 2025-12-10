@@ -97,7 +97,7 @@ class LatencyPinger:
         self._cancellation_counts: Dict[str, deque] = {}
         
         # Redis for event publishing
-        self._redis: Optional[redis.Redis] = None
+        self._redis = None  # Redis client instance
         
         # Statistics tracking
         self._total_pings = 0

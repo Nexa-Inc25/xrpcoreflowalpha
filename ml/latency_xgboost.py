@@ -132,7 +132,7 @@ class LatencyXGBoostPredictor:
         self._feature_stats: Dict[str, Dict[str, float]] = {}
         
         # Redis for data
-        self._redis: Optional[redis.Redis] = None
+        self._redis = None  # Redis client instance
         
         # Training history
         self._training_history: List[Dict[str, Any]] = []

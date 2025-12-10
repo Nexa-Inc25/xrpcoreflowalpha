@@ -8,7 +8,7 @@ from app.redis_utils import get_redis, REDIS_ENABLED
 from app.config import COINGECKO_API_BASE, COINGECKO_API_KEY, REDIS_URL
 from utils.retry import async_retry
 
-_redis: Optional[redis.Redis] = None
+_redis = None  # Redis client instance
 
 
 async def _get_redis() :

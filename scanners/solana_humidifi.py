@@ -15,7 +15,7 @@ from app.config import (
 )
 from bus.signal_bus import publish_signal
 
-_redis: Optional[redis.Redis] = None
+_redis = None  # Redis client instance
 _client: Optional[httpx.AsyncClient] = None
 
 

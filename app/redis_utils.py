@@ -79,9 +79,9 @@ class FakePubSub:
     async def close(self):
         pass
 
-_redis_client: Optional[redis.Redis] = None
+_redis_client = None  # Redis client instance
 
-async def get_redis() -> redis.Redis:
+async def get_redis():
     """
     Get Redis client with graceful fallback to FakeRedis if Redis is not available
     """

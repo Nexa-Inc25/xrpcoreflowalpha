@@ -6,7 +6,7 @@ from app.redis_utils import get_redis, REDIS_ENABLED
 from app.config import REDIS_URL, SECRET_UNSHIELD_MIN_USD
 from bus.signal_bus import publish_signal
 
-_redis: Optional[redis.Redis] = None
+_redis = None  # Redis client instance
 
 
 async def _get_redis() :
