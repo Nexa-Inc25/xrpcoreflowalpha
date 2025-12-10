@@ -13,11 +13,16 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
-# Clerk keys for build (will be overridden at runtime)
+# Default env vars for build (will be overridden at runtime by DigitalOcean)
+# Using ARG to allow build-time override
+ARG NEXT_PUBLIC_API_BASE=https://api.zkalphaflow.com
+ARG NEXT_PUBLIC_API_WS_BASE=wss://api.zkalphaflow.com
 ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_placeholder
+
+# Set them as ENV for the build process
+ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
+ENV NEXT_PUBLIC_API_WS_BASE=$NEXT_PUBLIC_API_WS_BASE
 ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-ENV NEXT_PUBLIC_API_BASE=https://api.zkalphaflow.com
-ENV NEXT_PUBLIC_API_WS_BASE=wss://api.zkalphaflow.com
 
 RUN npm run build
 
@@ -39,8 +44,8 @@ COPY --from=builder /app/.next/static ./.next/static
 
 USER nextjs
 
-EXPOSE 8080
-ENV PORT=8080
+EXPOSE 3000
+ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 CMD ["node", "server.js"]
