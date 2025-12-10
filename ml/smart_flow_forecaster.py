@@ -12,10 +12,23 @@ from dataclasses import dataclass
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import TimeSeriesSplit
-import xgboost as xgb
-from prophet import Prophet
 import asyncio
 import httpx
+
+# Optional imports - don't crash if not available
+try:
+    import xgboost as xgb
+    XGBOOST_AVAILABLE = True
+except ImportError:
+    XGBOOST_AVAILABLE = False
+    logging.warning("XGBoost not available - using alternative models")
+
+try:
+    from prophet import Prophet
+    PROPHET_AVAILABLE = True
+except ImportError:
+    PROPHET_AVAILABLE = False
+    logging.warning("Prophet not available - using sklearn models only")
 
 logger = logging.getLogger(__name__)
 
@@ -279,16 +292,28 @@ class SmartFlowForecaster:
             X_train, X_val = X_scaled[train_idx], X_scaled[val_idx]
             y_train, y_val = y[train_idx], y[val_idx]
             
-            # XGBoost
-            self.xgboost = xgb.XGBRegressor(
-                n_estimators=100,
-                max_depth=6,
-                learning_rate=0.1,
-                objective='reg:squarederror'
-            )
-            self.xgboost.fit(X_train, y_train)
-            xgb_pred = self.xgboost.predict(X_val)
-            scores['xgboost'].append(self._calculate_accuracy(y_val, xgb_pred))
+            # XGBoost (if available)
+            if XGBOOST_AVAILABLE:
+                self.xgboost = xgb.XGBRegressor(
+                    n_estimators=100,
+                    max_depth=6,
+                    learning_rate=0.1,
+                    objective='reg:squarederror'
+                )
+                self.xgboost.fit(X_train, y_train)
+                xgb_pred = self.xgboost.predict(X_val)
+                scores['xgboost'].append(self._calculate_accuracy(y_val, xgb_pred))
+            else:
+                # Use extra trees as fallback
+                from sklearn.ensemble import ExtraTreesRegressor
+                self.xgboost = ExtraTreesRegressor(
+                    n_estimators=100,
+                    max_depth=6,
+                    random_state=42
+                )
+                self.xgboost.fit(X_train, y_train)
+                xgb_pred = self.xgboost.predict(X_val)
+                scores['xgboost'].append(self._calculate_accuracy(y_val, xgb_pred))
             
             # Random Forest
             self.random_forest = RandomForestRegressor(
@@ -498,11 +523,16 @@ class SmartFlowForecaster:
         importance = {}
         feature_names = features.select_dtypes(include=[np.number]).columns.tolist()
         
-        # Get XGBoost feature importance
-        xgb_importance = self.xgboost.feature_importances_
+        # Get feature importance from best available model
+        if hasattr(self.xgboost, 'feature_importances_'):
+            feature_importance = self.xgboost.feature_importances_
+        elif hasattr(self.random_forest, 'feature_importances_'):
+            feature_importance = self.random_forest.feature_importances_
+        else:
+            return {}
         
-        for i, name in enumerate(feature_names[:len(xgb_importance)]):
-            importance[name] = float(xgb_importance[i])
+        for i, name in enumerate(feature_names[:len(feature_importance)]):
+            importance[name] = float(feature_importance[i])
         
         # Sort by importance
         importance = dict(sorted(importance.items(), key=lambda x: x[1], reverse=True)[:10])
