@@ -741,11 +741,18 @@ async def get_algo_fingerprint() -> Dict[str, Any]:
         from predictors.frequency_fingerprinter import zk_fingerprinter, KNOWN_FINGERPRINTS
         result = zk_fingerprinter.tick(source_label="api_query")
         
-        # Get list of all known fingerprints for reference
-        known_algos = [
-            {"name": name, "freq_hz": round(freq, 6), "period_sec": round(1/freq, 1)}
-            for name, freq in KNOWN_FINGERPRINTS.items()
-        ]
+        # Only show fingerprints that have ACTUALLY been detected, not all possible ones
+        # This prevents showing fake patterns that don't exist in real data
+        detected_algos = []
+        if result.get("fingerprint") and result.get("fingerprint") != "unknown":
+            matched_name = result.get("fingerprint")
+            if matched_name in KNOWN_FINGERPRINTS:
+                detected_algos.append({
+                    "name": matched_name,
+                    "freq_hz": round(KNOWN_FINGERPRINTS[matched_name], 6),
+                    "period_sec": round(1/KNOWN_FINGERPRINTS[matched_name], 1),
+                    "last_detected": _now_iso()
+                })
         
         return {
             "updated_at": _now_iso(),
@@ -755,7 +762,7 @@ async def get_algo_fingerprint() -> Dict[str, Any]:
                 "matched_algo": result.get("fingerprint", "unknown"),
                 "confidence": result.get("confidence", 0),
             },
-            "known_fingerprints": sorted(known_algos, key=lambda x: x["freq_hz"], reverse=True),
+            "detected_fingerprints": detected_algos,  # ONLY show what we've actually detected
             "status": "active" if result.get("confidence", 0) > 50 else "monitoring",
         }
     except Exception as e:
@@ -763,7 +770,7 @@ async def get_algo_fingerprint() -> Dict[str, Any]:
         return {
             "updated_at": _now_iso(),
             "detection": {"dominant_freq_hz": 0, "power": 0, "matched_algo": "unknown", "confidence": 0},
-            "known_fingerprints": [],
+            "detected_fingerprints": [],
             "status": "error",
             "error": str(e),
         }
