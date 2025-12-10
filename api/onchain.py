@@ -2,12 +2,11 @@ import secrets
 import time
 from typing import Optional, Dict, Any
 
-import redis.asyncio as redis
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from app.redis_utils import get_redis, REDIS_ENABLED
 from app.config import (
-    REDIS_URL,
     SOL_TREASURY,
     ETH_TREASURY,
     SOL_USDC_MINT,
@@ -35,8 +34,8 @@ class OnchainStartRequest(BaseModel):
     email: Optional[str] = None
 
 
-async def _r() -> redis.Redis:
-    return redis.from_url(REDIS_URL, decode_responses=True)
+async def _r():
+    return await get_redis()
 
 
 def _price_for(tier: str, asset: str, duration: str) -> float:
@@ -79,9 +78,26 @@ def _address_for(asset: str) -> str:
     raise HTTPException(status_code=400, detail="no treasury configured")
 
 
-@router.post("/billing/onchain/start")
+@router.post("/onchain/start")
 async def onchain_start(body: OnchainStartRequest, request: Request) -> Dict[str, Any]:
-    amount = _price_for(body.tier, body.asset, body.duration)
+    user_id = request.headers.get("x-user-id", "")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    price = _price_for(body.tier, body.asset, body.duration)
+    key = f"payment:pending:{user_id}:{time.time()}"
+    payment_id = f"pay_{secrets.token_urlsafe(16)}"
+    
+    if not REDIS_ENABLED:
+        # Return a basic response when Redis is not available
+        return {
+            "payment_id": payment_id,
+            "amount": price,
+            "asset": body.asset,
+            "status": "pending",
+            "redis": "disabled"
+        }
+    
+    r = await _r()
     addr = _address_for(body.asset)
     # pull email from body or header
     email = (body.email or request.headers.get("X-User-Email") or "").strip().lower()
@@ -89,7 +105,6 @@ async def onchain_start(body: OnchainStartRequest, request: Request) -> Dict[str
         # allow starting without email, but upgrade will require mapping via admin later
         pass
     ref = f"pay_{body.tier}_{secrets.token_urlsafe(10)}"
-    r = await _r()
     await r.hset(f"onchain:pending:{ref}", mapping={
         "tier": body.tier.lower(),
         "asset": body.asset.lower(),

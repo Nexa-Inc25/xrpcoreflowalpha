@@ -1,10 +1,9 @@
 from typing import Dict, Any, List, Optional
 
-import redis.asyncio as redis
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.config import REDIS_URL
+from app.redis_utils import get_redis, REDIS_ENABLED
 
 router = APIRouter()
 
@@ -16,8 +15,8 @@ class RegisterRequest(BaseModel):
     email: Optional[str] = None
 
 
-async def _r() -> redis.Redis:
-    return redis.from_url(REDIS_URL, decode_responses=True)
+async def _r():
+    return await get_redis()
 
 
 @router.post("/notify/register")
@@ -26,6 +25,10 @@ async def register(body: RegisterRequest) -> Dict[str, Any]:
     plat = body.platform.strip().lower()
     if not t or plat not in ("ios", "android"):
         raise HTTPException(status_code=400, detail="invalid token or platform")
+    
+    if not REDIS_ENABLED:
+        return {"status": "ok", "token": t, "platform": plat, "redis": "disabled"}
+    
     prefs = ",".join(sorted(set((body.preferences or []))))
     email = (body.email or "").strip().lower()
     r = await _r()
@@ -44,6 +47,10 @@ async def unregister(body: UnregisterRequest) -> Dict[str, Any]:
     t = body.token.strip()
     if not t:
         raise HTTPException(status_code=400, detail="invalid token")
+    
+    if not REDIS_ENABLED:
+        return {"status": "ok", "redis": "disabled"}
+    
     r = await _r()
     await r.delete(f"push:device:{t}")
     await r.srem("push:tokens", t)

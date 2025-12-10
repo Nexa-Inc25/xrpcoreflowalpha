@@ -1,14 +1,13 @@
 import time
-import redis.asyncio as redis
 from fastapi import APIRouter
 from datetime import datetime, timezone
 from typing import Dict, Any
 
 from app.config import (
-    REDIS_URL,
     APP_VERSION,
     APP_ENV
 )
+from app.redis_utils import get_redis, REDIS_ENABLED
 
 router = APIRouter()
 
@@ -28,12 +27,22 @@ async def health_check() -> Dict[str, Any]:
     }
 
 
-async def _get_redis() -> redis.Redis:
-    return redis.from_url(REDIS_URL, decode_responses=True)
+async def _get_redis():
+    return await get_redis()
 
 
 @router.get("/health/circuit")
 async def circuit_status():
+    if not REDIS_ENABLED:
+        return {
+            "ml_circuit_breaker": "OK",
+            "execution_circuit_breaker": "OK",
+            "consecutive_losses": 0,
+            "daily_pnl_usd": 0.0,
+            "status": "healthy",
+            "redis": "disabled"
+        }
+    
     r = await _get_redis()
     now = time.time()
 

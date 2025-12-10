@@ -2,18 +2,17 @@ import json
 import time
 from typing import Any, Dict, List, Optional
 
-import redis.asyncio as redis
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
-from app.config import REDIS_URL
+from app.redis_utils import get_redis, REDIS_ENABLED
 from observability.metrics import replay_requests_total
 
 router = APIRouter()
 
 
-async def _r() -> redis.Redis:
-    return redis.from_url(REDIS_URL, decode_responses=True)
+async def _r():
+    return await get_redis()
 
 
 def _now_ms() -> int:
