@@ -135,8 +135,14 @@ workers:
       deploy_on_push: true
     source_dir: /
     dockerfile_path: Dockerfile
-    instance_size_slug: basic-xxs
+    instance_size_slug: basic-xs
     instance_count: 1
+    autoscaling:
+      min_instance_count: 1
+      max_instance_count: 3
+      metrics:
+        cpu:
+          percent: 70
     envs:
       - key: DATABASE_URL
         type: SECRET
@@ -146,6 +152,14 @@ workers:
         type: SECRET
       - key: REDIS_URL
         type: SECRET
+      - key: WHALE_ALERT_API_KEY
+        type: SECRET
+      - key: POLYGON_API_KEY
+        type: SECRET
+      - key: ALPHA_VANTAGE_API_KEY
+        type: SECRET
+      - key: XRPL_WSS
+        value: "wss://s1.ripple.com"
 
 domains:
   - domain: zkalphaflow.com
