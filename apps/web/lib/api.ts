@@ -1,6 +1,8 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://api.zkalphaflow.com';
 
 function apiBaseTrimmed(): string {
+  // Remove trailing slash and return the base URL
+  // DigitalOcean routing already handles the /api prefix
   return API_BASE.replace(/\/$/, '');
 }
 
@@ -165,7 +167,7 @@ export async function fetchOrderBookDepth(symbol: string): Promise<{
         };
       }
     } catch (e) {
-      // Return mock data
+      // Fallback to empty data if Binance API fails
     }
   }
   
