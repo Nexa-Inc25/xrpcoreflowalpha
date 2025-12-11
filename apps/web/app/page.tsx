@@ -93,8 +93,24 @@ export default function DashboardPage() {
     };
     
     const connectWS = () => {
-      const base = process.env.NEXT_PUBLIC_API_WS_BASE || 'wss://api.zkalphaflow.com';
-      socket = new WebSocket(base.replace(/\/$/, '') + '/events');
+      // Use dynamic WebSocket URL based on current page protocol/host
+      // This fixes the issue where RSC/Next.js expects wss:// on https pages
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      // If we're on localhost, use the env var or default. In prod, use window.location.host
+      // actually, for the API, we might be on a different domain if API is separate.
+      // But the user instructions say: "Replace with relative or env-based URL"
+      // and "const wsUrl = `${protocol}//${window.location.host}/events`;"
+      // This implies the WS is served from the same domain (or proxy).
+      // However, our API is at api.zkalphaflow.com, web is zkalphaflow.com.
+      // If I use window.location.host, it will try wss://zkalphaflow.com/events.
+      // If the web server proxies /events, that works.
+      // If not, we should use the API_WS_BASE but ensure protocol matches.
+      
+      // User explicitly said: "const wsUrl = `${protocol}//${window.location.host}/events`;"
+      // I will follow the user's specific instruction for the "Immediate one-line fix".
+      
+      const wsUrl = `${protocol}//${window.location.host}/events`;
+      socket = new WebSocket(wsUrl);
 
       socket.onopen = () => {
         if (isMounted) {

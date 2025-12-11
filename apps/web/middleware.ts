@@ -7,6 +7,14 @@ const CLERK_CONFIGURED =
   (process.env.CLERK_SECRET_KEY || '').startsWith('sk_');
 
 export default async function middleware(request: NextRequest) {
+  // Force HTTPS in production
+  if (request.headers.get('x-forwarded-proto') !== 'https' && process.env.NODE_ENV === 'production') {
+    return NextResponse.redirect(
+      `https://${request.headers.get('host')}${request.nextUrl.pathname}`,
+      301
+    );
+  }
+
   // Skip auth for local dev without Clerk secrets
   if (!CLERK_CONFIGURED) {
     return NextResponse.next();
