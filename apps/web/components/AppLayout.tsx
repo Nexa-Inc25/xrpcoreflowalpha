@@ -9,10 +9,12 @@ import { useSidebar } from '../contexts/SidebarContext';
 // Runtime shim: patch WebSocket to redirect old ws://localhost:8010/events
 // connections (from legacy bundles) to the correct API WS base.
 if (typeof window !== 'undefined' && typeof window.WebSocket === 'function') {
-  const OriginalWebSocket = window.WebSocket;
-  // @ts-expect-error custom marker to avoid double-patching
-  if (!(OriginalWebSocket as any)._zkPatched) {
-    const PatchedWebSocket: typeof WebSocket = function (
+  type PatchedWSConstructor = typeof WebSocket & { _zkPatched?: boolean };
+
+  const OriginalWebSocket = window.WebSocket as PatchedWSConstructor;
+
+  if (!OriginalWebSocket._zkPatched) {
+    const PatchedWebSocket = function (
       url: string | URL,
       protocols?: string | string[],
     ) {
@@ -25,15 +27,12 @@ if (typeof window !== 'undefined' && typeof window.WebSocket === 'function') {
         nextUrl = baseWs.replace(/\/$/, '') + '/events';
       }
 
-      // @ts-ignore - delegate to native constructor
       return new OriginalWebSocket(nextUrl, protocols as any);
-    } as any;
+    } as PatchedWSConstructor;
 
     // Preserve prototype and mark as patched
-    (PatchedWebSocket as any).prototype = OriginalWebSocket.prototype;
-    // @ts-expect-error attach marker flag
-    (PatchedWebSocket as any)._zkPatched = true;
-    // @ts-expect-error assign patched constructor
+    PatchedWebSocket.prototype = OriginalWebSocket.prototype;
+    PatchedWebSocket._zkPatched = true;
     window.WebSocket = PatchedWebSocket;
   }
 }
