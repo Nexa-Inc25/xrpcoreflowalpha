@@ -234,7 +234,7 @@ export default function AnalyticsPage() {
   
   const { data: flows, isLoading: flowsLoading } = useQuery({
     queryKey: ['flow-history', windowSeconds],
-    queryFn: () => fetchFlowHistory({ page_size: 500, window_seconds: windowSeconds }),
+    queryFn: () => fetchFlowHistory({ page_size: 200, window_seconds: windowSeconds }),
     refetchInterval: 60000,
   });
   

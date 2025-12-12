@@ -17,6 +17,7 @@ router = APIRouter()
 POLYGON_API_KEY = os.getenv("POLYGON_API_KEY", "")
 COINGECKO_API_KEY = os.getenv("COINGECKO_API_KEY", "")
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY", "")
+_COINGECKO_DISABLED = False
 
 # Alpha Vantage crypto symbols
 ALPHA_VANTAGE_CRYPTO = {
@@ -81,6 +82,7 @@ def _pearson(x: List[float], y: List[float]) -> float:
 
 async def _fetch_price_history(asset: str) -> List[float]:
     """Fetch 24h price history from CoinGecko or Polygon. Returns list of prices."""
+    global _COINGECKO_DISABLED
     asset_lower = asset.lower()
     
     # Check cache
@@ -95,7 +97,7 @@ async def _fetch_price_history(asset: str) -> List[float]:
     # Try CoinGecko for crypto
     cg_id = COINGECKO_IDS.get(asset_lower)
     rate_limited = False
-    if cg_id:
+    if cg_id and not _COINGECKO_DISABLED:
         try:
             # Use pro API if key available, otherwise free tier
             base_url = "https://pro-api.coingecko.com/api/v3" if COINGECKO_API_KEY else "https://api.coingecko.com/api/v3"
@@ -111,6 +113,9 @@ async def _fetch_price_history(asset: str) -> List[float]:
                     data = resp.json()
                     prices = [p[1] for p in data.get("prices", [])]
                 elif resp.status_code == 429:
+                    rate_limited = True
+                elif resp.status_code in (401, 403):
+                    _COINGECKO_DISABLED = True
                     rate_limited = True
         except Exception as e:
             pass  # Will try Alpha Vantage fallback
