@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 
 import numpy as np
 from app.redis_utils import get_redis, REDIS_ENABLED
+from app.config import APP_ENV
 
 # REDIS_URL import removed - using redis_utils
 
@@ -503,7 +504,17 @@ async def start_latency_prediction_worker(
     """
     print("[LatencyXGB] Prediction worker started")
     latency_predictor._initialize_model()
-    
+
+    # Only allow expensive hyperparameter tuning when explicitly enabled,
+    # and never in production. This prevents heavy GridSearchCV (3k+ fits)
+    # from blocking the event loop and causing container health checks to
+    # fail on DigitalOcean.
+    enable_tuning_env = os.getenv("ENABLE_LATENCY_TUNING", "").strip().lower()
+    allow_env_tuning = enable_tuning_env in ("1", "true", "yes", "on")
+    if APP_ENV == "prod" and allow_env_tuning:
+        print("[LatencyXGB] Hyperparameter tuning requested via ENABLE_LATENCY_TUNING but ignored in prod")
+    enable_tuning = (APP_ENV != "prod") and allow_env_tuning
+
     last_retrain = 0.0
     last_tune = 0.0
     
@@ -517,8 +528,8 @@ async def start_latency_prediction_worker(
                 X, y = await latency_predictor.fetch_training_data()
                 
                 if len(X) > 100:
-                    # Check if hyperparameter tuning needed
-                    should_tune = now - last_tune > tune_interval_hours * 3600
+                    # Check if hyperparameter tuning is enabled and needed
+                    should_tune = enable_tuning and (now - last_tune > tune_interval_hours * 3600)
                     
                     metrics = latency_predictor.fit(
                         X, y,

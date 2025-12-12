@@ -33,7 +33,20 @@ VOLUME_SPIKE_MULT = 2.0   # 2x average volume
 
 
 async def start_futures_scanner():
-    """Start futures data scanner. Uses Yahoo Finance as free fallback."""
+    """Start futures data scanner.
+
+    When a Databento key is configured, we rely on the dedicated
+    Databento macro tracker for ES/NQ futures and *do not* use Yahoo
+    Finance at all for futures proxies. This keeps futures data on
+    institutional-grade feeds and avoids Yahoo entirely as requested.
+    """
+    if DATABENTO_API_KEY:
+        # Databento macro tracker is running (started from app.main);
+        # skip Yahoo futures scanner entirely to avoid mixing sources.
+        print("[FUTURES] Databento macro active; skipping Yahoo futures scanner")
+        await mark_scanner_connected("futures")
+        return
+
     print("[FUTURES] Starting scanner with Yahoo Finance proxy data")
     await mark_scanner_connected("futures")
     
