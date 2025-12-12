@@ -14,7 +14,7 @@ if (typeof window !== 'undefined' && typeof window.WebSocket === 'function') {
   const OriginalWebSocket = window.WebSocket as PatchedWSConstructor;
 
   if (!OriginalWebSocket._zkPatched) {
-    const PatchedWebSocket = function (
+    const PatchedWebSocket = (function (
       url: string | URL,
       protocols?: string | string[],
     ) {
@@ -28,7 +28,7 @@ if (typeof window !== 'undefined' && typeof window.WebSocket === 'function') {
       }
 
       return new OriginalWebSocket(nextUrl, protocols as any);
-    } as PatchedWSConstructor;
+    }) as unknown as PatchedWSConstructor;
 
     // Preserve prototype and mark as patched
     PatchedWebSocket.prototype = OriginalWebSocket.prototype;
