@@ -6,6 +6,38 @@ import { Menu, X } from 'lucide-react';
 import Sidebar from './Sidebar';
 import { useSidebar } from '../contexts/SidebarContext';
 
+// Runtime shim: patch WebSocket to redirect old ws://localhost:8010/events
+// connections (from legacy bundles) to the correct API WS base.
+if (typeof window !== 'undefined' && typeof window.WebSocket === 'function') {
+  const OriginalWebSocket = window.WebSocket;
+  // @ts-expect-error custom marker to avoid double-patching
+  if (!(OriginalWebSocket as any)._zkPatched) {
+    const PatchedWebSocket: typeof WebSocket = function (
+      url: string | URL,
+      protocols?: string | string[],
+    ) {
+      const raw = typeof url === 'string' ? url : url.toString();
+      let nextUrl = raw;
+
+      if (raw === 'ws://localhost:8010/events' || raw === 'ws://localhost:8010/events/') {
+        const baseWs =
+          process.env.NEXT_PUBLIC_API_WS_BASE || 'wss://api.zkalphaflow.com';
+        nextUrl = baseWs.replace(/\/$/, '') + '/events';
+      }
+
+      // @ts-ignore - delegate to native constructor
+      return new OriginalWebSocket(nextUrl, protocols as any);
+    } as any;
+
+    // Preserve prototype and mark as patched
+    (PatchedWebSocket as any).prototype = OriginalWebSocket.prototype;
+    // @ts-expect-error attach marker flag
+    (PatchedWebSocket as any)._zkPatched = true;
+    // @ts-expect-error assign patched constructor
+    window.WebSocket = PatchedWebSocket;
+  }
+}
+
 // Pages that should NOT show the sidebar (e.g., auth pages)
 const noSidebarPaths = ['/sign-in', '/sign-up'];
 
