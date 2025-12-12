@@ -265,7 +265,7 @@ async def fetch_correlations() -> Optional[Dict[str, Any]]:
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                "http://localhost:8010/analytics/heatmap?assets=xrp,btc,eth,spy,gold,vix",
+                "http://localhost:8000/analytics/heatmap?assets=xrp,btc,eth,spy,gold,vix",
                 timeout=10
             ) as resp:
                 if resp.status == 200:
@@ -280,7 +280,7 @@ async def fetch_risk_indicator() -> Optional[Dict[str, Any]]:
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                "http://localhost:8010/analytics/risk-indicator",
+                "http://localhost:8000/analytics/risk-indicator",
                 timeout=10
             ) as resp:
                 if resp.status == 200:

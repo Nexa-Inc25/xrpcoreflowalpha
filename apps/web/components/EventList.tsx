@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useState, forwardRef } from 'react';
+import { useState, forwardRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ExternalLink, 
@@ -19,6 +19,22 @@ import { fetchXrplFlowsHistory } from '../lib/api';
 import { cn, timeAgo, formatUSD } from '../lib/utils';
 import IsoFlowCard from './IsoFlowCard';
 import EventDetailPanel from './EventDetailPanel';
+
+function ClientTime({ timestamp }: { timestamp: string | number }) {
+  const [mounted, setMounted] = useState(false);
+  
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
+
+  return (
+    <span className="text-[11px] text-slate-500 ml-auto">
+      {timeAgo(timestamp)}
+    </span>
+  );
+}
 
 interface EventListProps {
   events: any[];
@@ -301,7 +317,7 @@ function EventRowContent({
               {/* Network */}
               {network && (
                 <span className="px-2 py-0.5 rounded-full bg-surface-1 text-[10px] text-slate-400 border border-white/5">
-                  {String(network).toUpperCase()}
+                  {network}
                 </span>
               )}
 
@@ -314,9 +330,7 @@ function EventRowContent({
 
               {/* Time */}
               {event.timestamp && (
-                <span className="text-[11px] text-slate-500 ml-auto">
-                  {timeAgo(event.timestamp)}
-                </span>
+                <ClientTime timestamp={event.timestamp} />
               )}
             </div>
           </>

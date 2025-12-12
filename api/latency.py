@@ -565,7 +565,8 @@ async def get_course_content() -> Dict[str, Any]:
     try:
         import httpx
         async with httpx.AsyncClient(timeout=5) as client:
-            resp = await client.get("http://localhost:8010/analytics/heatmap?assets=xrp,btc,eth,spy,gold")
+            # Use internal service port 8000
+            resp = await client.get("http://localhost:8000/analytics/heatmap?assets=xrp,btc,eth,spy,gold")
             if resp.status_code == 200:
                 data = resp.json()
                 matrix = data.get("matrix", {})

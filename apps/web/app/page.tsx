@@ -359,11 +359,22 @@ export default function DashboardPage() {
             <div className="flex items-center gap-4">
               <span>Public data only</span>
               <span>·</span>
-              <span>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+              <ClientDate />
             </div>
           </div>
         </footer>
       </div>
     </div>
   );
+}
+
+function ClientDate() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
+
+  return <span>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>;
 }

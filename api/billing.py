@@ -107,8 +107,8 @@ async def create_checkout_session(body: CheckoutRequest) -> Dict[str, Any]:
     # Derive success/cancel URLs if not provided in body
     def _stub_url() -> str:
         if LOCAL_LAN_IP:
-            return f"http://{LOCAL_LAN_IP}:8010/static/web_stub.html"
-        return "http://127.0.0.1:8010/static/web_stub.html"
+            return f"http://{LOCAL_LAN_IP}:8000/static/web_stub.html"
+        return "http://127.0.0.1:8000/static/web_stub.html"
     success_url = body.success_url or STRIPE_SUCCESS_URL or _stub_url()
     cancel_url = body.cancel_url or STRIPE_CANCEL_URL or _stub_url()
     if _STRIPE_AVAILABLE and STRIPE_SECRET_KEY and price:
