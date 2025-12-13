@@ -10,6 +10,7 @@ from typing import Any, List, Optional
 from urllib.parse import quote
 
 from app.config import (
+    DATABASE_URL,
     POSTGRES_HOST,
     POSTGRES_PORT,
     POSTGRES_DB,
@@ -28,6 +29,8 @@ _sqlite_path = Path(__file__).parent.parent / "data" / "signals.db"
 def _is_local_dev() -> bool:
     """Check if we're in local development (no real DB available)."""
     # Allow SQLite fallback if PostgreSQL is disabled or in dev mode
+    if DATABASE_URL and APP_ENV not in ("dev", "development"):
+        return False
     if POSTGRES_HOST in ("disabled", "none", ""):
         return True
     if APP_ENV in ("dev", "development"):
@@ -37,6 +40,17 @@ def _is_local_dev() -> bool:
 
 def get_dsn() -> str:
     """Build PostgreSQL DSN from config."""
+    if DATABASE_URL:
+        # DigitalOcean typically provides DATABASE_URL. Normalize scheme for asyncpg.
+        dsn = DATABASE_URL.strip()
+        if dsn.startswith("postgres://"):
+            dsn = "postgresql://" + dsn[len("postgres://"):]
+        # If sslmode isn't specified, honor config default.
+        if "sslmode=" not in dsn:
+            joiner = "&" if "?" in dsn else "?"
+            dsn = f"{dsn}{joiner}sslmode={POSTGRES_SSLMODE}"
+        return dsn
+
     user = quote(POSTGRES_USER, safe="")
     password = quote(POSTGRES_PASSWORD, safe="")
     db = quote(POSTGRES_DB, safe="")
@@ -64,7 +78,17 @@ async def get_pool():
                 max_size=10,
                 command_timeout=30,
             )
-            print(f"[DB] PostgreSQL pool created: {POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}")
+            # Avoid logging secrets. Prefer printing resolved host/db.
+            try:
+                from urllib.parse import urlparse
+
+                p = urlparse(dsn)
+                host = p.hostname or POSTGRES_HOST
+                port = p.port or POSTGRES_PORT
+                dbname = (p.path or "").lstrip("/") or POSTGRES_DB
+                print(f"[DB] PostgreSQL pool created: {host}:{port}/{dbname}")
+            except Exception:
+                print(f"[DB] PostgreSQL pool created")
             return _pool
         except Exception as e:
             print(f"[DB] PostgreSQL unavailable: {e}")

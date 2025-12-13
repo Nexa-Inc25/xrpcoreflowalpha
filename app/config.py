@@ -50,12 +50,33 @@ ALERTS_RATE_WINDOW_SECONDS = int(os.getenv("ALERTS_RATE_WINDOW_SECONDS", "60"))
 ALERTS_RATE_MAX_PER_WINDOW = int(os.getenv("ALERTS_RATE_MAX_PER_WINDOW", "30"))
 ALERTS_RATE_LIMIT_PER_CATEGORY = os.getenv("ALERTS_RATE_LIMIT_PER_CATEGORY", "false").lower() == "true"
 
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+
 POSTGRES_HOST = os.getenv("POSTGRES_HOST", "db")
 POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
 POSTGRES_DB = os.getenv("POSTGRES_DB", "xrpflow")
 POSTGRES_USER = os.getenv("POSTGRES_USER", "xrpflow")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "password")
 POSTGRES_SSLMODE = os.getenv("POSTGRES_SSLMODE", "require")
+
+if DATABASE_URL:
+    try:
+        from urllib.parse import urlparse, parse_qs
+
+        parsed = urlparse(DATABASE_URL)
+        if parsed.scheme.startswith("postgres") and parsed.hostname:
+            POSTGRES_HOST = parsed.hostname
+            POSTGRES_PORT = parsed.port or 5432
+            POSTGRES_DB = (parsed.path or "").lstrip("/") or POSTGRES_DB
+            if parsed.username:
+                POSTGRES_USER = parsed.username
+            if parsed.password:
+                POSTGRES_PASSWORD = parsed.password
+            qs = parse_qs(parsed.query or "")
+            if qs.get("sslmode"):
+                POSTGRES_SSLMODE = qs["sslmode"][0]
+    except Exception:
+        pass
 # Redis URL - empty string disables Redis (graceful degradation)
 _redis_url = os.getenv("REDIS_URL", "")
 REDIS_URL = _redis_url if _redis_url.startswith(("redis://", "rediss://", "unix://")) else ""
