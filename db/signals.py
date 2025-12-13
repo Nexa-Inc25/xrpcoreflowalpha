@@ -3,8 +3,9 @@ Signal storage and retrieval service.
 Handles persisting signals with entry prices and fetching for analytics.
 """
 import json
+import hashlib
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from db.connection import execute, fetch, fetchrow, fetchval, is_sqlite
@@ -18,7 +19,12 @@ async def store_signal(signal: Dict[str, Any]) -> Optional[str]:
     """
     try:
         # Generate unique signal ID
-        signal_id = signal.get("tx_hash") or signal.get("id") or str(uuid.uuid4())
+        raw_id = signal.get("tx_hash") or signal.get("id") or str(uuid.uuid4())
+        signal_id = str(raw_id)
+        # PostgreSQL schema uses VARCHAR(64) for signal_id.
+        # Some sources (e.g. 0x + 64 hex chars) are 66 chars; hash to a stable 64.
+        if len(signal_id) > 64:
+            signal_id = hashlib.sha256(signal_id.encode("utf-8")).hexdigest()
         
         # Get current prices for entry snapshot
         try:
@@ -119,8 +125,8 @@ async def get_signals_pending_outcome(interval_hours: int, limit: int = 100) -> 
     - no outcome exists for that interval yet
     """
     try:
-        # Use SQLite-compatible datetime string for comparison
-        cutoff = (datetime.utcnow() - timedelta(hours=interval_hours)).strftime('%Y-%m-%d %H:%M:%S')
+        cutoff_dt = datetime.now(timezone.utc) - timedelta(hours=interval_hours)
+        cutoff_sqlite = cutoff_dt.strftime('%Y-%m-%d %H:%M:%S')
         
         # Check if using SQLite (different query syntax)
         if is_sqlite():
@@ -134,7 +140,7 @@ async def get_signals_pending_outcome(interval_hours: int, limit: int = 100) -> 
                 ORDER BY s.detected_at ASC
                 LIMIT ?
                 """,
-                interval_hours, cutoff, limit
+                interval_hours, cutoff_sqlite, limit
             )
         else:
             rows = await fetch(
@@ -147,7 +153,7 @@ async def get_signals_pending_outcome(interval_hours: int, limit: int = 100) -> 
                 ORDER BY s.detected_at ASC
                 LIMIT $3
                 """,
-                interval_hours, cutoff, limit
+                interval_hours, cutoff_dt, limit
             )
         
         result = [dict(r) for r in rows]
