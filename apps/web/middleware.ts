@@ -7,17 +7,29 @@ const CLERK_CONFIGURED =
   (process.env.CLERK_SECRET_KEY || '').startsWith('sk_');
 
 export default async function middleware(request: NextRequest) {
+  const isDocument = request.headers.get('sec-fetch-dest') === 'document';
+
   // Force HTTPS in production
   if (request.headers.get('x-forwarded-proto') !== 'https' && process.env.NODE_ENV === 'production') {
-    return NextResponse.redirect(
+    const res = NextResponse.redirect(
       `https://${request.headers.get('host')}${request.nextUrl.pathname}`,
       301
     );
+
+    if (isDocument) {
+      res.headers.set('Cache-Control', 'no-store');
+    }
+
+    return res;
   }
 
   // Skip auth for local dev without Clerk secrets
   if (!CLERK_CONFIGURED) {
-    return NextResponse.next();
+    const res = NextResponse.next();
+    if (isDocument) {
+      res.headers.set('Cache-Control', 'no-store');
+    }
+    return res;
   }
 
   // Dynamic import Clerk only when configured
@@ -46,11 +58,19 @@ export default async function middleware(request: NextRequest) {
       return NextResponse.next();
     });
 
-    return clerkHandler(request, {} as any);
+    const res = (await clerkHandler(request, {} as any)) as NextResponse;
+    if (isDocument) {
+      res.headers.set('Cache-Control', 'no-store');
+    }
+    return res;
   } catch (e) {
     // Fallback if Clerk fails
     console.warn('[Middleware] Clerk error, bypassing:', e);
-    return NextResponse.next();
+    const res = NextResponse.next();
+    if (isDocument) {
+      res.headers.set('Cache-Control', 'no-store');
+    }
+    return res;
   }
 }
 
