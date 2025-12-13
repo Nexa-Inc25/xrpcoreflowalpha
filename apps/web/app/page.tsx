@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, Zap, TrendingUp, Shield, Radio, Wifi, WifiOff } from 'lucide-react';
@@ -28,6 +28,37 @@ export default function DashboardPage() {
   const [liveEvents, setLiveEvents] = useState<any[]>([]);
   const [newEventFlash, setNewEventFlash] = useState(false);
 
+  const seenEventKeysRef = useRef<Set<string>>(new Set());
+
+  const stableEventKey = useCallback((evt: any): string | null => {
+    if (!evt || typeof evt !== 'object') return null;
+    const explicit =
+      evt._key ||
+      evt.id ||
+      evt.signal_id ||
+      evt.tx_hash ||
+      evt.txHash ||
+      evt.hash ||
+      evt.features?.tx_hash ||
+      evt.features?.signal_id;
+    if (explicit && typeof explicit === 'string' && explicit.length >= 8) return explicit;
+    const t = String(evt.type || '').trim();
+    const ts = evt.timestamp ?? evt.detected_at ?? evt.created_at;
+    const summary = String(evt.summary || evt.message || '').trim();
+    if (!t) return null;
+    if (!ts && !summary) return null;
+    return `${t}:${String(ts ?? '')}:${summary.slice(0, 80)}`;
+  }, []);
+
+  const isValidEvent = useCallback((evt: any): boolean => {
+    if (!evt || typeof evt !== 'object') return false;
+    const t = String(evt.type || '').trim();
+    if (!t) return false;
+    const key = stableEventKey(evt);
+    if (!key) return false;
+    return true;
+  }, [stableEventKey]);
+
   const { data: uiData, isLoading: uiLoading } = useQuery({
     queryKey: ['ui'],
     queryFn: fetchUI,
@@ -48,14 +79,30 @@ export default function DashboardPage() {
     refetchInterval: 30_000,
   });
 
-  const handleNewEvent = useCallback((evt: any) => {
-    setLiveEvents((prev) => {
-      if (prev.length && prev[0]?.id === evt.id) return prev;
-      return [evt, ...prev].slice(0, 50);
-    });
-    setNewEventFlash(true);
-    setTimeout(() => setNewEventFlash(false), 1000);
-  }, []);
+  const handleNewEvent = useCallback(
+    (evt: any) => {
+      if (!isValidEvent(evt)) return;
+      const key = stableEventKey(evt);
+      if (!key) return;
+
+      setLiveEvents((prev) => {
+        if (seenEventKeysRef.current.has(key)) return prev;
+        seenEventKeysRef.current.add(key);
+        const next = [{ ...evt, _key: key }, ...prev].slice(0, 50);
+        if (next.length >= 50) {
+          const keep = new Set(next.map((e: any) => String(e?._key || e?.id || '')));
+          for (const k of Array.from(seenEventKeysRef.current)) {
+            if (k && !keep.has(k)) seenEventKeysRef.current.delete(k);
+          }
+        }
+        return next;
+      });
+
+      setNewEventFlash(true);
+      setTimeout(() => setNewEventFlash(false), 1000);
+    },
+    [isValidEvent, stableEventKey],
+  );
 
   useEffect(() => {
     let isMounted = true;

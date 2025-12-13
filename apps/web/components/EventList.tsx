@@ -160,7 +160,7 @@ export default function EventList({ events, isLoading }: EventListProps) {
             <AnimatePresence mode="popLayout" initial={false}>
               {displayEvents.map((event, index) => (
                 <EventRow 
-                  key={event.id} 
+                  key={String(event?._key || event?.id || event?.signal_id || event?.tx_hash || event?.hash || index)} 
                   event={event} 
                   index={index}
                   filter={filter}
