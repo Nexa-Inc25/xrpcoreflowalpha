@@ -40,6 +40,11 @@ KNOWN_INSTITUTIONS = {
 }
 
 
+def _err_str(e: Exception) -> str:
+    s = str(e)
+    return f"{e.__class__.__name__}: {s}" if s else repr(e)
+
+
 async def fetch_recent_transactions(min_value: int = MIN_VALUE_USD, limit: int = 100) -> List[Dict[str, Any]]:
     """Fetch recent large transactions from Whale Alert API."""
     if not WHALE_ALERT_API_KEY:
@@ -61,7 +66,8 @@ async def fetch_recent_transactions(min_value: int = MIN_VALUE_USD, limit: int =
                 """)
                 result = await session.execute(query, {'min_value': min_value, 'limit': limit})
                 return [dict(row) for row in result.fetchall()]
-        except:
+        except Exception as e:
+            print(f"[WhaleAlert] Database fallback error: {_err_str(e)}")
             return []  # Only return empty if we truly have NO data source
     
     # Get transactions from last 10 minutes
@@ -74,22 +80,26 @@ async def fetch_recent_transactions(min_value: int = MIN_VALUE_USD, limit: int =
         "limit": limit,
     }
     
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
+    async with httpx.AsyncClient(timeout=15) as client:
+        try:
             resp = await client.get(f"{WHALE_ALERT_API_BASE}/transactions", params=params)
-            if resp.status_code != 200:
-                print(f"[WhaleAlert] API error: {resp.status_code}")
-                return []
-            
+        except Exception as e:
+            raise RuntimeError(f"[WhaleAlert] Request failed: {_err_str(e)}") from e
+        
+        if resp.status_code != 200:
+            body = (resp.text or "").strip()
+            raise RuntimeError(f"[WhaleAlert] HTTP {resp.status_code}: {body[:200]}")
+        
+        try:
             data = resp.json()
-            if data.get("result") != "success":
-                print(f"[WhaleAlert] API failed: {data.get('message', 'unknown')}")
-                return []
-            
-            return data.get("transactions", [])
-    except Exception as e:
-        print(f"[WhaleAlert] Error fetching transactions: {e}")
-        return []
+        except Exception as e:
+            body = (resp.text or "").strip()
+            raise RuntimeError(f"[WhaleAlert] Invalid JSON: {_err_str(e)} body={body[:200]}") from e
+        
+        if data.get("result") != "success":
+            raise RuntimeError(f"[WhaleAlert] API failed: {data.get('message', 'unknown')}")
+        
+        return data.get("transactions", [])
 
 
 def score_transaction_confidence(tx: Dict[str, Any]) -> int:
@@ -226,7 +236,7 @@ async def process_transaction(tx: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return signal
         
     except Exception as e:
-        print(f"[WhaleAlert] Error processing tx: {e}")
+        print(f"[WhaleAlert] Error processing tx: {_err_str(e)}")
         return None
 
 
@@ -244,7 +254,7 @@ async def run_whale_alert_scanner():
                     print(f"[WhaleAlert] Found {len(transactions)} whale transactions from database")
                 await asyncio.sleep(60)
             except Exception as e:
-                print(f"[WhaleAlert] Fallback error: {e}")
+                print(f"[WhaleAlert] Fallback error: {_err_str(e)}")
                 await asyncio.sleep(60)
         return
     
@@ -273,11 +283,12 @@ async def run_whale_alert_scanner():
             # Keep seen_hashes bounded (last 1000)
             if len(seen_hashes) > 1000:
                 seen_hashes = set(list(seen_hashes)[-500:])
-            
+        
         except Exception as e:
             consecutive_errors += 1
-            await mark_scanner_error("whale_alert", str(e))
-            print(f"[WhaleAlert] Scanner error ({consecutive_errors}): {e}")
+            err = _err_str(e)
+            await mark_scanner_error("whale_alert", err)
+            print(f"[WhaleAlert] Scanner error ({consecutive_errors}): {err}")
             
             # Back off on repeated errors
             if consecutive_errors >= 5:
@@ -300,7 +311,11 @@ async def get_recent_whale_transfers(
     
     Returns formatted data suitable for frontend display.
     """
-    transactions = await fetch_recent_transactions(min_value=min_value, limit=limit)
+    try:
+        transactions = await fetch_recent_transactions(min_value=min_value, limit=limit)
+    except Exception as e:
+        await mark_scanner_error("whale_alert", _err_str(e))
+        return []
     
     results = []
     for tx in transactions:

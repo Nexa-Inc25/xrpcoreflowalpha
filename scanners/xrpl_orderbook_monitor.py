@@ -19,6 +19,11 @@ OB_STATE_KEY = "ob:state"
 STABLE_CODES = {"USD", "USDC", "USDT"}
 
 
+def _err_str(e: Exception) -> str:
+    s = str(e)
+    return f"{e.__class__.__name__}: {s}" if s else repr(e)
+
+
 async def _get_redis() :
     return await get_redis()
 
@@ -270,7 +275,7 @@ async def start_xrpl_orderbook_monitor():
 
             backoff = 5.0
         except Exception as e:
-            print(f"[XRPL] Orderbook monitor error: {e.__class__.__name__}: {e}")
+            print(f"[XRPL] Orderbook monitor error: {_err_str(e)}")
             await asyncio.sleep(backoff + random.random() * 2.0)
             backoff = min(backoff * 1.7, 60.0)
         finally:

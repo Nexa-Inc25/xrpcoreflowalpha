@@ -21,6 +21,11 @@ from alerts.slack import send_slack_alert, build_rich_slack_payload
 from utils.tx_validate import validate_tx
 
 
+def _err_str(e: Exception) -> str:
+    s = str(e)
+    return f"{e.__class__.__name__}: {s}" if s else repr(e)
+
+
 async def _get_dyn_partners() -> set[str]:
     """Get dynamic partners from Redis. Returns empty set if Redis unavailable."""
     try:
@@ -118,7 +123,7 @@ async def start_trustline_watcher():
 
             backoff = 5.0
         except Exception as e:
-            print(f"[XRPL] Trustline watcher error: {e.__class__.__name__}: {e}")
+            print(f"[XRPL] Trustline watcher error: {_err_str(e)}")
             await asyncio.sleep(backoff + random.random() * 2.0)
             backoff = min(backoff * 1.7, 60.0)
         finally:

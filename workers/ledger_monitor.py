@@ -11,6 +11,11 @@ from dataclasses import dataclass
 import httpx
 
 
+def _err_str(e: Exception) -> str:
+    s = str(e)
+    return f"{e.__class__.__name__}: {s}" if s else repr(e)
+
+
 @dataclass
 class LedgerState:
     """Current ledger synchronization state."""
@@ -65,18 +70,45 @@ class LedgerMonitor:
     
     async def fetch_remote_ledger(self) -> Optional[int]:
         """Fetch current validated ledger from Ripple mainnet."""
-        try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.post(
-                    "https://s1.ripple.com:51234/",
-                    json={"method": "server_info", "params": [{}]}
-                )
-                if resp.status_code == 200:
+        urls = (
+            "https://s1.ripple.com:51234/",
+            "https://s2.ripple.com:51234/",
+        )
+        payload = {"method": "server_info", "params": [{}]}
+        last_err: Exception | None = None
+        
+        async with httpx.AsyncClient(timeout=10) as client:
+            for url in urls:
+                try:
+                    resp = await client.post(url, json=payload)
+                except Exception as e:
+                    last_err = e
+                    continue
+                
+                if resp.status_code != 200:
+                    body = (resp.text or "").strip()
+                    last_err = RuntimeError(f"HTTP {resp.status_code}: {body[:200]}")
+                    continue
+                
+                try:
                     data = resp.json()
-                    ledger = data.get("result", {}).get("info", {}).get("validated_ledger", {}).get("seq")
-                    return ledger
-        except Exception as e:
-            print(f"[LedgerMonitor] Failed to fetch remote ledger: {e}")
+                except Exception as e:
+                    body = (resp.text or "").strip()
+                    last_err = RuntimeError(f"Invalid JSON: {_err_str(e)} body={body[:200]}")
+                    continue
+                
+                ledger = data.get("result", {}).get("info", {}).get("validated_ledger", {}).get("seq")
+                if ledger is None:
+                    last_err = RuntimeError("Missing validated_ledger.seq")
+                    continue
+                try:
+                    return int(ledger)
+                except Exception as e:
+                    last_err = RuntimeError(f"Invalid ledger value: {_err_str(e)} value={ledger}")
+                    continue
+        
+        if last_err is not None:
+            print(f"[LedgerMonitor] Failed to fetch remote ledger: {_err_str(last_err)}")
         return None
     
     def _check_drift(self):
@@ -133,7 +165,7 @@ class LedgerMonitor:
                     self.state.last_check = time.time()
                     self._check_drift()
             except Exception as e:
-                print(f"[LedgerMonitor] Error: {e}")
+                print(f"[LedgerMonitor] Error: {_err_str(e)}")
             
             await asyncio.sleep(self.CHECK_INTERVAL)
     

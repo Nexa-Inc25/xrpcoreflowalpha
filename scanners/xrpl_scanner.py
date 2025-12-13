@@ -49,10 +49,17 @@ def is_institutional_flow(source: str, dest: str) -> tuple[bool, Optional[str], 
     return (is_institutional, src_label, dst_label)
 
 
+def _err_str(e: Exception) -> str:
+    s = str(e)
+    return f"{e.__class__.__name__}: {s}" if s else repr(e)
+
+
 async def start_xrpl_scanner():
     if not XRPL_WSS:
         print("[XRPL] Scanner disabled - XRPL_WSS not configured")
         return
+    if not XRPL_WSS.startswith(("ws://", "wss://")):
+        raise ValueError(f"XRPL_WSS must be a WebSocket URL (ws:// or wss://). Got: {XRPL_WSS}")
     assert ("xrplcluster.com" in XRPL_WSS) or ("ripple.com" in XRPL_WSS), "NON-MAINNET WSS – FATAL ABORT"
     
     reconnect_count = 0
@@ -135,8 +142,9 @@ async def start_xrpl_scanner():
         
         except Exception as e:
             reconnect_count += 1
-            await mark_scanner_error("xrpl", str(e))
-            print(f"[XRPL] Connection error: {e}")
+            err = _err_str(e)
+            await mark_scanner_error("xrpl", err)
+            print(f"[XRPL] Connection error: {err}")
             # Exponential backoff up to 5 minutes
             backoff = min(300, 5 * (2 ** min(reconnect_count, 6)))
             print(f"[XRPL] Reconnecting in {backoff}s...")
