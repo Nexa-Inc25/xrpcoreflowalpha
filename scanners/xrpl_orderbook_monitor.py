@@ -1,5 +1,6 @@
 import asyncio
 import json
+import random
 import time
 from typing import Any, Dict, Optional, Tuple, List
 
@@ -93,163 +94,189 @@ async def start_xrpl_orderbook_monitor():
         return
     assert ("xrplcluster.com" in XRPL_WSS) or ("ripple.com" in XRPL_WSS), "NON-MAINNET WSS – FATAL ABORT"
     r = await _get_redis()
-    async with AsyncWebsocketClient(XRPL_WSS) as client:
-        @async_retry(max_attempts=5, delay=1, backoff=2)
-        async def _req(payload):
-            return await client.request(payload)
-        async def _keepalive():
-            while True:
-                try:
-                    await _req(ServerInfo())
-                except Exception:
-                    pass
-                await asyncio.sleep(20)
-        asyncio.create_task(_keepalive())
-        while True:
-            try:
-                xrp_usd = 0.0
-                try:
-                    xrp_usd = float(await get_price_usd("xrp"))
-                except Exception:
-                    xrp_usd = 0.0
-                # dynamic partners
-                gd_partners = {a.lower() for a in GODARK_XRPL_PARTNERS}
-                try:
-                    dyn = await r.smembers("godark:partners:xrpl")
-                    gd_partners |= {x.lower() for x in (dyn or [])}
-                except Exception:
-                    pass
-                def _asset_from_str(tok: str):
-                    if "." in tok:
-                        cur, iss = tok.split(".", 1)
-                        if cur.upper() == "XRP":
-                            return XRP()
-                        return IssuedCurrency(currency=cur.upper(), issuer=iss)
-                    return XRP() if tok.upper() == "XRP" else IssuedCurrency(currency=tok.upper(), issuer="")
-                for pair in DEX_ORDERBOOK_PAIRS:
-                    parsed = _parse_pair(pair)
-                    if not parsed:
-                        continue
-                    base, quote, key = parsed
-                    # Ask side (sellers of base)
-                    base_raw, quote_raw = pair.split("/")
-                    # If non-XRP lacks issuer, skip
-                    if base.get("currency") != "XRP" and not base.get("issuer"):
-                        continue
-                    if quote.get("currency") != "XRP" and not quote.get("issuer"):
-                        continue
-                    asks_req = BookOffers(taker_gets=_asset_from_str(base_raw), taker_pays=_asset_from_str(quote_raw), limit=20, ledger_index="validated")
-                    bids_req = BookOffers(taker_gets=_asset_from_str(quote_raw), taker_pays=_asset_from_str(base_raw), limit=20, ledger_index="validated")
-                    asks_resp = await _req(asks_req)
-                    bids_resp = await _req(bids_req)
-                    asks: List[Dict[str, Any]] = asks_resp.result.get("offers", [])
-                    bids: List[Dict[str, Any]] = bids_resp.result.get("offers", [])
-                    # Aggregate USD depths
-                    ask_depth = 0.0
-                    bid_depth = 0.0
-                    whale_offer_usd = 0.0
-                    for off in asks[:10]:
-                        usd = _offer_usd(off, xrp_usd)
-                        if usd is not None:
-                            ask_depth += usd
-                            whale_offer_usd = max(whale_offer_usd, usd)
-                    for off in bids[:10]:
-                        usd = _offer_usd(off, xrp_usd)
-                        if usd is not None:
-                            bid_depth += usd
-                            whale_offer_usd = max(whale_offer_usd, usd)
-                    # Best prices via quality ratio if present
-                    def _best_quality(ofs: List[Dict[str, Any]]) -> Optional[float]:
+    backoff = 5.0
+    while True:
+        keepalive_task: asyncio.Task | None = None
+        try:
+            async with AsyncWebsocketClient(XRPL_WSS) as client:
+                @async_retry(max_attempts=5, delay=1, backoff=2)
+                async def _req(payload):
+                    return await client.request(payload)
+
+                async def _keepalive():
+                    while True:
                         try:
-                            if not ofs:
-                                return None
-                            q = ofs[0].get("quality")
-                            return float(q) if q is not None else None
+                            await _req(ServerInfo())
                         except Exception:
-                            return None
-                    best_ask_q = _best_quality(asks)
-                    best_bid_q = _best_quality(bids)
-                    spread_bps = None
+                            pass
+                        await asyncio.sleep(20)
+
+                keepalive_task = asyncio.create_task(_keepalive())
+
+                while True:
                     try:
-                        if best_ask_q and best_bid_q and best_bid_q > 0:
-                            spread_bps = max(0.0, (best_ask_q / best_bid_q - 1.0) * 10_000)
+                        xrp_usd = 0.0
+                        try:
+                            xrp_usd = float(await get_price_usd("xrp"))
+                        except Exception:
+                            xrp_usd = 0.0
+
+                        gd_partners = {a.lower() for a in GODARK_XRPL_PARTNERS}
+                        try:
+                            dyn = await r.smembers("godark:partners:xrpl")
+                            gd_partners |= {x.lower() for x in (dyn or [])}
+                        except Exception:
+                            pass
+
+                        def _asset_from_str(tok: str):
+                            if "." in tok:
+                                cur, iss = tok.split(".", 1)
+                                if cur.upper() == "XRP":
+                                    return XRP()
+                                return IssuedCurrency(currency=cur.upper(), issuer=iss)
+                            return XRP() if tok.upper() == "XRP" else IssuedCurrency(currency=tok.upper(), issuer="")
+
+                        for pair in DEX_ORDERBOOK_PAIRS:
+                            parsed = _parse_pair(pair)
+                            if not parsed:
+                                continue
+                            base, quote, key = parsed
+                            base_raw, quote_raw = pair.split("/")
+                            if base.get("currency") != "XRP" and not base.get("issuer"):
+                                continue
+                            if quote.get("currency") != "XRP" and not quote.get("issuer"):
+                                continue
+                            asks_req = BookOffers(taker_gets=_asset_from_str(base_raw), taker_pays=_asset_from_str(quote_raw), limit=20, ledger_index="validated")
+                            bids_req = BookOffers(taker_gets=_asset_from_str(quote_raw), taker_pays=_asset_from_str(base_raw), limit=20, ledger_index="validated")
+                            asks_resp = await _req(asks_req)
+                            bids_resp = await _req(bids_req)
+                            asks: List[Dict[str, Any]] = asks_resp.result.get("offers", [])
+                            bids: List[Dict[str, Any]] = bids_resp.result.get("offers", [])
+
+                            ask_depth = 0.0
+                            bid_depth = 0.0
+                            whale_offer_usd = 0.0
+                            for off in asks[:10]:
+                                usd = _offer_usd(off, xrp_usd)
+                                if usd is not None:
+                                    ask_depth += usd
+                                    whale_offer_usd = max(whale_offer_usd, usd)
+                            for off in bids[:10]:
+                                usd = _offer_usd(off, xrp_usd)
+                                if usd is not None:
+                                    bid_depth += usd
+                                    whale_offer_usd = max(whale_offer_usd, usd)
+
+                            def _best_quality(ofs: List[Dict[str, Any]]) -> Optional[float]:
+                                try:
+                                    if not ofs:
+                                        return None
+                                    q = ofs[0].get("quality")
+                                    return float(q) if q is not None else None
+                                except Exception:
+                                    return None
+
+                            best_ask_q = _best_quality(asks)
+                            best_bid_q = _best_quality(bids)
+                            spread_bps = None
+                            try:
+                                if best_ask_q and best_bid_q and best_bid_q > 0:
+                                    spread_bps = max(0.0, (best_ask_q / best_bid_q - 1.0) * 10_000)
+                            except Exception:
+                                spread_bps = None
+
+                            prev_raw = await r.hget(OB_STATE_KEY, key)
+                            prev = json.loads(prev_raw) if prev_raw else {}
+
+                            def _pct_change(prev_v: float, cur_v: float) -> float:
+                                if prev_v <= 0:
+                                    return 1.0 if cur_v > 0 else 0.0
+                                return (cur_v - prev_v) / prev_v
+
+                            change = {
+                                "bid_change_pct": _pct_change(float(prev.get("bid_depth_usd") or 0.0), bid_depth),
+                                "ask_change_pct": _pct_change(float(prev.get("ask_depth_usd") or 0.0), ask_depth),
+                                "imbalance_ratio": (bid_depth / max(ask_depth, 1e-9)) if (bid_depth > 0 or ask_depth > 0) else 1.0,
+                            }
+
+                            tags: List[str] = ["OB Liquidity Shift"]
+                            urgency = "MEDIUM"
+                            if max(bid_depth, ask_depth) >= 10_000_000:
+                                tags.append("OB Depth Surge")
+                                urgency = "HIGH"
+                            total_depth = bid_depth + ask_depth
+                            if total_depth >= 5_000_000 and (change["imbalance_ratio"] > 3 or change["imbalance_ratio"] < (1/3)):
+                                tags.append("OB Imbalance")
+                                urgency = "CRITICAL"
+                            if whale_offer_usd >= 5_000_000:
+                                tags.append("OB Whale Move")
+                                urgency = "CRITICAL"
+
+                            issuers = set()
+                            if base.get("currency") != "XRP":
+                                issuers.add((base.get("issuer") or "").lower())
+                            if quote.get("currency") != "XRP":
+                                issuers.add((quote.get("issuer") or "").lower())
+                            if any(i in {x.lower() for x in TRUSTLINE_WATCHED_ISSUERS} for i in issuers):
+                                tags.append("RWA OB Event")
+                            if any(i in gd_partners for i in issuers):
+                                tags.append("GoDark OB Shift")
+                                urgency = "CRITICAL"
+
+                            if abs(change["bid_change_pct"]) < 0.2 and abs(change["ask_change_pct"]) < 0.2 and "OB Depth Surge" not in tags and "OB Imbalance" not in tags and "OB Whale Move" not in tags:
+                                await r.hset(OB_STATE_KEY, key, json.dumps({
+                                    "bid_depth_usd": bid_depth,
+                                    "ask_depth_usd": ask_depth,
+                                    "best_ask_q": best_ask_q,
+                                    "best_bid_q": best_bid_q,
+                                    "timestamp": int(time.time()),
+                                }))
+                                continue
+
+                            signal: Dict[str, Any] = {
+                                "type": "orderbook",
+                                "pair": key,
+                                "bid_depth_usd": round(bid_depth, 2),
+                                "ask_depth_usd": round(ask_depth, 2),
+                                "spread_bps": round(spread_bps, 2) if spread_bps is not None else None,
+                                "change": {
+                                    "bid_change_pct": round(change["bid_change_pct"], 4),
+                                    "ask_change_pct": round(change["ask_change_pct"], 4),
+                                    "imbalance_ratio": round(change["imbalance_ratio"], 2),
+                                },
+                                "tags": tags,
+                                "urgency": urgency,
+                                "timestamp": int(time.time()),
+                                "summary": f"{key}: bid ${bid_depth:,.0f} | ask ${ask_depth:,.0f} | spread {round(spread_bps,2) if spread_bps is not None else 'n/a'} bps",
+                            }
+
+                            await r.hset(OB_STATE_KEY, key, json.dumps({
+                                "bid_depth_usd": bid_depth,
+                                "ask_depth_usd": ask_depth,
+                                "best_ask_q": best_ask_q,
+                                "best_bid_q": best_bid_q,
+                                "timestamp": int(time.time()),
+                            }))
+                            await publish_signal(signal)
+                            await send_slack_alert(build_rich_slack_payload(signal))
+                            try:
+                                print(f"[OB] {signal['summary']}")
+                            except Exception:
+                                pass
+
+                        await asyncio.sleep(15)
                     except Exception:
-                        spread_bps = None
-                    # Compare with previous state
-                    prev_raw = await r.hget(OB_STATE_KEY, key)
-                    prev = json.loads(prev_raw) if prev_raw else {}
-                    def _pct_change(prev_v: float, cur_v: float) -> float:
-                        if prev_v <= 0:
-                            return 1.0 if cur_v > 0 else 0.0
-                        return (cur_v - prev_v) / prev_v
-                    change = {
-                        "bid_change_pct": _pct_change(float(prev.get("bid_depth_usd") or 0.0), bid_depth),
-                        "ask_change_pct": _pct_change(float(prev.get("ask_depth_usd") or 0.0), ask_depth),
-                        "imbalance_ratio": (bid_depth / max(ask_depth, 1e-9)) if (bid_depth > 0 or ask_depth > 0) else 1.0,
-                    }
-                    tags: List[str] = ["OB Liquidity Shift"]
-                    urgency = "MEDIUM"
-                    if max(bid_depth, ask_depth) >= 10_000_000:
-                        tags.append("OB Depth Surge")
-                        urgency = "HIGH"
-                    total_depth = bid_depth + ask_depth
-                    if total_depth >= 5_000_000 and (change["imbalance_ratio"] > 3 or change["imbalance_ratio"] < (1/3)):
-                        tags.append("OB Imbalance")
-                        urgency = "CRITICAL"
-                    if whale_offer_usd >= 5_000_000:
-                        tags.append("OB Whale Move")
-                        urgency = "CRITICAL"
-                    # RWA / GoDark tagging
-                    # If quote or base issuer in watched issuers -> RWA
-                    issuers = set()
-                    if base.get("currency") != "XRP":
-                        issuers.add((base.get("issuer") or "").lower())
-                    if quote.get("currency") != "XRP":
-                        issuers.add((quote.get("issuer") or "").lower())
-                    if any(i in {x.lower() for x in TRUSTLINE_WATCHED_ISSUERS} for i in issuers):
-                        tags.append("RWA OB Event")
-                    if any(i in gd_partners for i in issuers):
-                        tags.append("GoDark OB Shift")
-                        urgency = "CRITICAL"
-                    # Only alert on meaningful changes (10% on either side)
-                    if abs(change["bid_change_pct"]) < 0.2 and abs(change["ask_change_pct"]) < 0.2 and "OB Depth Surge" not in tags and "OB Imbalance" not in tags and "OB Whale Move" not in tags:
-                        await r.hset(OB_STATE_KEY, key, json.dumps({
-                            "bid_depth_usd": bid_depth,
-                            "ask_depth_usd": ask_depth,
-                            "best_ask_q": best_ask_q,
-                            "best_bid_q": best_bid_q,
-                            "timestamp": int(time.time()),
-                        }))
-                        continue
-                    signal: Dict[str, Any] = {
-                        "type": "orderbook",
-                        "pair": key,
-                        "bid_depth_usd": round(bid_depth, 2),
-                        "ask_depth_usd": round(ask_depth, 2),
-                        "spread_bps": round(spread_bps, 2) if spread_bps is not None else None,
-                        "change": {
-                            "bid_change_pct": round(change["bid_change_pct"], 4),
-                            "ask_change_pct": round(change["ask_change_pct"], 4),
-                            "imbalance_ratio": round(change["imbalance_ratio"], 2),
-                        },
-                        "tags": tags,
-                        "urgency": urgency,
-                        "timestamp": int(time.time()),
-                        "summary": f"{key}: bid ${bid_depth:,.0f} | ask ${ask_depth:,.0f} | spread {round(spread_bps,2) if spread_bps is not None else 'n/a'} bps",
-                    }
-                    await r.hset(OB_STATE_KEY, key, json.dumps({
-                        "bid_depth_usd": bid_depth,
-                        "ask_depth_usd": ask_depth,
-                        "best_ask_q": best_ask_q,
-                        "best_bid_q": best_bid_q,
-                        "timestamp": int(time.time()),
-                    }))
-                    await publish_signal(signal)
-                    await send_slack_alert(build_rich_slack_payload(signal))
-                    try:
-                        print(f"[OB] {signal['summary']}")
-                    except Exception:
-                        pass
-                await asyncio.sleep(15)
-            except Exception:
-                await asyncio.sleep(1)
+                        await asyncio.sleep(1)
+
+            backoff = 5.0
+        except Exception as e:
+            print(f"[XRPL] Orderbook monitor error: {e.__class__.__name__}: {e}")
+            await asyncio.sleep(backoff + random.random() * 2.0)
+            backoff = min(backoff * 1.7, 60.0)
+        finally:
+            if keepalive_task is not None:
+                keepalive_task.cancel()
+                try:
+                    await keepalive_task
+                except Exception:
+                    pass
