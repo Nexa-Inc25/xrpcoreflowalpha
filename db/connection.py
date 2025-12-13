@@ -31,6 +31,10 @@ def _is_local_dev() -> bool:
     # Allow SQLite fallback if PostgreSQL is disabled or in dev mode
     if DATABASE_URL and APP_ENV not in ("dev", "development"):
         return False
+    # In production, never silently fall back to SQLite.
+    # If Postgres is misconfigured/missing, we should crash fast so the issue is fixed.
+    if APP_ENV in ("prod", "production"):
+        return POSTGRES_HOST in ("disabled", "none", "")
     if POSTGRES_HOST in ("disabled", "none", ""):
         return True
     if APP_ENV in ("dev", "development"):
