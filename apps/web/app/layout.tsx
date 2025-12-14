@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { ClerkProvider } from '@clerk/nextjs';
+import Script from 'next/script';
 import ReactQueryProvider from '../components/ReactQueryProvider';
 import { SidebarProvider } from '../contexts/SidebarContext';
 import AppLayout from '../components/AppLayout';
@@ -78,11 +79,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const content = (
     <html lang="en" className="antialiased">
       <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{if(typeof window==='undefined')return;var WS=window.WebSocket;if(typeof WS!=='function')return;if(WS.__zkPatched)return;var base=${JSON.stringify(process.env.NEXT_PUBLIC_API_WS_BASE || 'wss://api.zkalphaflow.com')};var Patched=function(url,protocols){var raw=(typeof url==='string')?url:(url&&url.toString?url.toString():String(url));var next=raw;if(raw==='ws://localhost:8010/events'||raw==='ws://localhost:8010/events/'){next=String(base).replace(/\\/$/,'')+'/events';}return protocols!=null?new WS(next,protocols):new WS(next);};Patched.prototype=WS.prototype;Patched.__zkPatched=true;window.WebSocket=Patched;}catch(e){}})();`,
-          }}
-        />
+        <Script id="zk-ws-shim" strategy="beforeInteractive">
+          {`(function(){try{if(typeof window==='undefined')return;var WS=window.WebSocket;if(typeof WS!=='function')return;if(WS.__zkPatched)return;var base=${JSON.stringify(process.env.NEXT_PUBLIC_API_WS_BASE || 'wss://api.zkalphaflow.com')};var baseTrim=String(base).replace(/\/$/,'');var Patched=function(url,protocols){var raw=(typeof url==='string')?url:(url&&url.toString?url.toString():String(url));var next=raw;try{if(/^ws:\/\/(localhost|127\.0\.0\.1):8010(\/|$)/.test(raw)){var suffix=raw.replace(/^ws:\/\/(localhost|127\.0\.0\.1):8010/,'');if(!suffix||suffix==='/'){suffix='/events';}if(suffix==='/events/'||suffix==='/events'){suffix='/events';}next=baseTrim+suffix;}}catch(e){}return protocols!=null?new WS(next,protocols):new WS(next);};Patched.prototype=WS.prototype;Patched.__zkPatched=true;window.WebSocket=Patched;}catch(e){}})();`}
+        </Script>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>

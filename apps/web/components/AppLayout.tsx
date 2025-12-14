@@ -45,13 +45,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { collapsed, mobileOpen, toggleMobile } = useSidebar();
   const showSidebar = !noSidebarPaths.some(path => pathname?.startsWith(path));
   const [isDesktop, setIsDesktop] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const checkDesktop = () => setIsDesktop(window.innerWidth >= 1024);
     checkDesktop();
     window.addEventListener('resize', checkDesktop);
     return () => window.removeEventListener('resize', checkDesktop);
   }, []);
+
+  if (!mounted) {
+    return <>{children}</>;
+  }
 
   if (!showSidebar) {
     return <>{children}</>;
