@@ -111,6 +111,7 @@ export default function IsoFlowCard({ event }: IsoFlowCardProps) {
   const issuer: string | undefined = features.issuer as string | undefined;
 
   const insight = useMemo(() => {
+    // ONLY use backend-provided real analysis - NO hardcoded fake signals
     const backendDir = (features.iso_direction as string | undefined) || '';
     const backendConf =
       typeof features.iso_confidence === 'number' ? (features.iso_confidence as number) : undefined;
@@ -139,38 +140,7 @@ export default function IsoFlowCard({ event }: IsoFlowCardProps) {
       };
     }
 
-    const amt = typeof amountUsd === 'number' ? amountUsd : 0;
-    const dest = String(destination || '');
-    const iss = String(issuer || '');
-
-    if (amt > 50_000_000 && dest.startsWith('rWCo')) {
-      return {
-        signal: 'STRONG BUY' as const,
-        text: `$${(amt / 1e6).toFixed(1)}M XRP → ODL corridor → Expect XRP/USD spike`,
-        timeframe: '2–6 hours',
-        confidence: 94,
-      };
-    }
-
-    if (iss.startsWith('rH') && (features.limit_value || 0) > 500_000_000) {
-      return {
-        signal: 'LIQUIDITY INJECTION' as const,
-        text: `$${(amt / 1e6).toFixed(1)}M+ stablecoin issued → XRP bridge asset → Bullish`,
-        timeframe: '6–24 hours',
-        confidence: 98,
-      };
-    }
-
-    if (dest.startsWith('rUPWQ') || dest.startsWith('r3GxB')) {
-      return {
-        signal: 'ESCROW UNLOCK' as const,
-        text: `$${(amt / 1e6).toFixed(1)}M XRP escrow release → Temporary selling pressure`,
-        timeframe: '0–4 hours',
-        confidence: 89,
-      };
-    }
-
-    // TrustLine specific insights
+    // TrustLine specific insights (keep this as it's generic analysis)
     if (type === 'trustline') {
       const limitVal = features.limit_value as number || 0;
       const cur = decodeCurrency(features.currency as string);
@@ -191,11 +161,12 @@ export default function IsoFlowCard({ event }: IsoFlowCardProps) {
       };
     }
 
+    // NO fake signals - only show if we have real backend data
     return {
       signal: 'MONITOR' as const,
-      text: 'Large ISO movement – watch price action',
+      text: 'XRPL flow detected - monitor for price impact',
       timeframe: '1–12h',
-      confidence: 72,
+      confidence: 50, // Lower confidence when no real analysis available
     };
   }, [amountUsd, destination, issuer, features, type]);
 
