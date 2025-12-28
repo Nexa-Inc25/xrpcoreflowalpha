@@ -33,6 +33,7 @@ APP_VERSION = os.getenv("APP_VERSION", "1.0.0")
 
 XRPL_WSS = os.getenv("XRPL_WSS", "")
 ALCHEMY_WS_URL = os.getenv("ALCHEMY_WS_URL", "")
+ALCHEMY_API_KEY = os.getenv("ALCHEMY_API_KEY", "")
 FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "")
 POLYGON_API_KEY = os.getenv("POLYGON_API_KEY", "")
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY", "")

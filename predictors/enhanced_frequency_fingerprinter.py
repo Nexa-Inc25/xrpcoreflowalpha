@@ -34,7 +34,6 @@ KNOWN_FINGERPRINTS: Dict[str, Dict[str, float]] = {
     # HFT / Prop Trading (50-200 mHz range)
     "citadel_eth": {"freq": 1.0/8.7, "tolerance": 0.08, "min_power": 0.5},
     "citadel_btc": {"freq": 1.0/9.2, "tolerance": 0.08, "min_power": 0.5},
-    "citadel_accumulation": {"freq": 1.0/45.0, "tolerance": 0.15, "min_power": 0.3},
     "citadel_scalping": {"freq": 1.0/3.5, "tolerance": 0.05, "min_power": 0.6},
     "jump_crypto_eth": {"freq": 1.0/12.5, "tolerance": 0.1, "min_power": 0.45},
     "jump_crypto_btc": {"freq": 1.0/14.0, "tolerance": 0.1, "min_power": 0.45},

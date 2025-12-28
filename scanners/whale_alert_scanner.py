@@ -48,27 +48,8 @@ def _err_str(e: Exception) -> str:
 async def fetch_recent_transactions(min_value: int = MIN_VALUE_USD, limit: int = 100) -> List[Dict[str, Any]]:
     """Fetch recent large transactions from Whale Alert API."""
     if not WHALE_ALERT_API_KEY:
-        # NO FAKE DATA - if we don't have the API, we need to get it or use alternatives
-        print("[WhaleAlert] WARNING: No API key - cannot track whales. This is REQUIRED for real data.")
-        # Try to get data from our database instead of returning empty
-        from db.connection import get_async_session
-        from sqlalchemy import text
-        try:
-            async with get_async_session() as session:
-                query = text("""
-                    SELECT tx_hash, amount_usd, confidence, network, detected_at 
-                    FROM signals 
-                    WHERE signal_type = 'whale' 
-                    AND amount_usd > :min_value
-                    AND detected_at > NOW() - INTERVAL '10 minutes'
-                    ORDER BY detected_at DESC
-                    LIMIT :limit
-                """)
-                result = await session.execute(query, {'min_value': min_value, 'limit': limit})
-                return [dict(row) for row in result.fetchall()]
-        except Exception as e:
-            print(f"[WhaleAlert] Database fallback error: {_err_str(e)}")
-            return []  # Only return empty if we truly have NO data source
+        # REQUIRE real whale data - no fake data or empty fallbacks
+        raise RuntimeError("WHALE_ALERT_API_KEY required for real whale transaction tracking")
     
     # Get transactions from last 10 minutes
     start_time = int(time.time()) - 600

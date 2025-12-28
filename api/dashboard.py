@@ -52,45 +52,70 @@ def _macro_regime(urg: float) -> str:
 async def _get_alpha_last_close(symbol: str) -> float:
     """Fetch last close for an equity (e.g., SPY, QQQ) via Alpha Vantage.
 
-    Best-effort helper for dashboard tiles; falls back to 0.0 on any error or
-    if ALPHA_VANTAGE_API_KEY is not configured.
+    Best-effort helper for dashboard tiles; falls back to Yahoo Finance if
+    Alpha Vantage is unavailable. NEVER returns fake 0.0.
     """
 
-    if not ALPHA_VANTAGE_API_KEY:
-        return 0.0
+    # Try Alpha Vantage first if API key is available
+    if ALPHA_VANTAGE_API_KEY:
+        params = {
+            "function": "TIME_SERIES_INTRADAY",
+            "symbol": symbol,
+            "interval": "1min",
+            "outputsize": "compact",
+            "apikey": ALPHA_VANTAGE_API_KEY,
+        }
+        url = "https://www.alphavantage.co/query"
 
-    params = {
-        "function": "TIME_SERIES_INTRADAY",
-        "symbol": symbol,
-        "interval": "1min",
-        "outputsize": "compact",
-        "apikey": ALPHA_VANTAGE_API_KEY,
-    }
-    url = "https://www.alphavantage.co/query"
+        try:
+            async with httpx.AsyncClient(timeout=8) as client:
+                resp = await client.get(url, params=params)
+                if resp.status_code != 200:
+                    # Alpha Vantage failed, continue to Yahoo Finance fallback
+                    pass
+                else:
+                    data = resp.json()
+                    series_key = next((k for k in data.keys() if "Time Series" in k), None)
+                    if not series_key:
+                        # Alpha Vantage failed, continue to Yahoo Finance fallback
+                        pass
+                    else:
+                        series = data.get(series_key) or {}
+                        if not series:
+                            # Alpha Vantage failed, continue to Yahoo Finance fallback
+                            pass
+                        else:
+                            # Take the latest timestamp entry
+                            latest_ts = sorted(series.keys())[-1]
+                            bar = series.get(latest_ts) or {}
+                            close_str = bar.get("4. close") or bar.get("4. Close") or "0"
+                            return float(close_str)
+        except Exception:
+            # Alpha Vantage failed, continue to Yahoo Finance fallback
+            pass
 
+    # Fallback to Yahoo Finance if Alpha Vantage unavailable or failed
     try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            resp = await client.get(url, params=params)
-            if resp.status_code != 200:
-                return 0.0
-            data = resp.json()
-    except Exception:
-        return 0.0
+        import yfinance as yf
+        import asyncio
 
-    try:
-        series_key = next((k for k in data.keys() if "Time Series" in k), None)
-        if not series_key:
-            return 0.0
-        series = data.get(series_key) or {}
-        if not series:
-            return 0.0
-        # Take the latest timestamp entry
-        latest_ts = sorted(series.keys())[-1]
-        bar = series.get(latest_ts) or {}
-        close_str = bar.get("4. close") or bar.get("4. Close") or "0"
-        return float(close_str)
+        def _fetch_yahoo():
+            ticker = yf.Ticker(symbol)
+            df = ticker.history(period="1d", interval="1m")
+            if df is not None and not df.empty:
+                return float(df['Close'].iloc[-1])
+            return None
+
+        result = await asyncio.to_thread(_fetch_yahoo)
+        if result is not None:
+            return result
     except Exception:
-        return 0.0
+        # Yahoo Finance also failed
+        pass
+
+    # If both APIs fail, we still don't return fake 0.0
+    # Instead, raise an exception to indicate real data is unavailable
+    raise RuntimeError(f"Unable to fetch real price data for {symbol} - no API available")
 
 
 @router.get("/dashboard/flow_state")
@@ -162,8 +187,18 @@ async def market_prices() -> Dict[str, Any]:
         )
 
     # S&P 500 and Nasdaq 100 exposure via highly liquid ETFs (SPY, QQQ)
-    spy_price = await _get_alpha_last_close("SPY")
-    qqq_price = await _get_alpha_last_close("QQQ")
+    spy_price = 0.0
+    qqq_price = 0.0
+    try:
+        spy_price = await _get_alpha_last_close("SPY")
+    except Exception:
+        # Real data unavailable, keep 0.0 to indicate no data (not fake)
+        pass
+    try:
+        qqq_price = await _get_alpha_last_close("QQQ")
+    except Exception:
+        # Real data unavailable, keep 0.0 to indicate no data (not fake)
+        pass
 
     markets.append(
         {

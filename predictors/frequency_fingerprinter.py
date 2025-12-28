@@ -24,7 +24,6 @@ KNOWN_FINGERPRINTS: Dict[str, float] = {
     # HFT / Prop Trading
     "citadel_eth": 1.0 / 8.7,           # ~115 mHz - Citadel high-freq bursts
     "citadel_btc": 1.0 / 9.2,           # ~109 mHz - Citadel BTC
-    "citadel_accumulation": 1.0 / 45.0, # ~22.2 mHz - Citadel slow accumulation
     "jump_crypto_eth": 1.0 / 12.5,      # ~80 mHz - Jump Trading ETH
     "jump_crypto_btc": 1.0 / 14.0,      # ~71.4 mHz - Jump Trading BTC
     "tower_research": 1.0 / 6.3,        # ~159 mHz - Tower ultra high-freq

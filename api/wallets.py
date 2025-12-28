@@ -16,6 +16,7 @@ from fastapi import APIRouter, Query
 router = APIRouter()
 
 ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY", "")
+ALCHEMY_API_KEY = os.getenv("ALCHEMY_API_KEY", "")
 
 
 def _now_iso() -> str:
@@ -317,10 +318,10 @@ async def get_entity_balances(entity_name: str) -> Dict[str, Any]:
             "updated_at": _now_iso()
         }
     
-    if not ETHERSCAN_API_KEY:
+    if not ETHERSCAN_API_KEY and not ALCHEMY_API_KEY:
         return {
             "entity": entity_name,
-            "error": "ETHERSCAN_API_KEY not configured. Cannot fetch live balances.",
+            "error": "Neither ETHERSCAN_API_KEY nor ALCHEMY_API_KEY configured. Cannot fetch live balances.",
             "updated_at": _now_iso()
         }
     
@@ -329,33 +330,66 @@ async def get_entity_balances(entity_name: str) -> Dict[str, Any]:
     
     async with httpx.AsyncClient(timeout=15) as client:
         for wallet in entity_wallets:
-            try:
-                url = f"https://api.etherscan.io/api?module=account&action=balance&address={wallet['address']}&tag=latest&apikey={ETHERSCAN_API_KEY}"
-                resp = await client.get(url)
-                data = resp.json()
-                
-                if data.get("status") == "1":
-                    balance_wei = int(data.get("result", 0))
-                    balance_eth = balance_wei / 1e18
-                    total_eth += balance_eth
-                    
+            balance_fetched = False
+
+            # Try Etherscan first
+            if ETHERSCAN_API_KEY:
+                try:
+                    url = f"https://api.etherscan.io/api?module=account&action=balance&address={wallet['address']}&tag=latest&apikey={ETHERSCAN_API_KEY}"
+                    resp = await client.get(url)
+                    data = resp.json()
+
+                    if data.get("status") == "1":
+                        balance_wei = int(data.get("result", 0))
+                        balance_eth = balance_wei / 1e18
+                        total_eth += balance_eth
+
+                        balances.append({
+                            "address": wallet["address"],
+                            "label": wallet.get("label"),
+                            "type": wallet.get("type"),
+                            "balance_eth": balance_eth
+                        })
+                        balance_fetched = True
+                except Exception:
+                    pass  # Continue to Alchemy fallback
+
+            # Try Alchemy as fallback if Etherscan failed or unavailable
+            if not balance_fetched and ALCHEMY_API_KEY:
+                try:
+                    url = f"https://eth-mainnet.alchemyapi.io/v2/{ALCHEMY_API_KEY}"
+                    payload = {
+                        "jsonrpc": "2.0",
+                        "method": "eth_getBalance",
+                        "params": [wallet["address"], "latest"],
+                        "id": 1
+                    }
+                    resp = await client.post(url, json=payload)
+                    data = resp.json()
+
+                    if "result" in data:
+                        balance_wei = int(data["result"], 16)
+                        balance_eth = balance_wei / 1e18
+                        total_eth += balance_eth
+
+                        balances.append({
+                            "address": wallet["address"],
+                            "label": wallet.get("label"),
+                            "type": wallet.get("type"),
+                            "balance_eth": balance_eth
+                        })
+                        balance_fetched = True
+                except Exception as e:
                     balances.append({
                         "address": wallet["address"],
                         "label": wallet.get("label"),
-                        "type": wallet.get("type"),
-                        "balance_eth": balance_eth
+                        "error": f"Both APIs failed: {str(e)}"
                     })
-                else:
-                    balances.append({
-                        "address": wallet["address"],
-                        "label": wallet.get("label"),
-                        "error": data.get("message", "API error")
-                    })
-            except Exception as e:
+            elif not balance_fetched:
                 balances.append({
                     "address": wallet["address"],
                     "label": wallet.get("label"),
-                    "error": str(e)
+                    "error": "No API keys configured for balance fetching"
                 })
     
     return {
@@ -389,12 +423,12 @@ async def get_wallet_balance(address: str) -> Dict[str, Any]:
             "updated_at": _now_iso()
         }
     
-    # Ethereum address - fetch from Etherscan
-    if not ETHERSCAN_API_KEY:
+    # Ethereum address - fetch from Etherscan or Alchemy
+    if not ETHERSCAN_API_KEY and not ALCHEMY_API_KEY:
         return {
             "address": address,
             "chain": "ethereum",
-            "error": "ETHERSCAN_API_KEY not configured. Cannot fetch live balance.",
+            "error": "Neither ETHERSCAN_API_KEY nor ALCHEMY_API_KEY configured. Cannot fetch live balance.",
             "updated_at": _now_iso()
         }
     
@@ -405,32 +439,64 @@ async def get_wallet_balance(address: str) -> Dict[str, Any]:
             wallet_meta = w
             break
     
+    balance_fetched = False
+    balance_wei = 0
+    source = ""
+
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            # Fetch ETH balance
-            url = f"https://api.etherscan.io/api?module=account&action=balance&address={address}&tag=latest&apikey={ETHERSCAN_API_KEY}"
-            resp = await client.get(url)
-            data = resp.json()
-            
-            if data.get("status") != "1":
+            # Try Etherscan first
+            if ETHERSCAN_API_KEY:
+                try:
+                    url = f"https://api.etherscan.io/api?module=account&action=balance&address={address}&tag=latest&apikey={ETHERSCAN_API_KEY}"
+                    resp = await client.get(url)
+                    data = resp.json()
+
+                    if data.get("status") == "1":
+                        balance_wei = int(data.get("result", 0))
+                        balance_fetched = True
+                        source = "Etherscan API (live)"
+                except Exception:
+                    pass  # Continue to Alchemy fallback
+
+            # Try Alchemy if Etherscan failed
+            if not balance_fetched and ALCHEMY_API_KEY:
+                try:
+                    url = f"https://eth-mainnet.alchemyapi.io/v2/{ALCHEMY_API_KEY}"
+                    payload = {
+                        "jsonrpc": "2.0",
+                        "method": "eth_getBalance",
+                        "params": [address, "latest"],
+                        "id": 1
+                    }
+                    resp = await client.post(url, json=payload)
+                    data = resp.json()
+
+                    if "result" in data:
+                        balance_wei = int(data["result"], 16)
+                        balance_fetched = True
+                        source = "Alchemy API (live)"
+                except Exception:
+                    pass
+
+            if not balance_fetched:
                 return {
                     "address": address,
                     "chain": "ethereum",
-                    "error": f"Etherscan API error: {data.get('message', 'Unknown error')}",
+                    "error": "Both Etherscan and Alchemy APIs failed to fetch balance",
                     "updated_at": _now_iso()
                 }
-            
+
             # Convert Wei to ETH
-            balance_wei = int(data.get("result", 0))
             balance_eth = balance_wei / 1e18
-            
+
             result = {
                 "address": address,
                 "chain": "ethereum",
                 "balance_eth": balance_eth,
                 "balance_wei": str(balance_wei),
                 "updated_at": _now_iso(),
-                "source": "Etherscan API (live)",
+                "source": source,
                 "etherscan_url": f"https://etherscan.io/address/{address}"
             }
             
