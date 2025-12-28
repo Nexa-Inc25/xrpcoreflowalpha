@@ -330,13 +330,19 @@ async def get_algo_fingerprint_detail(algo_name: str) -> Dict[str, Any]:
 @router.get("/dashboard/algo_fingerprint")
 async def get_algo_fingerprint() -> Dict[str, Any]:
     """Get current algorithmic fingerprint detection status.
-    
+
     Returns the detected trading pattern frequency signature
     and matched institutional algo profile.
     """
     try:
         from predictors.frequency_fingerprinter import zk_fingerprinter, KNOWN_FINGERPRINTS
+
+        # DEBUG: Log what fingerprints are actually loaded
+        print(f"[DEBUG] KNOWN_FINGERPRINTS keys: {list(KNOWN_FINGERPRINTS.keys())[:5]}...")
+        print(f"[DEBUG] Total fingerprints: {len(KNOWN_FINGERPRINTS)}")
+
         result = zk_fingerprinter.tick(source_label="api_query")
+        print(f"[DEBUG] Fingerprinter result: {result}")
         
         # Only show fingerprints that have ACTUALLY been detected, not all possible ones
         # This prevents showing fake patterns that don't exist in real data
