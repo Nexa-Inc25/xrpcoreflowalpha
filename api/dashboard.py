@@ -367,6 +367,9 @@ async def get_algo_fingerprint() -> Dict[str, Any]:
             },
             "detected_fingerprints": detected_algos,  # ONLY show what we've actually detected
             "status": "active" if result.get("confidence", 0) > 50 else "monitoring",
+            # DEBUG: Include actual loaded fingerprints
+            "debug_loaded_fingerprints": list(KNOWN_FINGERPRINTS.keys())[:10],
+            "debug_fingerprint_count": len(KNOWN_FINGERPRINTS),
         }
     except Exception as e:
         print(f"[Dashboard] Error getting fingerprint: {e}")
