@@ -166,3 +166,5 @@ domains:
     type: PRIMARY
   - domain: www.zkalphaflow.com
     type: ALIAS
+  - domain: api.zkalphaflow.com
+    type: ALIAS
