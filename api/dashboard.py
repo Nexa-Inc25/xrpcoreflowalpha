@@ -371,3 +371,4 @@ async def get_algo_fingerprint() -> Dict[str, Any]:
             "status": "error",
             "error": str(e),
         }
+# Force rebuild

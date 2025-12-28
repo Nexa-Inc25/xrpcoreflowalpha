@@ -54,7 +54,7 @@ const categoryMap: Record<string, { label: string; color: string; icon: typeof B
   xrp_institutional: { label: 'XRP Institutional', color: 'text-emerald-400', icon: Signal },
   ripple_odl: { label: 'Ripple ODL', color: 'text-emerald-400', icon: Signal },
   xrp_escrow: { label: 'XRP Escrow', color: 'text-emerald-400', icon: Signal },
-  ghost: { label: 'Unknown Pattern', color: 'text-slate-400', icon: Fingerprint },
+  unknown: { label: 'Unknown Pattern', color: 'text-slate-400', icon: Fingerprint },
 };
 
 function getCategory(name: string) {

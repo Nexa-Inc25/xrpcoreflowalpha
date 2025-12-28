@@ -145,13 +145,6 @@ const categoryInfo: Record<string, { label: string; color: string; bgColor: stri
     icon: Fingerprint,
     description: 'Unidentified trading pattern'
   },
-  phantom: { 
-    label: 'Unknown Accumulator', 
-    color: 'text-slate-400', 
-    bgColor: 'bg-slate-500/20',
-    icon: Fingerprint,
-    description: 'Stealth accumulation pattern'
-  },
 };
 
 function getCategory(name: string) {
