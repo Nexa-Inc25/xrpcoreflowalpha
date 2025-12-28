@@ -34,6 +34,27 @@ def _iso(ts: Any) -> str:
     return _now_iso()
 
 
+def _validate_tx_hash(tx_hash: str, network: str = "eth") -> bool:
+    """Validate transaction hash format and ensure it's not fake/test data."""
+    if not tx_hash or not isinstance(tx_hash, str):
+        return False
+
+    # Remove any fake/test prefixes
+    if tx_hash.upper().startswith('0XTEST') or 'TEST' in tx_hash.upper():
+        return False
+
+    # Validate format based on network
+    if network.lower() in ['eth', 'ethereum', 'zk']:
+        # Ethereum: must start with 0x and be 66 characters (32 bytes + 0x)
+        return tx_hash.startswith('0x') and len(tx_hash) == 66 and tx_hash[2:].replace('0', '').isalnum()
+    elif network.lower() == 'xrpl':
+        # XRPL: 64-character hex string
+        return len(tx_hash) == 64 and tx_hash.replace('0', '').isalnum()
+
+    # Unknown network - basic validation
+    return len(tx_hash) >= 10 and tx_hash.replace('0', '').replace('x', '').isalnum()
+
+
 def _confidence_bucket(v: Optional[int]) -> str:
     try:
         i = int(v or 0)
@@ -61,12 +82,14 @@ def _format_event(sig: Dict[str, Any]) -> Dict[str, Any]:
         cur = sig.get("currency") or "IOU"
         issuer = sig.get("issuer") or ""
         account = sig.get("account") or ""
+        raw_tx_hash = sig.get("tx_hash") or ""
+        validated_tx_hash = raw_tx_hash if _validate_tx_hash(raw_tx_hash, "xrpl") else ""
         features = {
             "limit_value": float(val) if val else 0,
             "currency": cur,
             "issuer": issuer,
             "account": account,
-            "tx_hash": sig.get("tx_hash") or "",
+            "tx_hash": validated_tx_hash,
         }
         # Format value for display
         fval = float(val) if val else 0
@@ -88,10 +111,12 @@ def _format_event(sig: Dict[str, Any]) -> Dict[str, Any]:
         msg = f"OB {pair}: bid ${float(bid or 0):,.0f} | ask ${float(ask or 0):,.0f} | spread {sp if sp is not None else 'n/a'} bps"
     elif stype == "xrp":
         try:
+            raw_tx_hash = sig.get("tx_hash") or ""
+            validated_tx_hash = raw_tx_hash if _validate_tx_hash(raw_tx_hash, "xrpl") else ""
             features = {
                 "amount_xrp": float(sig.get("amount_xrp") or 0.0),
                 "usd_value": float(sig.get("usd_value") or 0.0),
-                "tx_hash": sig.get("tx_hash") or "",
+                "tx_hash": validated_tx_hash,
                 "source": sig.get("source") or "",
                 "destination": sig.get("destination") or "",
                 "destination_tag": sig.get("destination_tag"),
@@ -115,7 +140,7 @@ def _format_event(sig: Dict[str, Any]) -> Dict[str, Any]:
                 "partner_to": bool(sig.get("partner_to") or False),
                 "from": (sig.get("from") or ""),
                 "to": (sig.get("to") or ""),
-                "tx_hash": (sig.get("tx_hash") or ""),
+                "tx_hash": (sig.get("tx_hash") or "") if _validate_tx_hash(sig.get("tx_hash") or "", sig.get("network") or "eth") else "",
                 "network": (sig.get("network") or ""),
             }
         except Exception:

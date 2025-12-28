@@ -20,19 +20,43 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _validate_tx_hash_debug(tx_hash: str, network: str = "eth") -> bool:
+    """Simple validation to filter out fake transaction hashes."""
+    if not tx_hash or not isinstance(tx_hash, str):
+        return False
+    # Remove any fake/test prefixes
+    if tx_hash.upper().startswith('0XTEST') or 'TEST' in tx_hash.upper():
+        return False
+    # Basic format validation
+    if network.lower() in ['eth', 'ethereum', 'zk']:
+        return tx_hash.startswith('0x') and len(tx_hash) == 66
+    elif network.lower() == 'xrpl':
+        return len(tx_hash) == 64
+    return len(tx_hash) >= 10
+
+
 @router.get("/debug/recent_signals")
 async def recent_signals() -> Dict[str, Any]:
-    # fetch last hour of signals and return the last 10 with tx hashes
+    # fetch last hour of signals and return the last 10 with VALID tx hashes
     sigs: List[Dict[str, Any]] = await fetch_recent_signals(window_seconds=3600)
     with_hash = [s for s in sigs if isinstance(s, dict) and (s.get("tx_hash") or s.get("tx_sig"))]
+
+    # Filter out invalid transaction hashes
+    valid_sigs = []
+    for s in with_hash:
+        tx_hash = s.get("tx_hash") or s.get("tx_sig")
+        network = s.get("network", "eth")
+        if _validate_tx_hash_debug(tx_hash, network):
+            valid_sigs.append(s)
+
     # sort by timestamp (if present)
-    with_hash.sort(key=lambda s: int(s.get("timestamp", 0)), reverse=True)
+    valid_sigs.sort(key=lambda s: int(s.get("timestamp", 0)), reverse=True)
     out = [{
         "type": s.get("type"),
         "tx_hash": s.get("tx_hash") or s.get("tx_sig"),
         "timestamp": s.get("timestamp"),
         "summary": s.get("summary"),
-    } for s in with_hash[:10]]
+    } for s in valid_sigs[:10]]
     return {"recent": out, "count": len(out), "updated_at": _now_iso()}
 
 
@@ -62,11 +86,12 @@ async def trigger_test_event() -> Dict[str, Any]:
         except Exception:
             pass
     # One zk proof-like event with large inferred USD to drive impact card
+    # REMOVED: No fake transaction hashes - only real data allowed
     zk = {
         "type": "zk",
         "sub_type": "verifier_call",
         "network": "eth",
-        "tx_hash": f"0xTEST{now}",
+        # "tx_hash": REMOVED - no fake transaction hashes
         "gas_used": 850_000,
         "to": "0x010ffc9a",
         "from": "0xcd531ae9efcce479654c4926dec5f6209531ca7b",
@@ -80,7 +105,7 @@ async def trigger_test_event() -> Dict[str, Any]:
         "partner_to": 0,
         "usd_value": 50_000_000.0,
         "timestamp": now,
-        "summary": "TEST ZK verify",
+        "summary": "TEST ZK verify (no tx_hash - test data only)",
         "tags": ["Renegade Proof"],
     }
     try:
