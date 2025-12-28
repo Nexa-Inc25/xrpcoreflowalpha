@@ -21,10 +21,11 @@ if (typeof window !== 'undefined' && typeof window.WebSocket === 'function') {
       const raw = typeof url === 'string' ? url : url.toString();
       let nextUrl = raw;
 
-      if (raw === 'ws://localhost:8010/events' || raw === 'ws://localhost:8010/events/') {
-        const baseWs =
-          process.env.NEXT_PUBLIC_API_WS_BASE || 'wss://api.zkalphaflow.com';
+      // Redirect any localhost WebSocket URLs to production
+      if (raw.includes('localhost:8010') || raw.includes('127.0.0.1:8010') || raw.startsWith('ws://localhost') || raw.startsWith('ws://127.0.0.1')) {
+        const baseWs = process.env.NEXT_PUBLIC_API_WS_BASE || 'wss://api.zkalphaflow.com';
         nextUrl = baseWs.replace(/\/$/, '') + '/events';
+        console.log('[WS Shim] Redirected localhost WS to:', nextUrl);
       }
 
       return new OriginalWebSocket(nextUrl, protocols as any);

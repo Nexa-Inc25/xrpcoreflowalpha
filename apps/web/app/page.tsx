@@ -141,8 +141,14 @@ export default function DashboardPage() {
     
     const connectWS = () => {
       // Use NEXT_PUBLIC_API_WS_BASE for the WebSocket base URL (env-driven)
-      const baseWs = process.env.NEXT_PUBLIC_API_WS_BASE || 'wss://api.zkalphaflow.com';
-      const wsUrl = baseWs.endsWith('/') ? `${baseWs}events` : `${baseWs}/events`;
+      // NEVER fallback to localhost - always use production URL
+      let baseWs = process.env.NEXT_PUBLIC_API_WS_BASE;
+      if (!baseWs || baseWs.includes('localhost') || baseWs.startsWith('ws://')) {
+        // Force production URL if env var is missing or points to localhost
+        baseWs = 'wss://api.zkalphaflow.com';
+      }
+      const wsUrl = baseWs.replace(/\/$/, '') + '/events';
+      console.log('[WS] Connecting to:', wsUrl); // Debug log
       socket = new WebSocket(wsUrl);
 
       socket.onopen = () => {
