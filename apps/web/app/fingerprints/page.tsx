@@ -34,21 +34,27 @@ async function fetchFingerprint(): Promise<FingerprintResponse> {
 }
 
 const categoryMap: Record<string, { label: string; color: string; icon: typeof Building2 }> = {
-  citadel: { label: 'HFT / Prop', color: 'text-rose-400', icon: Zap },
-  jane_street: { label: 'Market Maker', color: 'text-blue-400', icon: Building2 },
-  jump: { label: 'HFT / Prop', color: 'text-rose-400', icon: Zap },
-  tower: { label: 'HFT', color: 'text-rose-400', icon: Zap },
-  virtu: { label: 'HFT', color: 'text-rose-400', icon: Zap },
-  wintermute: { label: 'Market Maker', color: 'text-blue-400', icon: Building2 },
-  cumberland: { label: 'OTC / Market Maker', color: 'text-blue-400', icon: Building2 },
-  alameda: { label: 'Crypto Native', color: 'text-amber-400', icon: TrendingUp },
-  gsr: { label: 'Crypto OTC', color: 'text-amber-400', icon: TrendingUp },
-  b2c2: { label: 'Institutional', color: 'text-purple-400', icon: Building2 },
-  galaxy: { label: 'Institutional', color: 'text-purple-400', icon: Building2 },
-  ripple: { label: 'XRPL Native', color: 'text-emerald-400', icon: Signal },
-  bitstamp: { label: 'Exchange', color: 'text-cyan-400', icon: Activity },
-  ghost: { label: 'Unknown', color: 'text-slate-400', icon: Fingerprint },
-  phantom: { label: 'Unknown', color: 'text-slate-400', icon: Fingerprint },
+  // Categorize by frequency range instead of fake firm identification
+  slow_accumulation: { label: 'Slow Accumulation', color: 'text-blue-400', icon: Building2 },
+  medium_accumulation: { label: 'Medium Accumulation', color: 'text-blue-400', icon: Building2 },
+  steady_accumulation: { label: 'Steady Accumulation', color: 'text-blue-400', icon: Building2 },
+  gradual_build: { label: 'Gradual Build', color: 'text-blue-400', icon: Building2 },
+  market_making: { label: 'Market Making', color: 'text-green-400', icon: TrendingUp },
+  otc_flow: { label: 'OTC Flow', color: 'text-amber-400', icon: Activity },
+  institutional_flow: { label: 'Institutional Flow', color: 'text-purple-400', icon: Building2 },
+  high_freq_trading: { label: 'High Freq Trading', color: 'text-rose-400', icon: Zap },
+  active_trading: { label: 'Active Trading', color: 'text-rose-400', icon: Zap },
+  rapid_execution: { label: 'Rapid Execution', color: 'text-rose-400', icon: Zap },
+  quick_trades: { label: 'Quick Trades', color: 'text-rose-400', icon: Zap },
+  ultra_high_freq: { label: 'Ultra High Freq', color: 'text-red-400', icon: Zap },
+  extreme_speed: { label: 'Extreme Speed', color: 'text-red-400', icon: Zap },
+  latency_arbitrage: { label: 'Latency Arbitrage', color: 'text-red-400', icon: Zap },
+  microsecond_trading: { label: 'Microsecond Trading', color: 'text-red-400', icon: Zap },
+  xrp_market_making: { label: 'XRP Market Making', color: 'text-emerald-400', icon: Signal },
+  xrp_institutional: { label: 'XRP Institutional', color: 'text-emerald-400', icon: Signal },
+  ripple_odl: { label: 'Ripple ODL', color: 'text-emerald-400', icon: Signal },
+  xrp_escrow: { label: 'XRP Escrow', color: 'text-emerald-400', icon: Signal },
+  ghost: { label: 'Unknown Pattern', color: 'text-slate-400', icon: Fingerprint },
 };
 
 function getCategory(name: string) {
@@ -90,7 +96,7 @@ export default function FingerprintsPage() {
               <h1 className="text-2xl font-semibold text-white">Algo Fingerprints</h1>
             </div>
             <p className="text-slate-400 text-sm max-w-lg">
-              Frequency-based detection of institutional trading patterns. Identifies market makers, HFT firms, and large crypto players by their signature trade timing.
+              Real-time frequency analysis of market events. Detects common trading patterns by analyzing event timing and frequency distributions.
             </p>
           </div>
           

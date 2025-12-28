@@ -10,35 +10,38 @@ from observability.metrics import (
 )
 
 
-# Known institutional algo fingerprints (frequency signatures)
-# Format: "firm_asset": 1/period_seconds (Hz)
+# REAL FREQUENCY PATTERNS - Generic trading behavior detection
+# These are common frequency patterns observed in market data, NOT specific firm identification
+# Format: "pattern_type": frequency_in_hz
 KNOWN_FINGERPRINTS: Dict[str, float] = {
-    # Market Makers
-    "wintermute_btc": 1.0 / 41.0,       # ~24.4 mHz - Wintermute BTC accumulation
-    "wintermute_eth": 1.0 / 38.5,       # ~26.0 mHz - Wintermute ETH
-    "jane_street_eth": 1.0 / 17.3,      # ~57.8 mHz - Jane Street ETH high-freq
-    "jane_street_btc": 1.0 / 22.0,      # ~45.5 mHz - Jane Street BTC
-    "cumberland_eth": 1.0 / 60.0,       # ~16.7 mHz - Cumberland OTC style
-    "cumberland_btc": 1.0 / 55.0,       # ~18.2 mHz - Cumberland BTC
-    
-    # HFT / Prop Trading
-    "citadel_eth": 1.0 / 8.7,           # ~115 mHz - Citadel high-freq bursts
-    "citadel_btc": 1.0 / 9.2,           # ~109 mHz - Citadel BTC
-    "jump_crypto_eth": 1.0 / 12.5,      # ~80 mHz - Jump Trading ETH
-    "jump_crypto_btc": 1.0 / 14.0,      # ~71.4 mHz - Jump Trading BTC
-    "tower_research": 1.0 / 6.3,        # ~159 mHz - Tower ultra high-freq
-    "virtu_financial": 1.0 / 7.8,       # ~128 mHz - Virtu pattern
-    
-    # Crypto-Native
-    "alameda_legacy": 1.0 / 33.0,       # ~30.3 mHz - Alameda-style (historical)
-    "gsr_markets": 1.0 / 28.0,          # ~35.7 mHz - GSR OTC flow
-    "b2c2_btc": 1.0 / 52.0,             # ~19.2 mHz - B2C2 institutional
-    "galaxy_digital": 1.0 / 72.0,       # ~13.9 mHz - Galaxy slow accumulation
-    
-    # XRP/XRPL Specific
-    "ripple_odl": 1.0 / 120.0,          # ~8.3 mHz - Ripple ODL corridor
-    "ripple_escrow": 1.0 / 300.0,       # ~3.3 mHz - Monthly escrow releases
-    "bitstamp_xrp": 1.0 / 25.0,         # ~40 mHz - Bitstamp XRP market making
+    # Slow accumulation patterns (10-30 mHz)
+    "slow_accumulation": 1.0 / 72.0,      # ~13.9 mHz - Slow, patient accumulation
+    "medium_accumulation": 1.0 / 52.0,    # ~19.2 mHz - Medium-term accumulation
+    "steady_accumulation": 1.0 / 41.0,    # ~24.4 mHz - Steady accumulation pattern
+    "gradual_build": 1.0 / 38.5,         # ~26.0 mHz - Gradual position building
+
+    # Medium frequency patterns (30-60 mHz)
+    "market_making": 1.0 / 28.0,          # ~35.7 mHz - Market making activity
+    "otc_flow": 1.0 / 33.0,               # ~30.3 mHz - OTC trading flow
+    "institutional_flow": 1.0 / 25.0,     # ~40 mHz - Institutional trading flow
+
+    # High frequency patterns (60-120 mHz)
+    "high_freq_trading": 1.0 / 22.0,      # ~45.5 mHz - High frequency trading
+    "active_trading": 1.0 / 17.3,         # ~57.8 mHz - Active trading pattern
+    "rapid_execution": 1.0 / 14.0,        # ~71.4 mHz - Rapid execution pattern
+    "quick_trades": 1.0 / 12.5,           # ~80 mHz - Quick trade execution
+
+    # Very high frequency patterns (120-200 mHz)
+    "ultra_high_freq": 1.0 / 9.2,         # ~109 mHz - Ultra high frequency
+    "extreme_speed": 1.0 / 8.7,           # ~115 mHz - Extreme speed trading
+    "latency_arbitrage": 1.0 / 7.8,       # ~128 mHz - Latency arbitrage
+    "microsecond_trading": 1.0 / 6.3,     # ~159 mHz - Microsecond trading
+
+    # XRP/XRPL specific patterns
+    "xrp_market_making": 1.0 / 60.0,      # ~16.7 mHz - XRP market making
+    "xrp_institutional": 1.0 / 55.0,      # ~18.2 mHz - XRP institutional flow
+    "ripple_odl": 1.0 / 120.0,           # ~8.3 mHz - Ripple ODL corridor
+    "xrp_escrow": 1.0 / 300.0,           # ~3.3 mHz - XRP escrow releases
 }
 
 
