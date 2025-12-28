@@ -1,9 +1,9 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://api.zkalphaflow.com';
 
 function apiBaseTrimmed(): string {
-  // Remove trailing slash and return the base URL
-  // DigitalOcean routing already handles the /api prefix
-  return API_BASE.replace(/\/$/, '');
+  // Remove trailing slash and return the base URL with /api prefix for DigitalOcean routing
+  const base = API_BASE.replace(/\/$/, '');
+  return base + '/api';
 }
 
 export async function fetchUI(): Promise<any> {

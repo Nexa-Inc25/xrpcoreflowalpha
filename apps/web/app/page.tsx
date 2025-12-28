@@ -147,7 +147,8 @@ export default function DashboardPage() {
         // Force production URL if env var is missing or points to localhost
         baseWs = 'wss://api.zkalphaflow.com';
       }
-      const wsUrl = baseWs.replace(/\/$/, '') + '/events';
+      // Add /api prefix for DigitalOcean routing
+      const wsUrl = baseWs.replace(/\/$/, '') + '/api/events';
       console.log('[WS] Connecting to:', wsUrl); // Debug log
       socket = new WebSocket(wsUrl);
 
