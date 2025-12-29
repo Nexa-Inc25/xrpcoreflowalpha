@@ -226,27 +226,36 @@ async def _startup():
     except Exception as e:
         print(f"[STARTUP] Educator bot skipped: {e}")
     
-    # Always start Yahoo macro tracker as primary for ES/NQ data
-    # This ensures we have real market data flowing for futures flow
-    try:
-        asyncio.create_task(start_yahoo_macro_tracker())
-        print("[STARTUP] Yahoo Finance macro tracker started for ES/NQ data")
-    except Exception as e:
-        print(f"[STARTUP] Yahoo macro tracker failed: {e}")
-        # Fallback to Databento if Yahoo fails
-        if DATABENTO_API_KEY:
-            try:
-                asyncio.create_task(start_databento_macro_tracker())
-                print("[STARTUP] Databento macro tracker started (fallback)")
-            except Exception as e2:
-                print(f"[STARTUP] Databento macro tracker also failed: {e2}")
-        elif POLYGON_API_KEY:
-            try:
-                asyncio.create_task(start_polygon_macro_tracker())
-                print("[STARTUP] Polygon macro tracker started (fallback)")
-            except Exception as e3:
-                print(f"[STARTUP] Polygon macro tracker also failed: {e3}")
-                print("[STARTUP] WARNING: No macro tracker working - futures flow will remain idle")
+    # Try Polygon first (more reliable than Yahoo for futures data)
+    macro_started = False
+    if POLYGON_API_KEY:
+        try:
+            asyncio.create_task(start_polygon_macro_tracker())
+            print("[STARTUP] Polygon macro tracker started for ES/NQ data")
+            macro_started = True
+        except Exception as e:
+            print(f"[STARTUP] Polygon macro tracker failed: {e}")
+
+    # Fallback to Yahoo if Polygon not available or fails
+    if not macro_started:
+        try:
+            asyncio.create_task(start_yahoo_macro_tracker())
+            print("[STARTUP] Yahoo Finance macro tracker started (fallback)")
+            macro_started = True
+        except Exception as e:
+            print(f"[STARTUP] Yahoo macro tracker failed: {e}")
+
+    # Final fallback to Databento
+    if not macro_started and DATABENTO_API_KEY:
+        try:
+            asyncio.create_task(start_databento_macro_tracker())
+            print("[STARTUP] Databento macro tracker started (final fallback)")
+            macro_started = True
+        except Exception as e:
+            print(f"[STARTUP] Databento macro tracker failed: {e}")
+
+    if not macro_started:
+        print("[STARTUP] WARNING: No macro tracker could be started - futures flow will remain idle")
     try:
         zk_dominant_frequency_hz.labels(source="futures_btcusdt").set(0.0)
         zk_dominant_frequency_hz.labels(source="futures_ethusdt").set(0.0)
