@@ -107,7 +107,34 @@ app.add_middleware(
     allow_methods=CORS_ALLOW_METHODS or ["*"],
     allow_headers=CORS_ALLOW_HEADERS or ["*"],
 )
-# Include all routers - DigitalOcean handles /api prefix routing
+# Mount all API routes under /api prefix for DigitalOcean routing
+api_router = APIRouter()
+api_router.include_router(ui_router)
+api_router.include_router(sdui_router)
+api_router.include_router(billing_router)
+api_router.include_router(admin_router)
+api_router.include_router(export_router)
+api_router.include_router(onchain_router)
+api_router.include_router(notify_router)
+api_router.include_router(history_router)
+api_router.include_router(qr_router)
+api_router.include_router(user_router)
+api_router.include_router(debug_router)
+api_router.include_router(health_router)
+api_router.include_router(db_health_router)
+api_router.include_router(scanner_health_router)
+api_router.include_router(dashboard_router)
+api_router.include_router(wallets_router)
+api_router.include_router(flows_router)
+api_router.include_router(analytics_router)
+api_router.include_router(correlations_router)
+api_router.include_router(latency_router)
+api_router.include_router(tuned_analytics_router)
+api_router.include_router(monitoring_router)
+
+app.include_router(api_router, prefix="/api")
+
+# Also mount at root level for direct API access
 app.include_router(ui_router)
 app.include_router(sdui_router)
 app.include_router(billing_router)
