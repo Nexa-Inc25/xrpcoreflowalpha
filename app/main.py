@@ -107,34 +107,7 @@ app.add_middleware(
     allow_methods=CORS_ALLOW_METHODS or ["*"],
     allow_headers=CORS_ALLOW_HEADERS or ["*"],
 )
-# Mount all API routers under /api prefix to match DigitalOcean routing
-api_router = APIRouter()
-api_router.include_router(ui_router)
-api_router.include_router(sdui_router)
-api_router.include_router(billing_router)
-api_router.include_router(admin_router)
-api_router.include_router(export_router)
-api_router.include_router(onchain_router)
-api_router.include_router(notify_router)
-api_router.include_router(history_router)
-api_router.include_router(qr_router)
-api_router.include_router(user_router)
-api_router.include_router(debug_router)
-api_router.include_router(health_router)
-api_router.include_router(db_health_router)
-api_router.include_router(scanner_health_router)
-api_router.include_router(dashboard_router)
-api_router.include_router(wallets_router)
-api_router.include_router(flows_router)
-api_router.include_router(analytics_router)
-api_router.include_router(correlations_router)
-api_router.include_router(latency_router)
-api_router.include_router(tuned_analytics_router)
-api_router.include_router(monitoring_router)
-
-app.include_router(api_router, prefix="/api")
-
-# Also mount routers at root level for backward compatibility
+# Include all routers - DigitalOcean handles /api prefix routing
 app.include_router(ui_router)
 app.include_router(sdui_router)
 app.include_router(billing_router)
@@ -253,36 +226,27 @@ async def _startup():
     except Exception as e:
         print(f"[STARTUP] Educator bot skipped: {e}")
     
-    # Always try to start macro trackers for ES/NQ data
-    # Priority: Databento > Polygon > Yahoo fallback
-    macro_started = False
-    if DATABENTO_API_KEY:
-        try:
-            asyncio.create_task(start_databento_macro_tracker())
-            print("[STARTUP] Databento macro tracker started")
-            macro_started = True
-        except Exception as e:
-            print(f"[STARTUP] Databento macro tracker failed: {e}")
-
-    if not macro_started and POLYGON_API_KEY:
-        try:
-            asyncio.create_task(start_polygon_macro_tracker())
-            print("[STARTUP] Polygon macro tracker started")
-            macro_started = True
-        except Exception as e:
-            print(f"[STARTUP] Polygon macro tracker failed: {e}")
-
-    if not macro_started and not DISABLE_EQUITY_FALLBACK:
-        try:
-            # Force Yahoo Finance fallback for ES/NQ data
-            asyncio.create_task(start_yahoo_macro_tracker())
-            print("[STARTUP] Yahoo Finance macro tracker started (fallback)")
-            macro_started = True
-        except Exception as e:
-            print(f"[STARTUP] Yahoo macro tracker failed: {e}")
-
-    if not macro_started:
-        print("[STARTUP] WARNING: No macro tracker could be started - futures flow will remain idle")
+    # Always start Yahoo macro tracker as primary for ES/NQ data
+    # This ensures we have real market data flowing for futures flow
+    try:
+        asyncio.create_task(start_yahoo_macro_tracker())
+        print("[STARTUP] Yahoo Finance macro tracker started for ES/NQ data")
+    except Exception as e:
+        print(f"[STARTUP] Yahoo macro tracker failed: {e}")
+        # Fallback to Databento if Yahoo fails
+        if DATABENTO_API_KEY:
+            try:
+                asyncio.create_task(start_databento_macro_tracker())
+                print("[STARTUP] Databento macro tracker started (fallback)")
+            except Exception as e2:
+                print(f"[STARTUP] Databento macro tracker also failed: {e2}")
+        elif POLYGON_API_KEY:
+            try:
+                asyncio.create_task(start_polygon_macro_tracker())
+                print("[STARTUP] Polygon macro tracker started (fallback)")
+            except Exception as e3:
+                print(f"[STARTUP] Polygon macro tracker also failed: {e3}")
+                print("[STARTUP] WARNING: No macro tracker working - futures flow will remain idle")
     try:
         zk_dominant_frequency_hz.labels(source="futures_btcusdt").set(0.0)
         zk_dominant_frequency_hz.labels(source="futures_ethusdt").set(0.0)
