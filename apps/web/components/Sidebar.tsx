@@ -43,16 +43,21 @@ export default function Sidebar() {
     queryFn: async () => {
       const base = process.env.NEXT_PUBLIC_API_BASE || 'https://api.zkalphaflow.com';
       const res = await fetch(`${base}/admin/alerts`);
-      if (!res.ok) return { alert_count: 0 };
+      if (!res.ok) return { alert_count: 0, alerts: [] };
       return res.json();
     },
     refetchInterval: 30_000,
   });
   
+  // Only count warning and error level alerts, not info
+  const actionableAlertCount = alertData?.alerts?.filter(
+    (alert: any) => alert.level === 'warning' || alert.level === 'error'
+  ).length || 0;
+  
   // Build nav items with real alert count
   const navItems = baseNavItems.map(item => {
-    if (item.href === '/alerts' && alertData?.alert_count > 0) {
-      return { ...item, badge: String(alertData.alert_count) };
+    if (item.href === '/alerts' && actionableAlertCount > 0) {
+      return { ...item, badge: String(actionableAlertCount) };
     }
     return item;
   });

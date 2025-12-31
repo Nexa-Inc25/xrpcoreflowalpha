@@ -24,7 +24,7 @@ interface UIChild {
 
 export default function DashboardPage() {
   const isPremium = false;
-  const [isConnected, setIsConnected] = useState(false);
+  const [isConnected, setIsConnected] = useState<boolean | null>(null);
   const [liveEvents, setLiveEvents] = useState<any[]>([]);
   const [newEventFlash, setNewEventFlash] = useState(false);
 
@@ -263,20 +263,27 @@ export default function DashboardPage() {
             {/* Connection status */}
             <div className={cn(
               "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium glass-subtle",
-              isConnected 
+              isConnected === true
                 ? "text-emerald-300 border border-emerald-500/30" 
-                : "text-rose-300 border border-rose-500/30"
+                : isConnected === false
+                ? "text-rose-300 border border-rose-500/30"
+                : "text-amber-300 border border-amber-500/30"
             )}>
-              {isConnected ? (
+              {isConnected === true ? (
                 <>
                   <Wifi className="w-3.5 h-3.5" />
                   <span>Live</span>
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 </>
-              ) : (
+              ) : isConnected === false ? (
                 <>
                   <WifiOff className="w-3.5 h-3.5" />
                   <span>Reconnecting...</span>
+                </>
+              ) : (
+                <>
+                  <Wifi className="w-3.5 h-3.5 animate-pulse" />
+                  <span>Connecting...</span>
                 </>
               )}
             </div>

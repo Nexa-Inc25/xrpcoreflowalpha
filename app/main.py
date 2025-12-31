@@ -1,5 +1,5 @@
 import asyncio
-from fastapi import FastAPI, Response, APIRouter
+from fastapi import FastAPI, Response, APIRouter, APIRouter
 from fastapi.responses import RedirectResponse
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from app.config import XRPL_WSS, ALCHEMY_WS_URL, FINNHUB_API_KEY, SOLANA_RPC_URL, APP_VERSION

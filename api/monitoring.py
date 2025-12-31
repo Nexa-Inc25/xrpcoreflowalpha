@@ -567,7 +567,7 @@ async def get_system_alerts() -> Dict[str, Any]:
     
     return {
         "timestamp": _now_iso(),
-        "alert_count": len(alerts),
+        "alert_count": len([a for a in alerts if a.get("level") in ("warning", "error")]),
         "alerts": alerts,
     }
 

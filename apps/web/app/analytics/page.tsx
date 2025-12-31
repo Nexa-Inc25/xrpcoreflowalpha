@@ -23,6 +23,14 @@ import { cn, formatNumber, formatUSD, timeAgo } from '../../lib/utils';
 import { fetchRecentSignals, fetchFlowHistory, fetchUI, fetchAnalyticsPerformance, fetchLatencyState, fetchXrplCorrelation, LatencyState, LatencyAnomaly } from '../../lib/api';
 import CorrelationHeatmap from '../../components/CorrelationHeatmap';
 
+// Fetch heatmap data for correlations
+async function fetchHeatmapData(assets: string) {
+  const base = process.env.NEXT_PUBLIC_API_BASE || 'https://api.zkalphaflow.com';
+  const res = await fetch(`${base}/analytics/heatmap?assets=${assets}`);
+  if (!res.ok) return null;
+  return res.json();
+}
+
 // Process REAL API data into analytics format
 function processRealData(signals: any, flows: any) {
   const signalArray = Array.isArray(signals) ? signals : [];
@@ -259,6 +267,14 @@ export default function AnalyticsPage() {
     queryFn: () => fetchXrplCorrelation(15),
     refetchInterval: 30000,
     enabled: activeTab === 'latency',
+  });
+  
+  // Fetch heatmap data for correlations tab
+  const { data: heatmapData } = useQuery({
+    queryKey: ['correlation_heatmap', 'xrp,btc,eth,spy,es,gold'],
+    queryFn: () => fetchHeatmapData('xrp,btc,eth,spy,es,gold'),
+    refetchInterval: 60000,
+    enabled: activeTab === 'correlations',
   });
   
   const isLoading = signalsLoading || flowsLoading || uiLoading;
@@ -597,12 +613,13 @@ export default function AnalyticsPage() {
               animate={{ opacity: 1, y: 0 }}
               className="mb-8"
             >
+              {/* Main Heatmap - Full Width */}
+              <div className="mb-6">
+                <CorrelationHeatmap assets="xrp,btc,eth,spy,es,gold" />
+              </div>
+              
+              {/* Two Column Grid for Cards */}
               <div className="grid lg:grid-cols-2 gap-6">
-                {/* Main Heatmap */}
-                <div className="lg:col-span-2">
-                  <CorrelationHeatmap assets="xrp,btc,eth,spy,es,gold" />
-                </div>
-                
                 {/* XRP-Centric Correlations Card */}
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -615,21 +632,46 @@ export default function AnalyticsPage() {
                     XRP Cross-Market Signals
                   </h3>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 rounded-lg bg-surface-2">
-                      <span className="text-sm text-slate-300">XRP/SPY Correlation</span>
-                      <span className="text-emerald-400 font-mono">+0.35</span>
-                    </div>
-                    <div className="flex items-center justify-between p-3 rounded-lg bg-surface-2">
-                      <span className="text-sm text-slate-300">XRP/ES Futures</span>
-                      <span className="text-emerald-400 font-mono">+0.38</span>
-                    </div>
-                    <div className="flex items-center justify-between p-3 rounded-lg bg-surface-2">
-                      <span className="text-sm text-slate-300">XRP/Gold</span>
-                      <span className="text-amber-400 font-mono">+0.15</span>
-                    </div>
+                    {heatmapData?.matrix ? (
+                      <>
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-surface-2">
+                          <span className="text-sm text-slate-300">XRP/SPY Correlation</span>
+                          <span className={cn(
+                            "font-mono",
+                            (heatmapData.matrix.XRP?.SPY ?? 0) > 0 ? "text-emerald-400" : "text-rose-400"
+                          )}>
+                            {(heatmapData.matrix.XRP?.SPY ?? 0) > 0 ? '+' : ''}{(heatmapData.matrix.XRP?.SPY ?? 0).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-surface-2">
+                          <span className="text-sm text-slate-300">XRP/ES Futures</span>
+                          <span className={cn(
+                            "font-mono",
+                            (heatmapData.matrix.XRP?.ES ?? 0) > 0 ? "text-emerald-400" : "text-rose-400"
+                          )}>
+                            {(heatmapData.matrix.XRP?.ES ?? 0) > 0 ? '+' : ''}{(heatmapData.matrix.XRP?.ES ?? 0).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-surface-2">
+                          <span className="text-sm text-slate-300">XRP/Gold</span>
+                          <span className={cn(
+                            "font-mono",
+                            (heatmapData.matrix.XRP?.GOLD ?? 0) > 0 ? "text-emerald-400" : "text-amber-400"
+                          )}>
+                            {(heatmapData.matrix.XRP?.GOLD ?? 0) > 0 ? '+' : ''}{(heatmapData.matrix.XRP?.GOLD ?? 0).toFixed(2)}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-sm text-slate-500 p-3">Loading correlation data...</div>
+                    )}
                   </div>
                   <p className="text-xs text-slate-500 mt-4">
-                    Moderate XRP/equity correlation indicates institutional flow from traditional markets to XRPL.
+                    {heatmapData?.matrix?.XRP?.SPY 
+                      ? Math.abs(heatmapData.matrix.XRP.SPY) > 0.3 
+                        ? "Moderate to strong XRP/equity correlation indicates institutional flow from traditional markets to XRPL."
+                        : "Weak correlation suggests XRP moving independently from equity markets."
+                      : "Real-time cross-market correlation analysis"}
                   </p>
                 </motion.div>
                 
@@ -645,21 +687,50 @@ export default function AnalyticsPage() {
                     Market Regime Analysis
                   </h3>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 rounded-lg bg-surface-2">
-                      <span className="text-sm text-slate-300">SPY/VIX Inverse</span>
-                      <span className="text-rose-400 font-mono">-0.82</span>
-                    </div>
-                    <div className="flex items-center justify-between p-3 rounded-lg bg-surface-2">
-                      <span className="text-sm text-slate-300">BTC/ETH Sync</span>
-                      <span className="text-emerald-400 font-mono">+0.85</span>
-                    </div>
-                    <div className="flex items-center justify-between p-3 rounded-lg bg-surface-2">
-                      <span className="text-sm text-slate-300">Risk-On Indicator</span>
-                      <span className="text-emerald-400 font-medium">Active</span>
-                    </div>
+                    {heatmapData?.matrix ? (
+                      <>
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-surface-2">
+                          <span className="text-sm text-slate-300">BTC/ETH Sync</span>
+                          <span className={cn(
+                            "font-mono",
+                            (heatmapData.matrix.BTC?.ETH ?? 0) > 0 ? "text-emerald-400" : "text-rose-400"
+                          )}>
+                            {(heatmapData.matrix.BTC?.ETH ?? 0) > 0 ? '+' : ''}{(heatmapData.matrix.BTC?.ETH ?? 0).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-surface-2">
+                          <span className="text-sm text-slate-300">XRP/BTC Correlation</span>
+                          <span className={cn(
+                            "font-mono",
+                            (heatmapData.matrix.XRP?.BTC ?? 0) > 0 ? "text-emerald-400" : "text-rose-400"
+                          )}>
+                            {(heatmapData.matrix.XRP?.BTC ?? 0) > 0 ? '+' : ''}{(heatmapData.matrix.XRP?.BTC ?? 0).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-surface-2">
+                          <span className="text-sm text-slate-300">Crypto/Equity Link</span>
+                          <span className={cn(
+                            "font-medium",
+                            (heatmapData.matrix.BTC?.SPY ?? 0) > 0.5 || (heatmapData.matrix.ETH?.SPY ?? 0) > 0.5
+                              ? "text-emerald-400"
+                              : "text-slate-400"
+                          )}>
+                            {(heatmapData.matrix.BTC?.SPY ?? 0) > 0.5 || (heatmapData.matrix.ETH?.SPY ?? 0) > 0.5
+                              ? "Active"
+                              : "Weak"}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-sm text-slate-500 p-3">Loading correlation data...</div>
+                    )}
                   </div>
                   <p className="text-xs text-slate-500 mt-4">
-                    Strong BTC/ETH correlation with moderate equity ties suggests risk-on environment favorable for XRP.
+                    {heatmapData?.matrix?.BTC?.ETH
+                      ? Math.abs(heatmapData.matrix.BTC.ETH) > 0.7
+                        ? "Strong crypto correlation suggests risk-on environment favorable for XRP."
+                        : "Diverging crypto assets indicate sector rotation or independent catalysts."
+                      : "Real-time market regime analysis"}
                   </p>
                 </motion.div>
               </div>
